@@ -24,30 +24,50 @@ jobs:
 
       - name: Get version from tag
         id: version
-        run: echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        run: echo "version=${{GITHUB_REF#refs/tags/}}" >> $GITHUB_OUTPUT
 
-      - name: Create skill package
+      - name: Create skill-repo skill package
         run: |
-          mkdir -p dist
-          # Copy skill files from new structure
-          cp skills/skill-repo/SKILL.md dist/
-          cp LICENSE dist/
-          [ -d "skills/skill-repo/references" ] && cp -r skills/skill-repo/references dist/
-          [ -d "skills/skill-repo/scripts" ] && cp -r skills/skill-repo/scripts dist/
-          [ -d "skills/skill-repo/assets" ] && cp -r skills/skill-repo/assets dist/
-          [ -d "skills/skill-repo/templates" ] && cp -r skills/skill-repo/templates dist/
+          mkdir -p dist-skill
+          cp skills/skill-repo/SKILL.md dist-skill/
+          cp LICENSE dist-skill/
+          [ -d "skills/skill-repo/references" ] && cp -r skills/skill-repo/references dist-skill/
+          [ -d "skills/skill-repo/scripts" ] && cp -r skills/skill-repo/scripts dist-skill/
+          [ -d "skills/skill-repo/assets" ] && cp -r skills/skill-repo/assets dist-skill/
+          [ -d "skills/skill-repo/templates" ] && cp -r skills/skill-repo/templates dist-skill/
+          [ -d "skills/skill-repo/examples" ] && cp -r skills/skill-repo/examples dist-skill/
+          [ -f "skills/skill-repo/checkpoints.yaml" ] && cp skills/skill-repo/checkpoints.yaml dist-skill/
+          cd dist-skill
+          zip -r ../skill-repo-skill-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../skill-repo-skill-${{ steps.version.outputs.version }}.tar.gz .
+
+      - name: Create skill-repo plugin package
+        run: |
+          mkdir -p dist-plugin
+          # Include skill-repo skill files
+          mkdir -p dist-plugin/skills/skill-repo
+          cp skills/skill-repo/SKILL.md dist-plugin/skills/skill-repo/
+          [ -d "skills/skill-repo/references" ] && cp -r skills/skill-repo/references dist-plugin/skills/skill-repo/
+          [ -d "skills/skill-repo/scripts" ] && cp -r skills/skill-repo/scripts dist-plugin/skills/skill-repo/
+          [ -d "skills/skill-repo/assets" ] && cp -r skills/skill-repo/assets dist-plugin/skills/skill-repo/
+          [ -d "skills/skill-repo/templates" ] && cp -r skills/skill-repo/templates dist-plugin/skills/skill-repo/
+          [ -d "skills/skill-repo/examples" ] && cp -r skills/skill-repo/examples dist-plugin/skills/skill-repo/
+          [ -f "skills/skill-repo/checkpoints.yaml" ] && cp skills/skill-repo/checkpoints.yaml dist-plugin/skills/skill-repo/
+          cp LICENSE dist-plugin/
           # Include plugin manifest
-          [ -d ".claude-plugin" ] && cp -r .claude-plugin dist/
-          cd dist
-          zip -r ../skill-repo-${{ steps.version.outputs.version }}.zip .
-          tar -czvf ../skill-repo-${{ steps.version.outputs.version }}.tar.gz .
+          [ -d ".claude-plugin" ] && cp -r .claude-plugin dist-plugin/
+          cd dist-plugin
+          zip -r ../skill-repo-plugin-${{ steps.version.outputs.version }}.zip .
+          tar -czvf ../skill-repo-plugin-${{ steps.version.outputs.version }}.tar.gz .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
           files: |
-            skill-repo-${{ steps.version.outputs.version }}.zip
-            skill-repo-${{ steps.version.outputs.version }}.tar.gz
+            skill-repo-skill-${{ steps.version.outputs.version }}.zip
+            skill-repo-skill-${{ steps.version.outputs.version }}.tar.gz
+            skill-repo-plugin-${{ steps.version.outputs.version }}.zip
+            skill-repo-plugin-${{ steps.version.outputs.version }}.tar.gz
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
