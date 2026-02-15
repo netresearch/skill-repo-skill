@@ -1,6 +1,6 @@
 ---
 name: skill-repo
-description: "Agent Skill: Guide for structuring Netresearch skill repositories. Use when creating skills, standardizing repos, or setting up composer/release workflows. By Netresearch."
+description: "Use when creating new skill repositories, standardizing existing skill repos, or setting up composer/release workflows for skills."
 ---
 
 # Skill Repository Structure Guide
@@ -31,7 +31,7 @@ Standards for Netresearch skill repository layout and distribution.
 ```yaml
 ---
 name: skill-name          # lowercase, hyphens, max 64 chars
-description: "Agent Skill: ... By Netresearch."
+description: "Use when <trigger conditions>"
 ---
 ```
 
