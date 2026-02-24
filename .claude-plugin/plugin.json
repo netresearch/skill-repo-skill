@@ -10,8 +10,5 @@
   },
   "skills": [
     "./skills/skill-repo"
-  ],
-  "support": {
-    "issues": "https://github.com/netresearch/skill-repo-skill/issues"
-  }
+  ]
 }
