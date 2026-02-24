@@ -6,9 +6,12 @@
   "license": "MIT",
   "author": {
     "name": "Netresearch DTT GmbH",
-    "email": "info@netresearch.de"
+    "url": "https://github.com/netresearch/skill-repo-skill"
   },
   "skills": [
     "./skills/skill-repo"
-  ]
+  ],
+  "support": {
+    "issues": "https://github.com/netresearch/skill-repo-skill/issues"
+  }
 }
