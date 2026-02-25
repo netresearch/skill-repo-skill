@@ -124,41 +124,40 @@ jobs:
           fi
           COUNT=$(echo "$CHECKPOINT_FILES" | wc -l)
           echo "Found $COUNT checkpoint file(s)"
-          uv pip install --system pyyaml -q
           FAILED=0
           while IFS= read -r f; do
             [[ -z "$f" ]] && continue
             echo "=== Validating $f ==="
-            python3 -c "
+            uv run --with pyyaml python3 - "$f" <<'PYEOF' || FAILED=1
           import sys, yaml
-          with open('$f') as fh:
+          with open(sys.argv[1]) as fh:
               data = yaml.safe_load(fh)
           if not isinstance(data, dict):
-              print('ERROR: not a YAML mapping')
+              print("ERROR: not a YAML mapping")
               sys.exit(1)
-          has_mechanical = 'mechanical' in data
-          has_llm = 'llm_reviews' in data
+          has_mechanical = "mechanical" in data
+          has_llm = "llm_reviews" in data
           if not has_mechanical and not has_llm:
-              print('ERROR: must have mechanical and/or llm_reviews section')
+              print("ERROR: must have mechanical and/or llm_reviews section")
               sys.exit(1)
           all_ids = []
-          for section in ('mechanical', 'llm_reviews'):
+          for section in ("mechanical", "llm_reviews"):
               items = data.get(section, [])
               if items is None:
                   continue
               for item in items:
-                  if 'id' not in item:
-                      print(f'ERROR: entry in {section} missing id field')
+                  if "id" not in item:
+                      print(f"ERROR: entry in {section} missing id field")
                       sys.exit(1)
-                  all_ids.append(item['id'])
+                  all_ids.append(item["id"])
           dupes = [x for x in all_ids if all_ids.count(x) > 1]
           if dupes:
-              print(f'ERROR: duplicate checkpoint IDs: {set(dupes)}')
+              print(f"ERROR: duplicate checkpoint IDs: {set(dupes)}")
               sys.exit(1)
-          m = len(data.get('mechanical', []) or [])
-          l = len(data.get('llm_reviews', []) or [])
-          print(f'Valid: {m} mechanical + {l} LLM review checkpoints')
-          " || FAILED=1
+          m = len(data.get("mechanical", []) or [])
+          l = len(data.get("llm_reviews", []) or [])
+          print(f"Valid: {m} mechanical + {l} LLM review checkpoints")
+          PYEOF
           done <<< "$CHECKPOINT_FILES"
           if [[ $FAILED -eq 1 ]]; then
             echo "::error::Checkpoint validation failed"
