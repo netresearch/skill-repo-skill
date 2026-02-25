@@ -25,7 +25,7 @@ Download the [latest release](https://github.com/netresearch/{skill-repo}/releas
 ### Option 3: Composer (PHP projects)
 
 ```bash
-composer require netresearch/agent-{skill-name}
+composer require netresearch/{skill-name}-skill
 ```
 
 **Requires:** [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin)

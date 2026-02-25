@@ -1,5 +1,5 @@
 {
-  "name": "netresearch/agent-skill-repo",
+  "name": "netresearch/skill-repo-skill",
   "description": "Guide for structuring Netresearch skill repositories with multi-channel distribution",
   "type": "ai-agent-skill",
   "license": "MIT",

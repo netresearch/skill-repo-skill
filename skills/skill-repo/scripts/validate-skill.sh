@@ -130,12 +130,12 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
         error "composer.json type must be 'ai-agent-skill'"
     fi
 
-    # Name pattern
+    # Name pattern: netresearch/*-skill or netresearch/*-agent-skill
     COMP_NAME=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('name',''))" 2>/dev/null || echo "")
-    if [[ "$COMP_NAME" == netresearch/agent-* ]]; then
+    if [[ "$COMP_NAME" =~ ^netresearch/.*-skill$ ]]; then
         success "composer.json name: $COMP_NAME"
     else
-        error "composer.json name must match netresearch/agent-*: $COMP_NAME"
+        error "composer.json name must match netresearch/*-skill or netresearch/*-agent-skill: $COMP_NAME"
     fi
 
     # Plugin dependency

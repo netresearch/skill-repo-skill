@@ -8,10 +8,10 @@ Add `composer.json` to ALL skills **EXCEPT** those explicitly targeting non-PHP 
 
 | Skill Type | composer.json |
 |------------|---------------|
-| PHP/TYPO3 skills | ✅ Required |
-| General skills | ✅ Required |
-| Go-specific skills | ❌ Not needed |
-| Rust-specific skills | ❌ Not needed |
+| PHP/TYPO3 skills | Required |
+| General skills | Required |
+| Go-specific skills | Not needed |
+| Rust-specific skills | Not needed |
 
 ## composer.json Structure
 
@@ -19,7 +19,7 @@ Add `composer.json` to ALL skills **EXCEPT** those explicitly targeting non-PHP 
 
 ```json
 {
-  "name": "netresearch/agent-{skill-name}",
+  "name": "netresearch/{skill-name}-skill",
   "description": "{Skill description from SKILL.md}",
   "type": "ai-agent-skill",
   "license": "MIT",
@@ -44,18 +44,17 @@ Add `composer.json` to ALL skills **EXCEPT** those explicitly targeting non-PHP 
 
 | Field | Value | Purpose |
 |-------|-------|---------|
-| `name` | `netresearch/agent-{skill-name}` | Package identifier |
+| `name` | `netresearch/{name}-skill` | Package identifier (matches repo name) |
 | `type` | `ai-agent-skill` | Enables plugin discovery |
 | `require` | `composer-agent-skill-plugin` | Plugin dependency |
 | `extra.ai-agent-skill` | Path to SKILL.md | Skill location |
 
 ### Package Naming Convention
 
-- Prefix: `netresearch/agent-`
-- Suffix: skill name without `-skill` suffix
+- Pattern: `netresearch/{name}-skill` (matches the GitHub repo name)
 - Examples:
-  - `typo3-docs-skill` → `netresearch/agent-typo3-docs`
-  - `enterprise-readiness-skill` → `netresearch/agent-enterprise-readiness`
+  - `typo3-docs-skill` → `netresearch/typo3-docs-skill`
+  - `enterprise-readiness-skill` → `netresearch/enterprise-readiness-skill`
 
 ## Multi-Skill Packages
 
@@ -63,7 +62,7 @@ For packages containing multiple skills:
 
 ```json
 {
-  "name": "netresearch/agent-{package-name}",
+  "name": "netresearch/{name}-skill",
   "type": "ai-agent-skill",
   "extra": {
     "ai-agent-skill": [
@@ -78,7 +77,7 @@ For packages containing multiple skills:
 
 ```json
 {
-  "name": "netresearch/agent-jira-skill",
+  "name": "netresearch/jira-skill",
   "extra": {
     "ai-agent-skill": [
       "skills/jira-communication/SKILL.md",

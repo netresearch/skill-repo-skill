@@ -41,13 +41,13 @@ description: "Use when <trigger conditions>"
 
 1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
 2. **Release**: Download and extract to `~/.claude/skills/{name}/`
-3. **Composer**: `composer require netresearch/agent-{name}`
+3. **Composer**: `composer require netresearch/{name}`
 
 ## Composer Package
 
 ```json
 {
-  "name": "netresearch/agent-{skill-name}",
+  "name": "netresearch/{skill-name}",
   "type": "ai-agent-skill",
   "require": {"netresearch/composer-agent-skill-plugin": "*"},
   "extra": {"ai-agent-skill": "SKILL.md"}
