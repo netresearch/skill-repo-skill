@@ -52,8 +52,7 @@ jobs:
               comments:
                 min-spaces-from-content: 1
               document-start: disable
-              indentation:
-                indent-sequences: whatever
+              indentation: disable
               line-length:
                 max: 200
               truthy:
