@@ -36,6 +36,21 @@ jobs:
       - name: YAML lint
         uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
 
+      - name: Validate plugin version format
+        run: |
+          PLUGIN_FILE=".claude-plugin/plugin.json"
+          if [[ ! -f "$PLUGIN_FILE" ]]; then
+            echo "::error::$PLUGIN_FILE not found"
+            exit 1
+          fi
+          PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
+          echo "plugin.json version: $PLUGIN_VERSION"
+          if ! echo "$PLUGIN_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::Invalid version format in plugin.json: $PLUGIN_VERSION"
+            exit 1
+          fi
+          echo "Version format valid"
+
       - name: ShellCheck scripts
         run: |
           # Auto-discover shell scripts in skill directories and root scripts/
