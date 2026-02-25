@@ -44,17 +44,18 @@ Add `composer.json` to ALL skills **EXCEPT** those explicitly targeting non-PHP 
 
 | Field | Value | Purpose |
 |-------|-------|---------|
-| `name` | `netresearch/{name}-skill` | Package identifier (matches repo name) |
+| `name` | `netresearch/{repo-name}` | Must match GitHub repo name exactly |
 | `type` | `ai-agent-skill` | Enables plugin discovery |
 | `require` | `composer-agent-skill-plugin` | Plugin dependency |
 | `extra.ai-agent-skill` | Path to SKILL.md | Skill location |
 
 ### Package Naming Convention
 
-- Pattern: `netresearch/{name}-skill` (matches the GitHub repo name)
+- **Rule: composer name = GitHub repo name** (`netresearch/{repo-name}`)
+- All skill repos are named `*-skill` on GitHub
 - Examples:
-  - `typo3-docs-skill` → `netresearch/typo3-docs-skill`
-  - `enterprise-readiness-skill` → `netresearch/enterprise-readiness-skill`
+  - Repo `netresearch/typo3-docs-skill` → composer name `netresearch/typo3-docs-skill`
+  - Repo `netresearch/jira-skill` → composer name `netresearch/jira-skill`
 
 ## Multi-Skill Packages
 

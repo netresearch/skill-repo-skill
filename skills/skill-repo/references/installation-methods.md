@@ -74,7 +74,7 @@ For PHP projects, install skills as Composer packages.
 composer require netresearch/composer-agent-skill-plugin
 
 # Install skills
-composer require netresearch/{skill-name}-skill
+composer require netresearch/{repo-name}
 ```
 
 ### How It Works
@@ -106,4 +106,4 @@ composer require netresearch/{skill-name}-skill
 |--------|----------|
 | Marketplace | Managed by Claude Code |
 | Release | `~/.claude/skills/{skill-name}/` |
-| Composer | `vendor/netresearch/{skill-name}-skill/` |
+| Composer | `vendor/netresearch/{repo-name}/` |

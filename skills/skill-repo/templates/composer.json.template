@@ -1,5 +1,5 @@
 {
-  "name": "netresearch/{skill-name}-skill",
+  "name": "netresearch/{repo-name}",
   "description": "{Skill description}",
   "type": "ai-agent-skill",
   "license": "MIT",

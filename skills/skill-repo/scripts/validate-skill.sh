@@ -130,12 +130,26 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
         error "composer.json type must be 'ai-agent-skill'"
     fi
 
-    # Name pattern: netresearch/*-skill or netresearch/*-agent-skill
+    # Name must match GitHub repo name (netresearch/{repo-name})
     COMP_NAME=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('name',''))" 2>/dev/null || echo "")
-    if [[ "$COMP_NAME" =~ ^netresearch/.*-skill$ ]]; then
-        success "composer.json name: $COMP_NAME"
+    REPO_NAME=""
+    if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+        REPO_NAME="${GITHUB_REPOSITORY#*/}"
+    elif git -C "$REPO_DIR" remote get-url origin &>/dev/null; then
+        REMOTE_URL=$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null)
+        REPO_NAME=$(basename "$REMOTE_URL" .git)
+    fi
+    if [[ -n "$REPO_NAME" ]]; then
+        EXPECTED_NAME="netresearch/$REPO_NAME"
+        if [[ "$COMP_NAME" == "$EXPECTED_NAME" ]]; then
+            success "composer.json name matches repo: $COMP_NAME"
+        else
+            error "composer.json name must match repo name: expected '$EXPECTED_NAME', got '$COMP_NAME'"
+        fi
+    elif [[ "$COMP_NAME" =~ ^netresearch/.*-skill$ ]]; then
+        success "composer.json name: $COMP_NAME (repo name check skipped - no git remote)"
     else
-        error "composer.json name must match netresearch/*-skill or netresearch/*-agent-skill: $COMP_NAME"
+        error "composer.json name must match netresearch/{repo-name}: $COMP_NAME"
     fi
 
     # Plugin dependency
