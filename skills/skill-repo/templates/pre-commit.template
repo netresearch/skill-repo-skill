@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# pre-commit hook: validate skill repo structure
+# Install: cp Build/hooks/pre-commit .git/hooks/pre-commit
+# Or use: git config core.hooksPath Build/hooks
+
+SCRIPT=""
+for f in scripts/validate-skill.sh skills/*/scripts/validate-skill.sh; do
+    [[ -f "$f" ]] && SCRIPT="$f" && break
+done
+
+if [[ -z "$SCRIPT" ]]; then
+    echo "No local validate-skill.sh found, skipping validation"
+    exit 0
+fi
+
+bash "$SCRIPT" .
