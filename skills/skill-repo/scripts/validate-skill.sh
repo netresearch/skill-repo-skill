@@ -145,16 +145,32 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
         warning "composer.json should require netresearch/composer-agent-skill-plugin"
     fi
 
-    # ai-agent-skill extra path exists
-    SKILL_PATH=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('extra',{}).get('ai-agent-skill',''))" 2>/dev/null || echo "")
-    if [[ -n "$SKILL_PATH" ]]; then
-        if [[ -f "$REPO_DIR/$SKILL_PATH" ]]; then
-            success "composer.json extra.ai-agent-skill path exists: $SKILL_PATH"
-        else
-            error "composer.json extra.ai-agent-skill points to missing file: $SKILL_PATH"
-        fi
-    else
+    # ai-agent-skill extra path(s) exist (supports both string and array values)
+    SKILL_PATH_ERRORS=$(python3 -c "
+import json, os
+data = json.load(open('$REPO_DIR/composer.json'))
+val = data.get('extra', {}).get('ai-agent-skill', '')
+paths = val if isinstance(val, list) else [val] if val else []
+if not paths:
+    print('MISSING')
+else:
+    for p in paths:
+        if not os.path.isfile(os.path.join('$REPO_DIR', p)):
+            print('NOTFOUND:' + p)
+        else:
+            print('OK:' + p)
+" 2>/dev/null || echo "ERROR")
+    if [[ "$SKILL_PATH_ERRORS" == "MISSING" ]]; then
         error "composer.json missing extra.ai-agent-skill"
+    elif [[ "$SKILL_PATH_ERRORS" == "ERROR" ]]; then
+        error "composer.json extra.ai-agent-skill could not be parsed"
+    else
+        while IFS= read -r line; do
+            case "$line" in
+                OK:*) success "composer.json skill path exists: ${line#OK:}" ;;
+                NOTFOUND:*) error "composer.json skill path missing: ${line#NOTFOUND:}" ;;
+            esac
+        done <<< "$SKILL_PATH_ERRORS"
     fi
 else
     error "composer.json not found"
@@ -201,7 +217,8 @@ for path in data.get('skills', []):
     # Author URL
     AUTHOR_URL=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('author',{}).get('url',''))" 2>/dev/null || echo "")
     if [[ -n "$AUTHOR_URL" ]]; then
-        if [[ "$AUTHOR_URL" == "https://www.netresearch.de" ]]; then
+        AUTHOR_URL_CLEAN="${AUTHOR_URL%/}"
+        if [[ "$AUTHOR_URL_CLEAN" == "https://www.netresearch.de" ]]; then
             success "plugin.json author.url is correct"
         else
             error "plugin.json author.url must be https://www.netresearch.de (got: $AUTHOR_URL)"
