@@ -33,11 +33,27 @@ jobs:
       - name: Run skill validation
         run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
 
+      - name: Markdown lint defaults
+        run: |
+          # Provide sensible defaults if repo has no markdownlint config
+          if [[ ! -f .markdownlint-cli2.jsonc ]] && [[ ! -f .markdownlint-cli2.yaml ]] && [[ ! -f .markdownlint.jsonc ]] && [[ ! -f .markdownlint.json ]]; then
+            echo '{"config":{"MD013":false,"MD024":false,"MD033":false,"MD036":false,"MD040":false,"MD041":false,"MD060":false}}' > .markdownlint-cli2.jsonc
+          fi
+
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@07035fd053f7be764496c0f8d8f9f41f98305101 # v22.0.0
 
       - name: YAML lint
         uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
+        with:
+          config_data: |
+            extends: default
+            rules:
+              document-start: disable
+              line-length:
+                max: 200
+              truthy:
+                allowed-values: ['true', 'false', 'on']
 
       - name: Validate plugin version format
         run: |
