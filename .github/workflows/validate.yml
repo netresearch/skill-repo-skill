@@ -29,3 +29,29 @@ jobs:
 
       - name: Run skill validation
         run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
+
+      - name: ShellCheck scripts
+        run: |
+          # Auto-discover shell scripts in skill directories and root scripts/
+          SCRIPTS=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
+            \( -name '*.sh' -type f -print \) | sort)
+          if [[ -z "$SCRIPTS" ]]; then
+            echo "No shell scripts found, skipping ShellCheck"
+            exit 0
+          fi
+          COUNT=$(echo "$SCRIPTS" | wc -l)
+          echo "Found $COUNT shell script(s)"
+          sudo apt-get update -qq > /dev/null 2>&1 && sudo apt-get install -y -qq shellcheck > /dev/null 2>&1
+          FAILED=0
+          while IFS= read -r script; do
+            [[ -z "$script" ]] && continue
+            echo "Checking: $script"
+            if ! shellcheck -x -S error "$script"; then
+              FAILED=1
+            fi
+          done <<< "$SCRIPTS"
+          if [[ $FAILED -eq 1 ]]; then
+            echo "::error::ShellCheck found errors"
+            exit 1
+          fi
+          echo "All $COUNT scripts passed ShellCheck"
