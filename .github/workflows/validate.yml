@@ -49,7 +49,11 @@ jobs:
           config_data: |
             extends: default
             rules:
+              comments:
+                min-spaces-from-content: 1
               document-start: disable
+              indentation:
+                indent-sequences: whatever
               line-length:
                 max: 200
               truthy:
