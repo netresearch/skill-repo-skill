@@ -1,0 +1,31 @@
+name: Validate Skill
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Skill Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@a90bcbc6539c36a85cdfeb73f7e2f433735f215b # v2.15.0
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Checkout validation script
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: netresearch/skill-repo-skill
+          path: .validate-skill
+          sparse-checkout: skills/skill-repo/scripts/validate-skill.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Run skill validation
+        run: bash .validate-skill/skills/skill-repo/scripts/validate-skill.sh .

@@ -14,7 +14,7 @@
     "netresearch/composer-agent-skill-plugin": "*"
   },
   "extra": {
-    "ai-agent-skill": "SKILL.md"
+    "ai-agent-skill": "skills/skill-repo/SKILL.md"
   },
   "support": {
     "issues": "https://github.com/netresearch/skill-repo-skill/issues",

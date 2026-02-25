@@ -1,146 +1,231 @@
 #!/bin/bash
-# validate-skill.sh - Validate skill repository structure
-# Usage: ./scripts/validate-skill.sh [path]
+# validate-skill.sh - Validate Netresearch skill repository structure
+# Usage: ./validate-skill.sh [repo-root-path]
+#
+# Checks: SKILL.md frontmatter, word count, composer.json, plugin.json,
+#          cross-file consistency, required files
+# Exit: 0 = valid, 1 = errors found
 
 set -euo pipefail
 
-SKILL_DIR="${1:-.}"
+REPO_DIR="${1:-.}"
 ERRORS=0
 WARNINGS=0
+NAME=""
 
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-error() {
-    echo -e "${RED}ERROR:${NC} $1"
-    ((ERRORS++))
-}
+error() { echo -e "${RED}ERROR:${NC} $1"; ((ERRORS++)) || true; }
+warning() { echo -e "${YELLOW}WARNING:${NC} $1"; ((WARNINGS++)) || true; }
+success() { echo -e "${GREEN}OK:${NC} $1"; }
 
-warning() {
-    echo -e "${YELLOW}WARNING:${NC} $1"
-    ((WARNINGS++))
-}
-
-success() {
-    echo -e "${GREEN}OK:${NC} $1"
-}
-
-echo "Validating skill repository: $SKILL_DIR"
+echo "Validating skill repository: $REPO_DIR"
 echo "========================================"
 
-# Check SKILL.md exists
-if [[ -f "$SKILL_DIR/SKILL.md" ]]; then
-    success "SKILL.md exists"
+# --- Discover SKILL.md ---
+SKILL_FILE=""
+if [[ -f "$REPO_DIR/SKILL.md" ]]; then
+    SKILL_FILE="$REPO_DIR/SKILL.md"
+else
+    for f in "$REPO_DIR"/skills/*/SKILL.md; do
+        if [[ -f "$f" ]]; then
+            SKILL_FILE="$f"
+            break
+        fi
+    done
+fi
 
-    # Check frontmatter
-    if head -1 "$SKILL_DIR/SKILL.md" | grep -q "^---$"; then
-        success "SKILL.md has frontmatter delimiter"
+# --- SKILL.md checks ---
+if [[ -n "$SKILL_FILE" ]]; then
+    success "SKILL.md found: ${SKILL_FILE#"$REPO_DIR"/}"
 
-        # Check name field
-        if grep -q "^name:" "$SKILL_DIR/SKILL.md"; then
-            NAME=$(grep "^name:" "$SKILL_DIR/SKILL.md" | head -1 | sed 's/name: *//')
-            if [[ "$NAME" =~ ^[a-z0-9-]{1,64}$ ]]; then
-                success "SKILL.md name is valid: $NAME"
-            else
-                error "SKILL.md name invalid (must be lowercase, hyphens, max 64 chars): $NAME"
-            fi
+    # Frontmatter delimiter
+    if head -1 "$SKILL_FILE" | grep -q "^---$"; then
+        success "SKILL.md has frontmatter"
+
+        # Extract frontmatter fields (between first two --- lines)
+        FRONTMATTER=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$SKILL_FILE")
+
+        # Check only name + description allowed in frontmatter
+        EXTRA_FIELDS=$(echo "$FRONTMATTER" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description):" || true)
+        if [[ -z "$EXTRA_FIELDS" ]]; then
+            success "Frontmatter has only name + description"
         else
-            error "SKILL.md missing 'name' field in frontmatter"
+            FIELD_NAMES=$(echo "$EXTRA_FIELDS" | sed 's/:.*//' | tr '\n' ', ' | sed 's/,$//')
+            error "Frontmatter has disallowed fields: $FIELD_NAMES"
         fi
 
-        # Check description field
-        if grep -q "^description:" "$SKILL_DIR/SKILL.md"; then
-            success "SKILL.md has description field"
+        # Check name field
+        if echo "$FRONTMATTER" | grep -q "^name:"; then
+            NAME=$(echo "$FRONTMATTER" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
+            if [[ "$NAME" =~ ^[a-z0-9-]{1,64}$ ]]; then
+                success "SKILL.md name valid: $NAME"
+            else
+                error "SKILL.md name invalid (lowercase, hyphens, max 64): $NAME"
+            fi
         else
-            error "SKILL.md missing 'description' field in frontmatter"
+            error "SKILL.md missing 'name' field"
+        fi
+
+        # Check description field and prefix
+        if echo "$FRONTMATTER" | grep -q "^description:"; then
+            DESC=$(echo "$FRONTMATTER" | grep "^description:" | head -1 | sed 's/description: *//' | sed 's/^"//' | sed 's/"$//')
+            if [[ "$DESC" == Use\ when* ]]; then
+                success "Description starts with 'Use when'"
+            else
+                error "Description must start with 'Use when': ${DESC:0:60}..."
+            fi
+        else
+            error "SKILL.md missing 'description' field"
         fi
     else
         error "SKILL.md missing frontmatter (must start with ---)"
     fi
 
-    # Check line count
-    LINES=$(wc -l < "$SKILL_DIR/SKILL.md")
-    if [[ $LINES -le 500 ]]; then
-        success "SKILL.md is $LINES lines (under 500 limit)"
+    # Word count check (max 500)
+    WORDS=$(wc -w < "$SKILL_FILE")
+    if [[ $WORDS -le 500 ]]; then
+        success "SKILL.md is $WORDS words (under 500 limit)"
     else
-        warning "SKILL.md is $LINES lines (recommended max 500)"
+        error "SKILL.md is $WORDS words (max 500)"
     fi
 else
-    error "SKILL.md not found"
+    error "SKILL.md not found (checked root and skills/*/)"
 fi
 
-# Check README.md exists
-if [[ -f "$SKILL_DIR/README.md" ]]; then
-    success "README.md exists"
-
-    # Check for Netresearch footer
-    if grep -q "Netresearch" "$SKILL_DIR/README.md"; then
-        success "README.md contains Netresearch reference"
+# --- Required files ---
+for file in README.md LICENSE .gitignore; do
+    if [[ -f "$REPO_DIR/$file" ]]; then
+        success "$file exists"
     else
-        warning "README.md should contain Netresearch credits"
+        error "$file not found"
     fi
+done
 
-    # Check for installation section
-    if grep -qi "## Installation" "$SKILL_DIR/README.md"; then
-        success "README.md has Installation section"
-    else
-        warning "README.md should have Installation section"
-    fi
+# Release workflow
+if [[ -f "$REPO_DIR/.github/workflows/release.yml" ]]; then
+    success "release.yml exists"
 else
-    error "README.md not found"
+    error ".github/workflows/release.yml not found"
 fi
 
-# Check LICENSE exists
-if [[ -f "$SKILL_DIR/LICENSE" ]]; then
-    success "LICENSE exists"
+# No composer.lock
+if [[ -f "$REPO_DIR/composer.lock" ]]; then
+    error "composer.lock must not exist in skill repos"
 else
-    error "LICENSE not found"
+    success "No composer.lock"
 fi
 
-# Check for composer.lock (should NOT exist)
-if [[ -f "$SKILL_DIR/composer.lock" ]]; then
-    error "composer.lock should not exist in skill repos"
-else
-    success "No composer.lock (correct)"
-fi
-
-# Check composer.json if exists
-if [[ -f "$SKILL_DIR/composer.json" ]]; then
+# --- composer.json checks ---
+if [[ -f "$REPO_DIR/composer.json" ]]; then
     success "composer.json exists"
 
-    # Check type
-    if grep -q '"type".*"ai-agent-skill"' "$SKILL_DIR/composer.json"; then
-        success "composer.json has correct type"
+    # Type
+    if grep -q '"type".*"ai-agent-skill"' "$REPO_DIR/composer.json"; then
+        success "composer.json type is ai-agent-skill"
     else
-        error "composer.json type should be 'ai-agent-skill'"
+        error "composer.json type must be 'ai-agent-skill'"
     fi
 
-    # Check for skill plugin dependency
-    if grep -q "composer-agent-skill-plugin" "$SKILL_DIR/composer.json"; then
+    # Name pattern
+    COMP_NAME=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('name',''))" 2>/dev/null || echo "")
+    if [[ "$COMP_NAME" == netresearch/agent-* ]]; then
+        success "composer.json name: $COMP_NAME"
+    else
+        error "composer.json name must match netresearch/agent-*: $COMP_NAME"
+    fi
+
+    # Plugin dependency
+    if grep -q "composer-agent-skill-plugin" "$REPO_DIR/composer.json"; then
         success "composer.json requires skill plugin"
     else
         warning "composer.json should require netresearch/composer-agent-skill-plugin"
     fi
 
-    # Check for ai-agent-skill extra
-    if grep -q '"ai-agent-skill"' "$SKILL_DIR/composer.json"; then
-        success "composer.json has ai-agent-skill extra"
+    # ai-agent-skill extra path exists
+    SKILL_PATH=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('extra',{}).get('ai-agent-skill',''))" 2>/dev/null || echo "")
+    if [[ -n "$SKILL_PATH" ]]; then
+        if [[ -f "$REPO_DIR/$SKILL_PATH" ]]; then
+            success "composer.json extra.ai-agent-skill path exists: $SKILL_PATH"
+        else
+            error "composer.json extra.ai-agent-skill points to missing file: $SKILL_PATH"
+        fi
     else
-        error "composer.json missing 'extra.ai-agent-skill' configuration"
+        error "composer.json missing extra.ai-agent-skill"
+    fi
+else
+    error "composer.json not found"
+fi
+
+# --- plugin.json checks ---
+PLUGIN_FILE="$REPO_DIR/.claude-plugin/plugin.json"
+if [[ -f "$PLUGIN_FILE" ]]; then
+    success "plugin.json exists"
+
+    # Name matches SKILL.md name
+    PLUGIN_NAME=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('name',''))" 2>/dev/null || echo "")
+    if [[ -n "$NAME" ]] && [[ "$PLUGIN_NAME" == "$NAME" ]]; then
+        success "plugin.json name matches SKILL.md: $PLUGIN_NAME"
+    elif [[ -n "$NAME" ]]; then
+        error "plugin.json name '$PLUGIN_NAME' does not match SKILL.md name '$NAME'"
+    fi
+
+    # Skills is array
+    SKILLS_TYPE=$(python3 -c "import json; s=json.load(open('$PLUGIN_FILE')).get('skills'); print('array' if isinstance(s, list) else type(s).__name__)" 2>/dev/null || echo "unknown")
+    if [[ "$SKILLS_TYPE" == "array" ]]; then
+        success "plugin.json skills is array"
+
+        # Check each skill path exists as directory
+        MISSING_PATHS=$(python3 -c "
+import json, os
+data = json.load(open('$PLUGIN_FILE'))
+for path in data.get('skills', []):
+    full = os.path.join('$REPO_DIR', path)
+    if not os.path.isdir(full):
+        print(path)
+" 2>/dev/null || true)
+        if [[ -z "$MISSING_PATHS" ]]; then
+            success "All plugin.json skill paths exist"
+        else
+            while IFS= read -r p; do
+                error "plugin.json skill path missing: $p"
+            done <<< "$MISSING_PATHS"
+        fi
+    else
+        error "plugin.json skills must be an array (got: $SKILLS_TYPE)"
+    fi
+
+    # Author URL
+    AUTHOR_URL=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('author',{}).get('url',''))" 2>/dev/null || echo "")
+    if [[ -n "$AUTHOR_URL" ]]; then
+        if [[ "$AUTHOR_URL" == "https://www.netresearch.de" ]]; then
+            success "plugin.json author.url is correct"
+        else
+            error "plugin.json author.url must be https://www.netresearch.de (got: $AUTHOR_URL)"
+        fi
+    fi
+else
+    error ".claude-plugin/plugin.json not found"
+fi
+
+# --- README.md quality checks (warnings only) ---
+if [[ -f "$REPO_DIR/README.md" ]]; then
+    if grep -q "Netresearch" "$REPO_DIR/README.md"; then
+        success "README.md contains Netresearch reference"
+    else
+        warning "README.md should contain Netresearch credits"
+    fi
+    if grep -qi "## Installation" "$REPO_DIR/README.md"; then
+        success "README.md has Installation section"
+    else
+        warning "README.md should have Installation section"
     fi
 fi
 
-# Check for common directories
-for dir in references scripts assets; do
-    if [[ -d "$SKILL_DIR/$dir" ]]; then
-        success "$dir/ directory exists"
-    fi
-done
-
-# Summary
+# --- Summary ---
 echo ""
 echo "========================================"
 echo "Validation Summary"
@@ -152,6 +237,6 @@ if [[ $ERRORS -eq 0 ]]; then
     echo -e "${GREEN}Skill repository is valid!${NC}"
     exit 0
 else
-    echo -e "${RED}Skill repository has errors that must be fixed.${NC}"
+    echo -e "${RED}Skill repository has $ERRORS error(s) that must be fixed.${NC}"
     exit 1
 fi
