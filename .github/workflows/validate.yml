@@ -27,6 +27,9 @@ jobs:
           sparse-checkout: skills/skill-repo/scripts/
           sparse-checkout-cone-mode: false
 
+      - name: Set up uv
+        uses: astral-sh/setup-uv@eac588ad8def6316056a12d4907a9d4d84ff7a3b # v7.3.0
+
       - name: Run skill validation
         run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
 
@@ -87,11 +90,10 @@ jobs:
           fi
           COUNT=$(echo "$PYFILES" | wc -l)
           echo "Found $COUNT Python file(s)"
-          pip install ruff -q
           echo "=== ruff check ==="
-          ruff check .
+          uvx ruff check .
           echo "=== ruff format ==="
-          ruff format --check .
+          uvx ruff format --check .
 
       - name: Validate checkpoint schemas
         run: |
@@ -103,7 +105,7 @@ jobs:
           fi
           COUNT=$(echo "$CHECKPOINT_FILES" | wc -l)
           echo "Found $COUNT checkpoint file(s)"
-          pip install pyyaml -q
+          uv pip install --system pyyaml -q
           FAILED=0
           while IFS= read -r f; do
             [[ -z "$f" ]] && continue
