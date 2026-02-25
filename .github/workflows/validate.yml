@@ -76,3 +76,73 @@ jobs:
             exit 1
           fi
           echo "All $COUNT scripts passed ShellCheck"
+
+      - name: Python lint
+        run: |
+          PYFILES=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
+            -name '*.py' -type f -print | sort)
+          if [[ -z "$PYFILES" ]]; then
+            echo "No Python files found, skipping"
+            exit 0
+          fi
+          COUNT=$(echo "$PYFILES" | wc -l)
+          echo "Found $COUNT Python file(s)"
+          # Collect directories containing .py files
+          DIRS=$(echo "$PYFILES" | xargs -I{} dirname {} | sort -u | tr '\n' ' ')
+          pip install ruff -q
+          echo "=== ruff check ==="
+          ruff check $DIRS
+          echo "=== ruff format ==="
+          ruff format --check $DIRS
+
+      - name: Validate checkpoint schemas
+        run: |
+          CHECKPOINT_FILES=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
+            -name 'checkpoints.yaml' -o -name '*-checkpoints.yaml' | grep -v '.skill-repo-tools' | sort)
+          if [[ -z "$CHECKPOINT_FILES" ]]; then
+            echo "No checkpoint files found, skipping"
+            exit 0
+          fi
+          COUNT=$(echo "$CHECKPOINT_FILES" | wc -l)
+          echo "Found $COUNT checkpoint file(s)"
+          pip install pyyaml -q
+          FAILED=0
+          while IFS= read -r f; do
+            [[ -z "$f" ]] && continue
+            echo "=== Validating $f ==="
+            python3 -c "
+          import sys, yaml
+          with open('$f') as fh:
+              data = yaml.safe_load(fh)
+          if not isinstance(data, dict):
+              print('ERROR: not a YAML mapping')
+              sys.exit(1)
+          has_mechanical = 'mechanical' in data
+          has_llm = 'llm_reviews' in data
+          if not has_mechanical and not has_llm:
+              print('ERROR: must have mechanical and/or llm_reviews section')
+              sys.exit(1)
+          all_ids = []
+          for section in ('mechanical', 'llm_reviews'):
+              items = data.get(section, [])
+              if items is None:
+                  continue
+              for item in items:
+                  if 'id' not in item:
+                      print(f'ERROR: entry in {section} missing id field')
+                      sys.exit(1)
+                  all_ids.append(item['id'])
+          dupes = [x for x in all_ids if all_ids.count(x) > 1]
+          if dupes:
+              print(f'ERROR: duplicate checkpoint IDs: {set(dupes)}')
+              sys.exit(1)
+          m = len(data.get('mechanical', []) or [])
+          l = len(data.get('llm_reviews', []) or [])
+          print(f'Valid: {m} mechanical + {l} LLM review checkpoints')
+          " || FAILED=1
+          done <<< "$CHECKPOINT_FILES"
+          if [[ $FAILED -eq 1 ]]; then
+            echo "::error::Checkpoint validation failed"
+            exit 1
+          fi
+          echo "All $COUNT checkpoint file(s) valid"
