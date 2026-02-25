@@ -19,13 +19,119 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Checkout validation script
+      - name: Checkout validation tools
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: netresearch/skill-repo-skill
-          path: .validate-skill
-          sparse-checkout: skills/skill-repo/scripts/validate-skill.sh
+          path: .skill-repo-tools
+          sparse-checkout: skills/skill-repo/scripts/
           sparse-checkout-cone-mode: false
 
       - name: Run skill validation
-        run: bash .validate-skill/skills/skill-repo/scripts/validate-skill.sh .
+        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
+
+      - name: ShellCheck scripts
+        run: |
+          # Auto-discover shell scripts in skill directories and root scripts/
+          SCRIPTS=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
+            \( -name '*.sh' -type f -print \) | sort)
+          if [[ -z "$SCRIPTS" ]]; then
+            echo "No shell scripts found, skipping ShellCheck"
+            exit 0
+          fi
+          COUNT=$(echo "$SCRIPTS" | wc -l)
+          echo "Found $COUNT shell script(s)"
+          sudo apt-get update -qq > /dev/null 2>&1 && sudo apt-get install -y -qq shellcheck > /dev/null 2>&1
+          FAILED=0
+          while IFS= read -r script; do
+            [[ -z "$script" ]] && continue
+            echo "Checking: $script"
+            if ! shellcheck -x -S error "$script"; then
+              FAILED=1
+            fi
+          done <<< "$SCRIPTS"
+          if [[ $FAILED -eq 1 ]]; then
+            echo "::error::ShellCheck found errors"
+            exit 1
+          fi
+          echo "All $COUNT scripts passed ShellCheck"
+
+      - name: Verify checkpoints
+        run: |
+          # Find checkpoints.yaml in skill directories
+          CHECKPOINT_FILES=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
+            -name 'checkpoints.yaml' -print | sort)
+          if [[ -z "$CHECKPOINT_FILES" ]]; then
+            echo "No checkpoints.yaml found, skipping"
+            exit 0
+          fi
+          # Install yq
+          sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.52.2/yq_linux_amd64 2>/dev/null
+          sudo chmod +x /usr/local/bin/yq
+
+          ERROR_FILE=$(mktemp)
+          trap 'rm -f "$ERROR_FILE"' EXIT
+
+          while IFS= read -r checkpoints_file; do
+            [[ -z "$checkpoints_file" ]] && continue
+            echo "=== Processing $checkpoints_file ==="
+
+            while read -r checkpoint; do
+              id=$(echo "$checkpoint" | jq -r '.id')
+              type=$(echo "$checkpoint" | jq -r '.type')
+              target=$(echo "$checkpoint" | jq -r '.target')
+              pattern=$(echo "$checkpoint" | jq -r '.pattern // empty')
+              severity=$(echo "$checkpoint" | jq -r '.severity')
+              desc=$(echo "$checkpoint" | jq -r '.desc')
+
+              if [[ ! -f "$target" ]]; then
+                if [[ "$severity" == "error" ]]; then
+                  echo "::error::[$id] $desc (file not found: $target)"
+                  echo "1" > "$ERROR_FILE"
+                fi
+                continue
+              fi
+
+              case "$type" in
+                "file_exists")
+                  if [[ -f "$target" ]]; then
+                    echo "OK: [$id] $desc"
+                  else
+                    echo "::error::[$id] $desc"
+                    [[ "$severity" == "error" ]] && echo "1" > "$ERROR_FILE"
+                  fi
+                  ;;
+                "regex")
+                  if grep -qE "$pattern" "$target" 2>/dev/null; then
+                    echo "OK: [$id] $desc"
+                  else
+                    if [[ "$severity" == "error" ]]; then
+                      echo "::error::[$id] $desc"
+                      echo "1" > "$ERROR_FILE"
+                    else
+                      echo "WARNING: [$id] $desc"
+                    fi
+                  fi
+                  ;;
+                "regex_not")
+                  if grep -qE "$pattern" "$target" 2>/dev/null; then
+                    if [[ "$severity" == "error" ]]; then
+                      echo "::error::[$id] $desc"
+                      grep -nE "$pattern" "$target" | head -3
+                      echo "1" > "$ERROR_FILE"
+                    else
+                      echo "WARNING: [$id] $desc"
+                    fi
+                  else
+                    echo "OK: [$id] $desc"
+                  fi
+                  ;;
+              esac
+            done < <(yq e '.mechanical[]' "$checkpoints_file" -o=json | jq -c '.')
+          done <<< "$CHECKPOINT_FILES"
+
+          if [[ -s "$ERROR_FILE" ]]; then
+            echo "::error::Some checkpoints failed"
+            exit 1
+          fi
+          echo "All checkpoints passed"
