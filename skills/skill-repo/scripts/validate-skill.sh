@@ -181,12 +181,17 @@ PLUGIN_FILE="$REPO_DIR/.claude-plugin/plugin.json"
 if [[ -f "$PLUGIN_FILE" ]]; then
     success "plugin.json exists"
 
-    # Name matches SKILL.md name
+    # Name matches SKILL.md name (only for single-skill repos)
     PLUGIN_NAME=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('name',''))" 2>/dev/null || echo "")
-    if [[ -n "$NAME" ]] && [[ "$PLUGIN_NAME" == "$NAME" ]]; then
-        success "plugin.json name matches SKILL.md: $PLUGIN_NAME"
-    elif [[ -n "$NAME" ]]; then
-        error "plugin.json name '$PLUGIN_NAME' does not match SKILL.md name '$NAME'"
+    SKILL_COUNT=$(python3 -c "import json; print(len(json.load(open('$PLUGIN_FILE')).get('skills',[])))" 2>/dev/null || echo "1")
+    if [[ "$SKILL_COUNT" -le 1 ]]; then
+        if [[ -n "$NAME" ]] && [[ "$PLUGIN_NAME" == "$NAME" ]]; then
+            success "plugin.json name matches SKILL.md: $PLUGIN_NAME"
+        elif [[ -n "$NAME" ]]; then
+            error "plugin.json name '$PLUGIN_NAME' does not match SKILL.md name '$NAME'"
+        fi
+    else
+        success "plugin.json is multi-skill ($SKILL_COUNT skills), name check skipped"
     fi
 
     # Skills is array
