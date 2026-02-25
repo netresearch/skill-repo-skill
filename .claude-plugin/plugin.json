@@ -6,7 +6,7 @@
   "license": "MIT",
   "author": {
     "name": "Netresearch DTT GmbH",
-    "url": "https://github.com/netresearch/skill-repo-skill"
+    "url": "https://www.netresearch.de"
   },
   "skills": [
     "./skills/skill-repo"
