@@ -97,13 +97,20 @@ else
 fi
 
 # --- Required files ---
-for file in README.md LICENSE .gitignore; do
+for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
     if [[ -f "$REPO_DIR/$file" ]]; then
         success "$file exists"
     else
         error "$file not found"
     fi
 done
+
+# Warn about old single LICENSE file
+if [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
+    warning "Old LICENSE file still exists alongside LICENSE-MIT — remove it"
+elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ ! -f "$REPO_DIR/LICENSE-MIT" ]]; then
+    warning "Single LICENSE file found — migrate to LICENSE-MIT + LICENSE-CC-BY-SA-4.0"
+fi
 
 # Release workflow
 if [[ -f "$REPO_DIR/.github/workflows/release.yml" ]]; then
@@ -128,6 +135,14 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
         success "composer.json type is ai-agent-skill"
     else
         error "composer.json type must be 'ai-agent-skill'"
+    fi
+
+    # License SPDX expression
+    COMP_LICENSE=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('license',''))" 2>/dev/null || echo "")
+    if [[ "$COMP_LICENSE" == "(MIT AND CC-BY-SA-4.0)" ]]; then
+        success "composer.json license is correct SPDX expression"
+    else
+        warning "composer.json license should be '(MIT AND CC-BY-SA-4.0)', got: $COMP_LICENSE"
     fi
 
     # Name must match GitHub repo name (netresearch/{repo-name})
