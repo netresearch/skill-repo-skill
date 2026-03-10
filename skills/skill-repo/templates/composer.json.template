@@ -2,7 +2,7 @@
   "name": "netresearch/{repo-name}",
   "description": "{Skill description}",
   "type": "ai-agent-skill",
-  "license": "MIT",
+  "license": "(MIT AND CC-BY-SA-4.0)",
   "authors": [
     {
       "name": "Netresearch DTT GmbH",
