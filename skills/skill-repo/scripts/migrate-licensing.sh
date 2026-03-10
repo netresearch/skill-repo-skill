@@ -124,7 +124,7 @@ fi
 
 # 5. Update README.md license section
 if [[ -f "$REPO_DIR/README.md" ]]; then
-    python3 << 'PYEOF'
+    python3 - "$REPO_DIR" << 'PYEOF'
 import re, sys
 
 repo_dir = sys.argv[1] if len(sys.argv) > 1 else "."
