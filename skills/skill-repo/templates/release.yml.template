@@ -36,7 +36,8 @@ jobs:
 
           # Copy skill-relevant files only
           cp SKILL.md dist/
-          cp LICENSE dist/
+          cp LICENSE-MIT dist/
+          cp LICENSE-CC-BY-SA-4.0 dist/
 
           # Copy directories if they exist
           [ -d "references" ] && cp -r references dist/

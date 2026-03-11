@@ -19,12 +19,26 @@ Standards for Netresearch skill repository layout and distribution.
 {skill-name}/
 ├── SKILL.md              # AI instructions (required)
 ├── README.md             # Human documentation (required)
-├── LICENSE               # MIT (required)
+├── LICENSE-MIT           # Code license (required)
+├── LICENSE-CC-BY-SA-4.0  # Content license (required)
 ├── composer.json         # PHP distribution
 ├── references/           # Extended docs
 ├── scripts/              # Automation
 └── .github/workflows/release.yml
 ```
+
+## Licensing
+
+Skill repos use split licensing:
+
+| Path pattern | License |
+|---|---|
+| `skills/**/*.md`, `references/**`, `assets/**/*.md`, `README.md`, `docs/**` | CC-BY-SA-4.0 |
+| `scripts/**`, `Build/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
+| `composer.json`, `plugin.json`, config files | MIT |
+| Code snippets embedded in `.md` files | Dual (both apply) |
+
+Composer/plugin metadata uses SPDX compound expression: `(MIT AND CC-BY-SA-4.0)`
 
 ## SKILL.md Requirements
 

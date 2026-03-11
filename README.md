@@ -74,7 +74,8 @@ The skill triggers on keywords like:
 {skill-name}/
 ├── SKILL.md              # AI instructions
 ├── README.md             # Human documentation
-├── LICENSE               # MIT license
+├── LICENSE-MIT           # Code license (MIT)
+├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
 ├── composer.json         # PHP distribution
 ├── references/           # Extended docs
 ├── scripts/              # Automation
@@ -100,7 +101,8 @@ The skill triggers on keywords like:
 skill-repo-skill/
 ├── SKILL.md                      # AI instructions
 ├── README.md                     # This file
-├── LICENSE                       # MIT
+├── LICENSE-MIT                   # Code license (MIT)
+├── LICENSE-CC-BY-SA-4.0          # Content license (CC-BY-SA-4.0)
 ├── composer.json                 # PHP distribution
 ├── templates/
 │   ├── README.md.template        # README template for skills
@@ -134,7 +136,12 @@ Contributions welcome! Please submit PRs for:
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+This project uses split licensing:
+
+- **Code** (scripts, workflows, configs): [MIT](LICENSE-MIT)
+- **Content** (skill definitions, documentation, references): [CC-BY-SA-4.0](LICENSE-CC-BY-SA-4.0)
+
+See the individual license files for full terms.
 
 ## Credits
 

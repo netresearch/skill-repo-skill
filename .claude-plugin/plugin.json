@@ -3,7 +3,7 @@
   "version": "1.6.6",
   "description": "Guide for structuring Netresearch skill repositories",
   "repository": "https://github.com/netresearch/skill-repo-skill",
-  "license": "MIT",
+  "license": "(MIT AND CC-BY-SA-4.0)",
   "author": {
     "name": "Netresearch DTT GmbH",
     "url": "https://www.netresearch.de"
