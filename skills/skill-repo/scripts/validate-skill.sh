@@ -138,7 +138,12 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
     fi
 
     # License SPDX expression
-    COMP_LICENSE=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('license',''))" 2>/dev/null || echo "")
+    COMP_LICENSE=$(python3 - "$REPO_DIR" <<'PYEOF' 2>/dev/null || echo ""
+import json, sys
+with open(f'{sys.argv[1]}/composer.json', 'r') as f:
+    print(json.load(f).get('license', ''))
+PYEOF
+)
     if [[ "$COMP_LICENSE" == "(MIT AND CC-BY-SA-4.0)" ]]; then
         success "composer.json license is correct SPDX expression"
     else
@@ -146,7 +151,12 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
     fi
 
     # Name must match GitHub repo name (netresearch/{repo-name})
-    COMP_NAME=$(python3 -c "import json; print(json.load(open('$REPO_DIR/composer.json')).get('name',''))" 2>/dev/null || echo "")
+    COMP_NAME=$(python3 - "$REPO_DIR" <<'PYEOF' 2>/dev/null || echo ""
+import json, sys
+with open(f'{sys.argv[1]}/composer.json', 'r') as f:
+    print(json.load(f).get('name', ''))
+PYEOF
+)
     REPO_NAME=""
     if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
         REPO_NAME="${GITHUB_REPOSITORY#*/}"
@@ -175,20 +185,22 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
     fi
 
     # ai-agent-skill extra path(s) exist (supports both string and array values)
-    SKILL_PATH_ERRORS=$(python3 -c "
-import json, os
-data = json.load(open('$REPO_DIR/composer.json'))
+    SKILL_PATH_ERRORS=$(python3 - "$REPO_DIR" <<'PYEOF' 2>/dev/null || echo "ERROR"
+import json, os, sys
+repo_dir = sys.argv[1]
+data = json.load(open(os.path.join(repo_dir, 'composer.json')))
 val = data.get('extra', {}).get('ai-agent-skill', '')
 paths = val if isinstance(val, list) else [val] if val else []
 if not paths:
     print('MISSING')
 else:
     for p in paths:
-        if not os.path.isfile(os.path.join('$REPO_DIR', p)):
+        if not os.path.isfile(os.path.join(repo_dir, p)):
             print('NOTFOUND:' + p)
         else:
             print('OK:' + p)
-" 2>/dev/null || echo "ERROR")
+PYEOF
+)
     if [[ "$SKILL_PATH_ERRORS" == "MISSING" ]]; then
         error "composer.json missing extra.ai-agent-skill"
     elif [[ "$SKILL_PATH_ERRORS" == "ERROR" ]]; then
@@ -211,8 +223,18 @@ if [[ -f "$PLUGIN_FILE" ]]; then
     success "plugin.json exists"
 
     # Name matches SKILL.md name (only for single-skill repos)
-    PLUGIN_NAME=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('name',''))" 2>/dev/null || echo "")
-    SKILL_COUNT=$(python3 -c "import json; print(len(json.load(open('$PLUGIN_FILE')).get('skills',[])))" 2>/dev/null || echo "1")
+    PLUGIN_NAME=$(python3 - "$PLUGIN_FILE" <<'PYEOF' 2>/dev/null || echo ""
+import json, sys
+with open(sys.argv[1], 'r') as f:
+    print(json.load(f).get('name', ''))
+PYEOF
+)
+    SKILL_COUNT=$(python3 - "$PLUGIN_FILE" <<'PYEOF' 2>/dev/null || echo "1"
+import json, sys
+with open(sys.argv[1], 'r') as f:
+    print(len(json.load(f).get('skills', [])))
+PYEOF
+)
     if [[ "$SKILL_COUNT" -le 1 ]]; then
         if [[ -n "$NAME" ]] && [[ "$PLUGIN_NAME" == "$NAME" ]]; then
             success "plugin.json name matches SKILL.md: $PLUGIN_NAME"
@@ -224,19 +246,27 @@ if [[ -f "$PLUGIN_FILE" ]]; then
     fi
 
     # Skills is array
-    SKILLS_TYPE=$(python3 -c "import json; s=json.load(open('$PLUGIN_FILE')).get('skills'); print('array' if isinstance(s, list) else type(s).__name__)" 2>/dev/null || echo "unknown")
+    SKILLS_TYPE=$(python3 - "$PLUGIN_FILE" <<'PYEOF' 2>/dev/null || echo "unknown"
+import json, sys
+with open(sys.argv[1], 'r') as f:
+    s = json.load(f).get('skills')
+print('array' if isinstance(s, list) else type(s).__name__)
+PYEOF
+)
     if [[ "$SKILLS_TYPE" == "array" ]]; then
         success "plugin.json skills is array"
 
         # Check each skill path exists as directory
-        MISSING_PATHS=$(python3 -c "
-import json, os
-data = json.load(open('$PLUGIN_FILE'))
+        MISSING_PATHS=$(python3 - "$PLUGIN_FILE" "$REPO_DIR" <<'PYEOF' 2>/dev/null || true
+import json, os, sys
+with open(sys.argv[1], 'r') as f:
+    data = json.load(f)
 for path in data.get('skills', []):
-    full = os.path.join('$REPO_DIR', path)
+    full = os.path.join(sys.argv[2], path)
     if not os.path.isdir(full):
         print(path)
-" 2>/dev/null || true)
+PYEOF
+)
         if [[ -z "$MISSING_PATHS" ]]; then
             success "All plugin.json skill paths exist"
         else
@@ -249,7 +279,12 @@ for path in data.get('skills', []):
     fi
 
     # Author URL
-    AUTHOR_URL=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE')).get('author',{}).get('url',''))" 2>/dev/null || echo "")
+    AUTHOR_URL=$(python3 - "$PLUGIN_FILE" <<'PYEOF' 2>/dev/null || echo ""
+import json, sys
+with open(sys.argv[1], 'r') as f:
+    print(json.load(f).get('author', {}).get('url', ''))
+PYEOF
+)
     if [[ -n "$AUTHOR_URL" ]]; then
         AUTHOR_URL_CLEAN="${AUTHOR_URL%/}"
         if [[ "$AUTHOR_URL_CLEAN" == "https://www.netresearch.de" ]]; then

@@ -94,33 +94,23 @@ Under the following terms:
   must distribute your contributions under the same license as the original.
 CCEOF
 
-# 3. Update composer.json
-if [[ -f "$REPO_DIR/composer.json" ]]; then
-    python3 -c "
-import json
-with open('$REPO_DIR/composer.json', 'r') as f:
-    data = json.load(f)
-data['license'] = '(MIT AND CC-BY-SA-4.0)'
-with open('$REPO_DIR/composer.json', 'w') as f:
-    json.dump(data, f, indent=4)
-    f.write('\n')
-"
-    echo "Updated composer.json license"
-fi
+# 3. Update composer.json and plugin.json
+python3 - "$REPO_DIR" << 'PYEOF'
+import json, sys, os
+repo_dir = sys.argv[1]
 
-# 4. Update plugin.json
-if [[ -f "$REPO_DIR/.claude-plugin/plugin.json" ]]; then
-    python3 -c "
-import json
-with open('$REPO_DIR/.claude-plugin/plugin.json', 'r') as f:
-    data = json.load(f)
-data['license'] = '(MIT AND CC-BY-SA-4.0)'
-with open('$REPO_DIR/.claude-plugin/plugin.json', 'w') as f:
-    json.dump(data, f, indent=4)
-    f.write('\n')
-"
-    echo "Updated plugin.json license"
-fi
+for rel_path, label in [("composer.json", "composer.json"), (".claude-plugin/plugin.json", "plugin.json")]:
+    full_path = os.path.join(repo_dir, rel_path)
+    if not os.path.isfile(full_path):
+        continue
+    with open(full_path, 'r') as f:
+        data = json.load(f)
+    data['license'] = '(MIT AND CC-BY-SA-4.0)'
+    with open(full_path, 'w') as f:
+        json.dump(data, f, indent=4)
+        f.write('\n')
+    print(f"Updated {label} license")
+PYEOF
 
 # 5. Update README.md license section
 if [[ -f "$REPO_DIR/README.md" ]]; then
