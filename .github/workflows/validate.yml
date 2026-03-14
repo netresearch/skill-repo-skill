@@ -43,20 +43,25 @@ jobs:
       - name: Markdown lint
         uses: DavidAnson/markdownlint-cli2-action@07035fd053f7be764496c0f8d8f9f41f98305101 # v22.0.0
 
+      - name: YAML lint defaults
+        run: |
+          if [[ ! -f .yamllint.yml ]] && [[ ! -f .yamllint.yaml ]] && [[ ! -f .yamllint ]]; then
+            cat > .yamllint.yml << 'YAMLEOF'
+          extends: default
+          rules:
+            comments:
+              min-spaces-from-content: 1
+            document-start: disable
+            indentation: disable
+            line-length:
+              max: 200
+            truthy:
+              allowed-values: ['true', 'false', 'on']
+          YAMLEOF
+          fi
+
       - name: YAML lint
         uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
-        with:
-          config_data: |
-            extends: default
-            rules:
-              comments:
-                min-spaces-from-content: 1
-              document-start: disable
-              indentation: disable
-              line-length:
-                max: 200
-              truthy:
-                allowed-values: ['true', 'false', 'on']
 
       - name: Validate plugin version format
         run: |
