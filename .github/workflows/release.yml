@@ -61,7 +61,7 @@ jobs:
               fi
             done
             [[ -f "$src/checkpoints.yaml" ]] && cp "$src/checkpoints.yaml" "$dst/"
-            cp LICENSE "$dst/" 2>/dev/null || true
+            cp LICENSE-MIT LICENSE-CC-BY-SA-4.0 "$dst/" 2>/dev/null || true
           }
 
           # --- Package each skill standalone ---
@@ -104,7 +104,7 @@ jobs:
             fi
           done <<< "$SKILL_PATHS"
 
-          cp LICENSE "$PLUGIN_DIST/" 2>/dev/null || true
+          cp LICENSE-MIT LICENSE-CC-BY-SA-4.0 "$PLUGIN_DIST/" 2>/dev/null || true
           [[ -d ".claude-plugin" ]] && cp -r .claude-plugin "$PLUGIN_DIST/"
           [[ -d "hooks" ]] && cp -r hooks "$PLUGIN_DIST/"
           if [[ -d "scripts" ]]; then
