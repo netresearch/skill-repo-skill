@@ -16,3 +16,6 @@ dist/
 # Never include composer.lock in skill repos
 composer.lock
 vendor/
+
+# Superpowers plans (local only)
+docs/
