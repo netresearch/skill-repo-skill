@@ -41,7 +41,7 @@ jobs:
           echo "Waiting for CI checks to complete..."
           for i in {1..60}; do
             CHECKS=$(gh pr checks "$PR_URL" --json name,state \
-              --jq '[.[] | select(.name != "Auto-merge dependency PRs")]')
+              --jq '[.[] | select(.name | test("Auto-merge dependency PRs"; "i") | not)]')
 
             FAILED=$(echo "$CHECKS" | jq '[.[] | select(.state == "FAILURE" or .state == "ERROR")] | length')
             PENDING=$(echo "$CHECKS" | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED" or .state == "IN_PROGRESS")] | length')
