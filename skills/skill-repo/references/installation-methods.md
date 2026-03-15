@@ -44,7 +44,8 @@ Download packaged skill files from GitHub Releases.
 
 Release packages contain only skill-relevant files:
 - `SKILL.md`
-- `LICENSE`
+- `LICENSE-MIT`
+- `LICENSE-CC-BY-SA-4.0`
 - `references/`
 - `scripts/`
 - `assets/`

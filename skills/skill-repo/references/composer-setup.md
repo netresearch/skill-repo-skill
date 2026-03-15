@@ -22,7 +22,7 @@ Add `composer.json` to ALL skills **EXCEPT** those explicitly targeting non-PHP 
   "name": "netresearch/{skill-name}-skill",
   "description": "{Skill description from SKILL.md}",
   "type": "ai-agent-skill",
-  "license": "MIT",
+  "license": "(MIT AND CC-BY-SA-4.0)",
   "authors": [
     {
       "name": "Netresearch DTT GmbH",

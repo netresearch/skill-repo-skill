@@ -17,6 +17,7 @@ Standards for Netresearch skill repository layout and distribution.
 
 ```
 {skill-name}/
+├── .claude-plugin/plugin.json  # Plugin metadata (required)
 ├── SKILL.md              # AI instructions (required)
 ├── README.md             # Human documentation (required)
 ├── LICENSE-MIT           # Code license (required)
@@ -49,7 +50,7 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-- Under 500 lines, use references/ for extended content
+- Under 500 words, use references/ for extended content
 
 ## Installation Methods
 
@@ -81,6 +82,13 @@ scripts/validate-skill.sh
 - `references/installation-methods.md`
 - `references/composer-setup.md`
 - `templates/README.md.template`
+
+## Releasing
+
+1. Bump version in `.claude-plugin/plugin.json`
+2. Commit: `chore: release vX.Y.Z`
+3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
+4. Push: `git push origin main vX.Y.Z`
 
 ---
 

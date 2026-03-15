@@ -36,7 +36,7 @@ The [claude-code-marketplace](https://github.com/netresearch/claude-code-marketp
 - **Trigger:** GitHub Actions schedule
 - **Process:**
   1. Clone each source repository
-  2. Extract semantic version from SKILL.md
+  2. Extract semantic version from `.claude-plugin/plugin.json`
   3. Append commit date for versioning
   4. Copy skill files to `skills/` directory
   5. Update marketplace metadata
@@ -70,7 +70,7 @@ jobs:
 ### Prerequisites
 
 1. Skill repository follows standard structure
-2. SKILL.md has valid frontmatter with version
+2. `.claude-plugin/plugin.json` has valid version
 3. Repository is public
 
 ### Configuration
@@ -92,7 +92,7 @@ Add skill to `.sync-config.json` in marketplace repo:
 ### Versioning
 
 Marketplace versions combine:
-- Semantic version from SKILL.md frontmatter
+- Semantic version from `.claude-plugin/plugin.json`
 - Last commit date
 
 Example: `1.2.3-20251021`
@@ -107,7 +107,8 @@ From source repository:
 - `scripts/`
 - `assets/`
 - `templates/`
-- `LICENSE`
+- `LICENSE-MIT`
+- `LICENSE-CC-BY-SA-4.0`
 
 ### Files NOT Synced
 
