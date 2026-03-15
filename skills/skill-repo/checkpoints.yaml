@@ -1,0 +1,177 @@
+# Checkpoints for skill-repo
+# Validates Netresearch skill repository structure and conventions
+
+version: 1
+skill_id: skill-repo
+
+preconditions:
+  - type: file_exists
+    target: .claude-plugin/plugin.json
+  - type: command
+    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' -not -path './node_modules/*' | head -1 | grep -q ."
+
+mechanical:
+  # License files
+  - id: SR-01
+    type: file_exists
+    target: LICENSE-MIT
+    severity: error
+    desc: "LICENSE-MIT must exist"
+
+  - id: SR-02
+    type: file_exists
+    target: LICENSE-CC-BY-SA-4.0
+    severity: error
+    desc: "LICENSE-CC-BY-SA-4.0 must exist"
+
+  - id: SR-03
+    type: file_not_exists
+    target: LICENSE
+    severity: error
+    desc: "Bare LICENSE file must not exist (use split licensing)"
+
+  - id: SR-04
+    type: contains
+    target: LICENSE-MIT
+    pattern: "Netresearch DTT GmbH"
+    severity: error
+    desc: "LICENSE-MIT must use correct entity name"
+
+  - id: SR-05
+    type: not_contains
+    target: LICENSE-MIT
+    pattern: "GmbH & Co. KG"
+    severity: error
+    desc: "LICENSE-MIT must not use old entity name"
+
+  # Metadata
+  - id: SR-06
+    type: json_path
+    target: composer.json
+    pattern: ".license"
+    severity: error
+    desc: "composer.json must have license field"
+
+  - id: SR-07
+    type: contains
+    target: composer.json
+    pattern: "(MIT AND CC-BY-SA-4.0)"
+    severity: error
+    desc: "composer.json license must be SPDX compound expression"
+
+  - id: SR-08
+    type: contains
+    target: .claude-plugin/plugin.json
+    pattern: "(MIT AND CC-BY-SA-4.0)"
+    severity: error
+    desc: "plugin.json license must be SPDX compound expression"
+
+  - id: SR-09
+    type: json_path
+    target: .claude-plugin/plugin.json
+    pattern: ".version"
+    severity: error
+    desc: "plugin.json must have version field"
+
+  - id: SR-10
+    type: contains
+    target: composer.json
+    pattern: "ai-agent-skill"
+    severity: error
+    desc: "composer.json type must be ai-agent-skill"
+
+  - id: SR-11
+    type: contains
+    target: composer.json
+    pattern: "composer-agent-skill-plugin"
+    severity: warning
+    desc: "composer.json should require composer-agent-skill-plugin"
+
+  # Required files
+  - id: SR-12
+    type: file_exists
+    target: README.md
+    severity: error
+    desc: "README.md must exist"
+
+  - id: SR-13
+    type: file_exists
+    target: .gitignore
+    severity: error
+    desc: ".gitignore must exist"
+
+  - id: SR-14
+    type: file_exists
+    target: renovate.json
+    severity: warning
+    desc: "renovate.json should exist for dependency updates"
+
+  - id: SR-15
+    type: file_exists
+    target: .github/workflows/release.yml
+    severity: error
+    desc: "Release workflow must exist"
+
+  - id: SR-16
+    type: file_exists
+    target: .github/workflows/auto-merge-deps.yml
+    severity: warning
+    desc: "Auto-merge caller workflow should exist"
+
+  - id: SR-17
+    type: file_not_exists
+    target: composer.lock
+    severity: error
+    desc: "composer.lock must not be committed in skill repos"
+
+  # README quality
+  - id: SR-18
+    type: contains
+    target: README.md
+    pattern: "## License"
+    severity: warning
+    desc: "README should have License section"
+
+  - id: SR-19
+    type: contains
+    target: README.md
+    pattern: "## Installation"
+    severity: warning
+    desc: "README should have Installation section"
+
+  - id: SR-20
+    type: contains
+    target: README.md
+    pattern: "Netresearch"
+    severity: warning
+    desc: "README should reference Netresearch"
+
+  # SKILL.md checks
+  - id: SR-21
+    type: command
+    pattern: "word_count=$(wc -w < $(find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' | head -1)); [ $word_count -le 500 ]"
+    severity: error
+    desc: "SKILL.md must be under 500 words"
+
+llm_reviews:
+  - id: SR-30
+    domain: repo-health
+    prompt: |
+      Review the README.md for a Netresearch skill repository:
+      1. Does it clearly explain what the skill does?
+      2. Does it have Installation section with marketplace/release/composer options?
+      3. Does the License section correctly describe split licensing (MIT + CC-BY-SA-4.0)?
+      4. Is the structure diagram accurate (shows LICENSE-MIT, LICENSE-CC-BY-SA-4.0)?
+    severity: warning
+    desc: "README structure and content quality"
+
+  - id: SR-31
+    domain: repo-health
+    prompt: |
+      Review the SKILL.md for a Netresearch skill:
+      1. Does frontmatter have only name + description fields?
+      2. Does description start with "Use when"?
+      3. Is the content clear and actionable for an AI agent?
+      4. Does it reference extended docs in references/ where appropriate?
+    severity: warning
+    desc: "SKILL.md clarity and completeness"
