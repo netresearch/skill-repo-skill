@@ -153,6 +153,50 @@ mechanical:
     severity: error
     desc: "SKILL.md must be under 500 words"
 
+  # SKILL.md frontmatter checks
+  - id: SR-22
+    type: regex
+    target: skills/*/SKILL.md
+    pattern: "^name: [a-z][a-z0-9-]{0,63}$"
+    severity: error
+    desc: "SKILL.md frontmatter name must be lowercase, hyphens only, max 64 chars"
+
+  - id: SR-23
+    type: regex
+    target: skills/*/SKILL.md
+    pattern: 'description: "Use when '
+    severity: error
+    desc: "SKILL.md frontmatter description must start with 'Use when'"
+
+  # Composer package checks
+  - id: SR-24
+    type: contains
+    target: composer.json
+    pattern: "ai-agent-skill"
+    severity: error
+    desc: "composer.json extra must reference ai-agent-skill entry point"
+
+  - id: SR-25
+    type: json_path
+    target: .claude-plugin/plugin.json
+    pattern: ".name"
+    severity: error
+    desc: "plugin.json must have name field"
+
+  - id: SR-26
+    type: json_path
+    target: .claude-plugin/plugin.json
+    pattern: ".skills"
+    severity: error
+    desc: "plugin.json must have skills array"
+
+  - id: SR-27
+    type: json_path
+    target: .claude-plugin/plugin.json
+    pattern: ".author"
+    severity: warning
+    desc: "plugin.json should have author field"
+
 llm_reviews:
   - id: SR-30
     domain: repo-health
