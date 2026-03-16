@@ -1,0 +1,93 @@
+name: Python CI
+
+on:
+  workflow_call:
+    inputs:
+      python-versions:
+        description: JSON array of Python versions to test
+        type: string
+        default: '["3.12", "3.13"]'
+      test-command:
+        description: Command to run for testing (receives PYTHON_VERSION env var)
+        type: string
+        required: true
+      run-bandit:
+        description: Run Bandit security scan
+        type: boolean
+        default: false
+      bandit-args:
+        description: Arguments for Bandit
+        type: string
+        default: '-r scripts/ --severity-level medium'
+      upload-coverage:
+        description: Upload coverage to Codecov
+        type: boolean
+        default: false
+      coverage-files:
+        description: Coverage file pattern
+        type: string
+        default: 'coverage.xml'
+    secrets:
+      CODECOV_TOKEN:
+        required: false
+
+permissions: {}
+
+jobs:
+  bandit:
+    name: Bandit Security Scan
+    if: ${{ inputs.run-bandit }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+
+      - name: Run Bandit
+        run: uv run --with bandit bandit ${{ inputs.bandit-args }}
+
+  test:
+    name: Test (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ${{ fromJSON(inputs.python-versions) }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: astral-sh/setup-uv@e06108dd0aef18192324c70427afc47652e63a82 # v7.5.0
+        with:
+          enable-cache: true
+
+      - name: Run tests
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: ${{ inputs.test-command }}
+
+      - name: Upload coverage
+        if: ${{ inputs.upload-coverage && matrix.python == fromJSON(inputs.python-versions)[0] }}
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5.5.2
+        with:
+          files: ${{ inputs.coverage-files }}
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
