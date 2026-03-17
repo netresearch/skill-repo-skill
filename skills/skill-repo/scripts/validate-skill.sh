@@ -49,13 +49,14 @@ if [[ -n "$SKILL_FILE" ]]; then
         # Extract frontmatter fields (between first two --- lines)
         FRONTMATTER=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$SKILL_FILE")
 
-        # Check only name + description allowed in frontmatter
-        EXTRA_FIELDS=$(echo "$FRONTMATTER" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description):" || true)
+        # Check frontmatter fields match Agent Skills spec
+        # Allowed: name, description, license, compatibility, metadata, allowed-tools
+        EXTRA_FIELDS=$(echo "$FRONTMATTER" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description|license|compatibility|metadata|allowed-tools):" || true)
         if [[ -z "$EXTRA_FIELDS" ]]; then
-            success "Frontmatter has only name + description"
+            success "Frontmatter fields are valid per Agent Skills spec"
         else
             FIELD_NAMES=$(echo "$EXTRA_FIELDS" | sed 's/:.*//' | tr '\n' ', ' | sed 's/,$//')
-            error "Frontmatter has disallowed fields: $FIELD_NAMES"
+            error "Frontmatter has non-spec fields: $FIELD_NAMES (allowed: name, description, license, compatibility, metadata, allowed-tools)"
         fi
 
         # Check name field
