@@ -78,6 +78,50 @@ jobs:
           fi
           echo "Version format valid"
 
+      - name: Validate SKILL.md metadata.version matches plugin.json
+        run: |
+          PLUGIN_FILE=".claude-plugin/plugin.json"
+          PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
+
+          # Find SKILL.md
+          SKILL_FILE=""
+          if [[ -f "SKILL.md" ]]; then
+            SKILL_FILE="SKILL.md"
+          else
+            for f in skills/*/SKILL.md; do
+              if [[ -f "$f" ]]; then
+                SKILL_FILE="$f"
+                break
+              fi
+            done
+          fi
+
+          if [[ -z "${SKILL_FILE}" ]]; then
+            echo "No SKILL.md found, skipping"
+            exit 0
+          fi
+
+          # Extract version from YAML frontmatter
+          SKILL_VERSION=$(sed -n '/^---$/,/^---$/p' "${SKILL_FILE}" \
+            | grep -E '^\s*version:' \
+            | head -1 \
+            | sed 's/.*version:[[:space:]]*//' \
+            | tr -d '"'"'")
+
+          if [[ -z "${SKILL_VERSION}" ]]; then
+            echo "No metadata.version in ${SKILL_FILE} frontmatter, skipping"
+            exit 0
+          fi
+
+          echo "plugin.json version: ${PLUGIN_VERSION}"
+          echo "SKILL.md version:    ${SKILL_VERSION}"
+
+          if [[ "${PLUGIN_VERSION}" != "${SKILL_VERSION}" ]]; then
+            echo "::error::Version mismatch — plugin.json (${PLUGIN_VERSION}) != SKILL.md metadata.version (${SKILL_VERSION})"
+            exit 1
+          fi
+          echo "Versions match"
+
       - name: ShellCheck scripts
         run: |
           # Auto-discover shell scripts in skill directories and root scripts/
