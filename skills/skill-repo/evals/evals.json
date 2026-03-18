@@ -1,0 +1,35 @@
+[
+  {
+    "name": "create_new_skill_repo",
+    "prompt": "Create a new skill repo from scratch called 'my-awesome-skill' with proper structure",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "plugin\\.json"
+      },
+      {
+        "type": "content",
+        "pattern": "SKILL\\.md"
+      },
+      {
+        "type": "content",
+        "pattern": "LICENSE-(MIT|CC-BY-SA)"
+      }
+    ]
+  },
+  {
+    "name": "validate_skill_repo_structure",
+    "prompt": "Validate this skill repo structure and tell me what's missing or wrong",
+    "assertions": [
+      {
+        "type": "tool_use",
+        "tool": "Bash",
+        "pattern": "validate-skill"
+      },
+      {
+        "type": "content",
+        "pattern": "(plugin\\.json|SKILL\\.md|LICENSE)"
+      }
+    ]
+  }
+]
