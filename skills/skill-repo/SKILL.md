@@ -1,6 +1,6 @@
 ---
 name: skill-repo
-description: "USE THIS SKILL when creating new skill repositories from scratch, standardizing or validating existing skill repo structure, setting up composer/release workflows for skills, configuring split licensing (MIT + CC-BY-SA-4.0), or fixing plugin.json / SKILL.md validation errors."
+description: "Use when creating new skill repositories from scratch, standardizing or validating existing skill repo structure, setting up composer/release workflows for skills, configuring split licensing (MIT + CC-BY-SA-4.0), or fixing plugin.json / SKILL.md validation errors."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires bash 4.3+, python3, jq."
 metadata:
