@@ -27,6 +27,14 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `Build/hooks/` | Git hooks (pre-commit, pre-push) |
 | `Build/Scripts/check-plugin-version.sh` | Version validation script |
 
+## Commands
+
+| Task | Command | ~Time |
+|------|---------|-------|
+| Validate skill structure | `bash skills/skill-repo/scripts/validate-skill.sh` | ~5s |
+| Lint (all) | Runs via reusable workflow `.github/workflows/validate.yml` | CI only |
+| ShellCheck | `shellcheck scripts/*.sh Build/Scripts/*.sh` | ~3s |
+
 ## Conventions
 
 ### Licensing (Split Model)
