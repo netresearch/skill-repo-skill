@@ -73,6 +73,13 @@ mechanical:
     severity: error
     desc: "plugin.json must have version field"
 
+  - id: SR-09b
+    type: not_contains
+    target: composer.json
+    pattern: '"version"'
+    severity: error
+    desc: "composer.json must NOT have a version field — Composer derives version from git tags. Adding it creates maintenance drift."
+
   - id: SR-10
     type: contains
     target: composer.json
