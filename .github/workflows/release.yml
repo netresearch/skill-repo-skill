@@ -21,13 +21,20 @@ on:
         type: string
         required: false
 
+permissions: {}
+
 jobs:
-  release:
-    name: Create Release
+  # --- Job 1: Bump version via PR (workflow_dispatch only) ---
+  bump:
+    name: Bump Version
+    if: inputs.bump != '' && inputs.bump != null
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+      pull-requests: write
+    outputs:
+      new_version: ${{ steps.calc.outputs.new_version }}
+      pr_number: ${{ steps.pr.outputs.pr_number }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
@@ -36,11 +43,9 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
 
-      - name: Bump version and create tag (workflow_dispatch only)
-        if: inputs.bump != ''
+      - name: Calculate new version
+        id: calc
         env:
           BUMP: ${{ inputs.bump }}
         run: |
@@ -57,6 +62,14 @@ jobs:
           esac
 
           echo "Bumping $CURRENT → $NEW"
+          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Bump plugin.json and SKILL.md
+        env:
+          NEW: ${{ steps.calc.outputs.new_version }}
+        run: |
+          set -euo pipefail
+          PLUGIN_FILE=".claude-plugin/plugin.json"
 
           # Update plugin.json
           python3 -c "
@@ -81,34 +94,94 @@ jobs:
             [[ -f "$SM" ]] && sed -i "s/^  version: \".*\"/  version: \"$NEW\"/" "$SM"
           done <<< "$SKILL_PATHS"
 
-          # Commit version bump to main
+      - name: Create release PR
+        id: pr
+        env:
+          NEW: ${{ steps.calc.outputs.new_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BRANCH="release/v$NEW"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git add -A
-          git commit -m "chore: release v$NEW [skip ci]"
-          git push origin main
+          git commit -m "chore: release v$NEW"
+          git push -u origin "$BRANCH"
 
-          # Create signed annotated tag via GitHub API
-          COMMIT_SHA=$(git rev-parse HEAD)
+          PR_URL=$(gh pr create \
+            --title "chore: release v$NEW" \
+            --body "Automated version bump to v$NEW. Merge to release." \
+            --head "$BRANCH" \
+            --base main)
+          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Created $PR_URL"
+
+      - name: Merge release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: |
+          # Wait for any required checks
+          sleep 10
+          gh pr merge "$PR_NUMBER" --merge --admin --delete-branch
+
+      - name: Create signed tag via API
+        env:
+          NEW: ${{ steps.calc.outputs.new_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          COMMIT_SHA=$(gh api "repos/${{ github.repository }}/commits/main" --jq '.sha')
+
+          # Create annotated tag object (GitHub signs it)
           gh api "repos/${{ github.repository }}/git/tags" \
             -f tag="v$NEW" \
             -f message="Release v$NEW" \
             -f object="$COMMIT_SHA" \
             -f type="commit"
+
+          # Create tag ref
           gh api "repos/${{ github.repository }}/git/refs" \
             -f ref="refs/tags/v$NEW" \
             -f sha="$COMMIT_SHA"
 
-          # Set for downstream steps
-          echo "TAG_VERSION=v$NEW" >> "$GITHUB_ENV"
+          echo "Created tag v$NEW at $COMMIT_SHA"
 
-      - name: Set tag from ref (tag push only)
-        if: inputs.bump == '' || inputs.bump == null
-        run: echo "TAG_VERSION=${{ github.ref_name }}" >> "$GITHUB_ENV"
+  # --- Job 2: Build and release (runs on tag push OR after bump) ---
+  release:
+    name: Create Release
+    needs: [bump]
+    if: always() && (needs.bump.result == 'success' || needs.bump.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - name: Determine tag version
+        id: version
+        run: |
+          if [[ -n "${{ needs.bump.outputs.new_version }}" ]]; then
+            echo "tag=v${{ needs.bump.outputs.new_version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout at tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ steps.version.outputs.tag }}
 
       - name: Validate version and build packages
         env:
-          TAG_VERSION: ${{ github.ref_name }}
+          TAG_VERSION: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
           PLUGIN_FILE=".claude-plugin/plugin.json"
@@ -209,6 +282,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2.6.1
         with:
+          tag_name: ${{ steps.version.outputs.tag }}
           files: dist/releases/*
           generate_release_notes: true
         env:
