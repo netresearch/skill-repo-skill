@@ -22,6 +22,12 @@ error() { echo -e "${RED}ERROR:${NC} $1"; ((ERRORS++)) || true; }
 warning() { echo -e "${YELLOW}WARNING:${NC} $1"; ((WARNINGS++)) || true; }
 success() { echo -e "${GREEN}OK:${NC} $1"; }
 
+# Check python3 availability (required for JSON parsing)
+if ! command -v python3 &>/dev/null; then
+    echo -e "${RED}ERROR:${NC} python3 is required for JSON parsing but not found in PATH"
+    exit 1
+fi
+
 echo "Validating skill repository: $REPO_DIR"
 echo "========================================"
 
@@ -44,7 +50,13 @@ if [[ -n "$SKILL_FILE" ]]; then
 
     # Frontmatter delimiter
     if head -1 "$SKILL_FILE" | grep -q "^---$"; then
-        success "SKILL.md has frontmatter"
+        # Verify closing --- delimiter exists (within first 30 lines)
+        CLOSING_LINE=$(sed -n '2,30{/^---$/=}' "$SKILL_FILE" | head -1)
+        if [[ -z "$CLOSING_LINE" ]]; then
+            error "SKILL.md frontmatter has opening --- but no closing --- delimiter"
+        else
+            success "SKILL.md has frontmatter"
+        fi
 
         # Extract frontmatter fields (between first two --- lines)
         FRONTMATTER=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$SKILL_FILE")
@@ -286,7 +298,9 @@ with open(sys.argv[1], 'r') as f:
     print(json.load(f).get('author', {}).get('url', ''))
 PYEOF
 )
-    if [[ -n "$AUTHOR_URL" ]]; then
+    if [[ -z "$AUTHOR_URL" ]]; then
+        error "plugin.json author.url is missing or empty; it must be https://www.netresearch.de"
+    else
         AUTHOR_URL_CLEAN="${AUTHOR_URL%/}"
         if [[ "$AUTHOR_URL_CLEAN" == "https://www.netresearch.de" ]]; then
             success "plugin.json author.url is correct"

@@ -1,6 +1,6 @@
 # Skill Validation CI Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> Implementation note: This plan is intended to be executed step by step as written.
 
 **Goal:** Automate detection of all skill repo issues we fixed manually (frontmatter, composer.json, plugin.json, file presence) via CI and pre-commit hook.
 
@@ -13,7 +13,7 @@
 ### Task 1: Write Enhanced validate-skill.sh
 
 **Files:**
-- Modify: `/home/cybot/projects/skill-repo-skill/main/skills/skill-repo/scripts/validate-skill.sh`
+- Modify: `skills/skill-repo/scripts/validate-skill.sh`
 
 **Step 1: Read the current script to understand the baseline**
 
@@ -307,7 +307,7 @@ composer.json path validation, plugin.json structure, cross-file consistency,
 ### Task 2: Create Reusable GitHub Workflow
 
 **Files:**
-- Create: `/home/cybot/projects/skill-repo-skill/main/.github/workflows/validate.yml`
+- Create: `.github/workflows/validate.yml`
 
 **Step 1: Write the reusable workflow**
 
@@ -364,8 +364,8 @@ Other skill repos can call this with:
 ### Task 3: Create Pre-Commit Hook
 
 **Files:**
-- Create: `/home/cybot/projects/skill-repo-skill/main/Build/hooks/pre-commit`
-- Modify: `/home/cybot/projects/skill-repo-skill/main/skills/skill-repo/templates/pre-commit.template`
+- Create: `Build/hooks/pre-commit`
+- Modify: `skills/skill-repo/templates/pre-commit.template`
 
 **Step 1: Write pre-commit hook**
 
@@ -413,7 +413,7 @@ git commit -S --signoff -m "feat: add pre-commit hook for local validation"
 ### Task 4: Update skill-repo-skill's Own lint.yml
 
 **Files:**
-- Modify: `/home/cybot/projects/skill-repo-skill/main/.github/workflows/lint.yml`
+- Modify: `.github/workflows/lint.yml`
 
 **Step 1: Add validate job to lint.yml**
 
