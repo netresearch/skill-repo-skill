@@ -4,7 +4,22 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
   workflow_call:
+    inputs:
+      bump:
+        description: 'Version bump type (patch/minor/major)'
+        type: string
+        required: false
 
 jobs:
   release:
@@ -24,93 +39,72 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Auto-bump version in plugin.json and SKILL.md
+      - name: Bump version and create tag (workflow_dispatch only)
+        if: inputs.bump != ''
         env:
-          TAG_VERSION: ${{ github.ref_name }}
+          BUMP: ${{ inputs.bump }}
         run: |
           set -euo pipefail
-          TAG_BARE="${TAG_VERSION#v}"
           PLUGIN_FILE=".claude-plugin/plugin.json"
+          CURRENT=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
+          IFS='.' read -r major minor patch <<< "$CURRENT"
 
-          # Read current plugin.json version
-          PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
+          case "$BUMP" in
+            major) NEW="$((major+1)).0.0" ;;
+            minor) NEW="${major}.$((minor+1)).0" ;;
+            patch) NEW="${major}.${minor}.$((patch+1))" ;;
+            *) echo "::error::Invalid bump type: $BUMP"; exit 1 ;;
+          esac
 
-          if [[ "$TAG_BARE" == "$PLUGIN_VERSION" ]]; then
-            echo "Versions already match ($TAG_BARE), no bump needed."
-            exit 0
-          fi
+          echo "Bumping $CURRENT → $NEW"
 
-          echo "::notice::Tag version ($TAG_BARE) differs from plugin.json ($PLUGIN_VERSION). Auto-bumping on main..."
-
-          # Update plugin.json in working tree (for packaging step)
+          # Update plugin.json
           python3 -c "
           import json, pathlib
           p = pathlib.Path('$PLUGIN_FILE')
           data = json.loads(p.read_text())
-          data['version'] = '$TAG_BARE'
+          data['version'] = '$NEW'
           p.write_text(json.dumps(data, indent=2) + '\n')
           "
-          echo "Updated $PLUGIN_FILE to $TAG_BARE"
 
-          # Update SKILL.md frontmatter version(s) in working tree
+          # Update SKILL.md frontmatter version(s)
           SKILL_PATHS=$(python3 -c "
           import json
           data = json.load(open('$PLUGIN_FILE'))
           skills = data.get('skills', [])
-          if isinstance(skills, str):
-              skills = [skills]
-          for s in skills:
-              print(s.strip('/').rstrip('/'))
+          if isinstance(skills, str): skills = [skills]
+          for s in skills: print(s.strip('/').rstrip('/'))
           ")
-
-          while IFS= read -r skill_path; do
-            [[ -z "$skill_path" ]] && continue
-            skill_path="${skill_path#./}"
-            SKILL_MD="$skill_path/SKILL.md"
-            if [[ -f "$SKILL_MD" ]]; then
-              sed -i "s/^  version: \".*\"/  version: \"$TAG_BARE\"/" "$SKILL_MD"
-              echo "Updated $SKILL_MD to $TAG_BARE"
-            fi
+          while IFS= read -r sp; do
+            [[ -z "$sp" ]] && continue
+            SM="${sp#./}/SKILL.md"
+            [[ -f "$SM" ]] && sed -i "s/^  version: \".*\"/  version: \"$NEW\"/" "$SM"
           done <<< "$SKILL_PATHS"
 
-          # Push the version bump to main
+          # Commit version bump to main
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Collect changed files
-          CHANGED_FILES=("$PLUGIN_FILE")
-          while IFS= read -r skill_path; do
-            [[ -z "$skill_path" ]] && continue
-            skill_path="${skill_path#./}"
-            SKILL_MD="$skill_path/SKILL.md"
-            [[ -f "$SKILL_MD" ]] && CHANGED_FILES+=("$SKILL_MD")
-          done <<< "$SKILL_PATHS"
-
-          # Stash the version changes, apply them on main, then restore working tree
-          git stash push -- "${CHANGED_FILES[@]}"
-          git checkout main
-          git stash pop
-          git add "${CHANGED_FILES[@]}"
-          git commit -m "chore: bump version to $TAG_BARE [skip ci]"
+          git add -A
+          git commit -m "chore: release v$NEW [skip ci]"
           git push origin main
 
-          # Return to the tag ref and re-apply version updates for packaging
-          git checkout "$TAG_VERSION"
-          python3 -c "
-          import json, pathlib
-          p = pathlib.Path('$PLUGIN_FILE')
-          data = json.loads(p.read_text())
-          data['version'] = '$TAG_BARE'
-          p.write_text(json.dumps(data, indent=2) + '\n')
-          "
-          while IFS= read -r skill_path; do
-            [[ -z "$skill_path" ]] && continue
-            skill_path="${skill_path#./}"
-            SKILL_MD="$skill_path/SKILL.md"
-            if [[ -f "$SKILL_MD" ]]; then
-              sed -i "s/^  version: \".*\"/  version: \"$TAG_BARE\"/" "$SKILL_MD"
-            fi
-          done <<< "$SKILL_PATHS"
+          # Create signed annotated tag via GitHub API
+          COMMIT_SHA=$(git rev-parse HEAD)
+          gh api "repos/${{ github.repository }}/git/tags" \
+            -f tag="v$NEW" \
+            -f message="Release v$NEW" \
+            -f object="$COMMIT_SHA" \
+            -f type="commit"
+          gh api "repos/${{ github.repository }}/git/refs" \
+            -f ref="refs/tags/v$NEW" \
+            -f sha="$COMMIT_SHA"
+
+          # Set for downstream steps
+          echo "TAG_VERSION=v$NEW" >> "$GITHUB_ENV"
+
+      - name: Set tag from ref (tag push only)
+        if: inputs.bump == '' || inputs.bump == null
+        run: echo "TAG_VERSION=${{ github.ref_name }}" >> "$GITHUB_ENV"
 
       - name: Validate version and build packages
         env:
