@@ -21,7 +21,9 @@ on:
         type: string
         required: false
 
-permissions: {}
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   # --- Job 1: Bump version via PR (workflow_dispatch only) ---
@@ -29,9 +31,6 @@ jobs:
     name: Bump Version
     if: inputs.bump != '' && inputs.bump != null
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     outputs:
       new_version: ${{ steps.calc.outputs.new_version }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
@@ -156,8 +155,6 @@ jobs:
     needs: [bump]
     if: always() && (needs.bump.result == 'success' || needs.bump.result == 'skipped')
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Harden Runner
