@@ -47,8 +47,10 @@ jobs:
 
       - name: Test generator on fixture repos
         shell: bash
+        env:
+          SCRIPTS_PATH: ${{ inputs.scripts-path }}
         run: |
-          SCRIPT_DIR="${{ inputs.scripts-path }}"
+          SCRIPT_DIR="$SCRIPTS_PATH"
           if [ ! -d "$SCRIPT_DIR" ]; then
             echo "Scripts directory not found: $SCRIPT_DIR"
             exit 1
@@ -116,8 +118,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Validate AGENTS.md structure
+        env:
+          SCRIPTS_PATH: ${{ inputs.scripts-path }}
         run: |
-          VALIDATE_SCRIPT="${{ inputs.scripts-path }}/validate-structure.sh"
+          VALIDATE_SCRIPT="$SCRIPTS_PATH/validate-structure.sh"
           if [ -f "$VALIDATE_SCRIPT" ]; then
             bash "$VALIDATE_SCRIPT" . --check-freshness
           else
@@ -133,8 +137,10 @@ jobs:
           fi
 
       - name: Verify commands exist
+        env:
+          SCRIPTS_PATH: ${{ inputs.scripts-path }}
         run: |
-          VERIFY_SCRIPT="${{ inputs.scripts-path }}/verify-commands.sh"
+          VERIFY_SCRIPT="$SCRIPTS_PATH/verify-commands.sh"
           if [ -f "$VERIFY_SCRIPT" ]; then
             bash "$VERIFY_SCRIPT" .
           else
