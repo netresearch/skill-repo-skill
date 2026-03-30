@@ -210,7 +210,7 @@ mechanical:
     target: .github/workflows/auto-merge-deps.yml
     pattern: 'pull_request_target'
     severity: error
-    desc: "Auto-merge workflow must use pull_request_target trigger (not pull_request) for bot PR write permissions. LLM review SR-32 validates full correctness"
+    desc: "Auto-merge workflow must use pull_request_target trigger (not pull_request) for bot PR write permissions. LLM review SR-34 validates full correctness"
 
   # === CROSS-PLATFORM COMPATIBILITY ===
   - id: SR-29
@@ -219,8 +219,23 @@ mechanical:
     severity: warning
     desc: "Shell scripts must not use grep -P (Perl regex) — not available on macOS BSD grep. Use grep -E (extended regex) instead"
 
-llm_reviews:
+  # Caller release workflow checks
   - id: SR-30
+    type: contains
+    target: .github/workflows/release.yml
+    pattern: "workflow_dispatch"
+    severity: error
+    desc: "Release workflow must include workflow_dispatch trigger for manual re-triggering of failed releases"
+
+  - id: SR-31
+    type: contains
+    target: .github/workflows/release.yml
+    pattern: "pull-requests: write"
+    severity: error
+    desc: "Release workflow must grant pull-requests: write permission (required by shared workflow bump job)"
+
+llm_reviews:
+  - id: SR-32
     domain: repo-health
     prompt: |
       Review the README.md for a Netresearch skill repository:
@@ -231,7 +246,7 @@ llm_reviews:
     severity: warning
     desc: "README structure and content quality"
 
-  - id: SR-31
+  - id: SR-33
     domain: repo-health
     prompt: |
       Review the SKILL.md for a Netresearch skill:
@@ -243,7 +258,7 @@ llm_reviews:
     desc: "SKILL.md clarity and completeness"
 
   # === REUSABLE WORKFLOW USAGE ===
-  - id: SR-32
+  - id: SR-34
     domain: ci
     prompt: |
       Check if the skill repo uses reusable workflows from skill-repo-skill:
@@ -259,3 +274,24 @@ llm_reviews:
       Report missing reusable workflow usage and inline reimplementations.
     severity: warning
     desc: "Skill repos should use reusable workflows from skill-repo-skill for CI standardization"
+
+  - id: SR-35
+    domain: release
+    severity: error
+    desc: "Caller release workflow permissions must satisfy all shared workflow job requirements"
+    prompt: |
+      Review .github/workflows/release.yml as a caller of a reusable workflow.
+      The shared workflow requires: contents: write and pull-requests: write.
+      GitHub validates ALL job-level permissions at startup, even for skipped jobs.
+      Check: Does the caller grant both? Flag missing permissions as error (causes startup_failure).
+
+  - id: SR-36
+    domain: release
+    severity: warning
+    desc: "plugin.json version must stay in sync with latest git tag"
+    prompt: |
+      Check version synchronization:
+      1. Read version from .claude-plugin/plugin.json
+      2. Get latest git tag (strip 'v' prefix)
+      3. If plugin.json version is BEHIND the latest tag, flag as error (version drift)
+      4. If AHEAD, flag as info (pending release)
