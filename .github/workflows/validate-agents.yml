@@ -3,11 +3,6 @@ name: Validate AGENTS.md
 on:
   workflow_call:
     inputs:
-      scripts-repo:
-        description: 'Repository containing validation scripts'
-        required: false
-        type: string
-        default: ''
       scripts-path:
         description: 'Path to validation scripts within the repo'
         required: false
@@ -28,7 +23,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ${{ fromJson(inputs.os-matrix) }}
+        os: ${{ fromJson(inputs['os-matrix']) }}
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
@@ -48,7 +43,7 @@ jobs:
       - name: Test generator on fixture repos
         shell: bash
         env:
-          SCRIPTS_PATH: ${{ inputs.scripts-path }}
+          SCRIPTS_PATH: ${{ inputs['scripts-path'] }}
         run: |
           SCRIPT_DIR="$SCRIPTS_PATH"
           if [ ! -d "$SCRIPT_DIR" ]; then
@@ -87,11 +82,11 @@ jobs:
 
             # Regression checks
             if [ -f "$fixture/AGENTS.md" ]; then
-              if grep -qP '^\|(\s*\|)+\s*$' "$fixture/AGENTS.md"; then
+              if grep -qE '^[|]([[:space:]]*[|])+[[:space:]]*$' "$fixture/AGENTS.md"; then
                 echo "::error::Blank table rows in $name/AGENTS.md"
                 FAILED=1
               fi
-              if grep -q '``' "$fixture/AGENTS.md"; then
+              if grep -qE '(^|[^`])``([^`]|$)' "$fixture/AGENTS.md"; then
                 echo "::error::Empty backticks in $name/AGENTS.md"
                 FAILED=1
               fi
@@ -119,7 +114,7 @@ jobs:
 
       - name: Validate AGENTS.md structure
         env:
-          SCRIPTS_PATH: ${{ inputs.scripts-path }}
+          SCRIPTS_PATH: ${{ inputs['scripts-path'] }}
         run: |
           VALIDATE_SCRIPT="$SCRIPTS_PATH/validate-structure.sh"
           if [ -f "$VALIDATE_SCRIPT" ]; then
@@ -138,7 +133,7 @@ jobs:
 
       - name: Verify commands exist
         env:
-          SCRIPTS_PATH: ${{ inputs.scripts-path }}
+          SCRIPTS_PATH: ${{ inputs['scripts-path'] }}
         run: |
           VERIFY_SCRIPT="$SCRIPTS_PATH/verify-commands.sh"
           if [ -f "$VERIFY_SCRIPT" ]; then
