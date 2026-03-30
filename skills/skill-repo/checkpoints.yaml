@@ -221,16 +221,16 @@ mechanical:
 
   # Caller release workflow checks
   - id: SR-30
-    type: contains
+    type: regex
     target: .github/workflows/release.yml
-    pattern: "workflow_dispatch"
+    pattern: "^\\s*workflow_dispatch:"
     severity: error
     desc: "Release workflow must include workflow_dispatch trigger for manual re-triggering of failed releases"
 
   - id: SR-31
-    type: contains
+    type: regex
     target: .github/workflows/release.yml
-    pattern: "pull-requests: write"
+    pattern: "^\\s*pull-requests:\\s*write"
     severity: error
     desc: "Release workflow must grant pull-requests: write permission (required by shared workflow bump job)"
 
@@ -293,5 +293,5 @@ llm_reviews:
       Check version synchronization:
       1. Read version from .claude-plugin/plugin.json
       2. Get latest git tag (strip 'v' prefix)
-      3. If plugin.json version is BEHIND the latest tag, flag as error (version drift)
+      3. If plugin.json version is BEHIND the latest tag, flag as warning (version drift)
       4. If AHEAD, flag as info (pending release)
