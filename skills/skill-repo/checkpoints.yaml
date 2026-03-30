@@ -215,7 +215,7 @@ mechanical:
   # === CROSS-PLATFORM COMPATIBILITY ===
   - id: SR-29
     type: command
-    target: "! grep -rn 'grep.*-P ' skills/ scripts/ .github/workflows/ 2>/dev/null | grep -v node_modules | grep -v '.git/' | head -1"
+    target: "! grep -qr --exclude-dir=node_modules --exclude-dir=.git 'grep.*-P ' skills/ scripts/ .github/workflows/ 2>/dev/null"
     severity: warning
     desc: "Shell scripts must not use grep -P (Perl regex) — not available on macOS BSD grep. Use grep -E (extended regex) instead"
 

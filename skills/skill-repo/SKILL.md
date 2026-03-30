@@ -115,7 +115,7 @@ Scripts in `scripts/` and workflow `run:` blocks must work on both Linux and mac
 - Use `grep -E` (extended regex), NOT `grep -P` (Perl regex — macOS BSD grep lacks `-P`)
 - Use `bash` explicitly in shebangs (macOS default shell is zsh)
 - Test regex patterns with both GNU and BSD grep behavior
-- Use `[[ ]]` conditionals (requires bash 4+, install via Homebrew on macOS)
+- Use `[[ ]]` for conditionals, which is more robust than single-bracket `[ ]` and is a bash builtin
 
 ---
 
