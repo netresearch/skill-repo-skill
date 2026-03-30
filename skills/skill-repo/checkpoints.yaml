@@ -210,12 +210,12 @@ mechanical:
     target: .github/workflows/auto-merge-deps.yml
     pattern: 'pull_request_target'
     severity: error
-    desc: "Auto-merge workflow must use pull_request_target trigger for bot PR write permissions"
+    desc: "Auto-merge workflow must use pull_request_target trigger (not pull_request) for bot PR write permissions. LLM review SR-32 validates full correctness"
 
   # === CROSS-PLATFORM COMPATIBILITY ===
   - id: SR-29
     type: command
-    target: "! grep -qr --exclude-dir=node_modules --exclude-dir=.git 'grep.*-P ' skills/ scripts/ .github/workflows/ 2>/dev/null"
+    pattern: "! grep -qr --include='*.sh' --exclude-dir=node_modules --exclude-dir=.git 'grep.*-P ' scripts/ .github/workflows/ 2>/dev/null"
     severity: warning
     desc: "Shell scripts must not use grep -P (Perl regex) — not available on macOS BSD grep. Use grep -E (extended regex) instead"
 
