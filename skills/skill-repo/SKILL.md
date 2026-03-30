@@ -97,6 +97,26 @@ scripts/validate-skill.sh
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main vX.Y.Z`
 
+## Workflow Requirements
+
+Skill repos MUST use reusable workflows from skill-repo-skill for CI standardization:
+
+| Workflow | Purpose | Required |
+|----------|---------|----------|
+| `auto-merge-deps.yml` | Auto-merge Dependabot/Renovate PRs | Yes |
+| `harness-verify.yml` | Verify AGENTS.md harness consistency | Yes |
+| `validate.yml` | Validate skill structure and lint | Yes |
+| `release.yml` | Create releases on tag push | Yes |
+
+### Cross-platform Compatibility
+
+Scripts in `scripts/` and workflow `run:` blocks must work on both Linux and macOS:
+
+- Use `grep -E` (extended regex), NOT `grep -P` (Perl regex — macOS BSD grep lacks `-P`)
+- Use `bash` explicitly in shebangs (macOS default shell is zsh)
+- Test regex patterns with both GNU and BSD grep behavior
+- Use `[[ ]]` for conditionals, which is more robust than single-bracket `[ ]` and is a bash builtin
+
 ---
 
 > **Contributing:** https://github.com/netresearch/skill-repo-skill
