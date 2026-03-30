@@ -1,0 +1,142 @@
+name: Validate AGENTS.md
+
+on:
+  workflow_call:
+    inputs:
+      scripts-repo:
+        description: 'Repository containing validation scripts'
+        required: false
+        type: string
+        default: ''
+      scripts-path:
+        description: 'Path to validation scripts within the repo'
+        required: false
+        type: string
+        default: 'skills/agent-rules/scripts'
+      os-matrix:
+        description: 'JSON array of OS runners'
+        required: false
+        type: string
+        default: '["ubuntu-latest", "macos-latest"]'
+
+permissions:
+  contents: read
+
+jobs:
+  test-generator:
+    name: Test Generator (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ${{ fromJson(inputs.os-matrix) }}
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install bash jq
+
+      - name: Test generator on fixture repos
+        shell: bash
+        run: |
+          SCRIPT_DIR="${{ inputs.scripts-path }}"
+          if [ ! -d "$SCRIPT_DIR" ]; then
+            echo "Scripts directory not found: $SCRIPT_DIR"
+            exit 1
+          fi
+
+          GENERATOR="$SCRIPT_DIR/generate-agents.sh"
+          if [ ! -f "$GENERATOR" ]; then
+            echo "Generator script not found: $GENERATOR"
+            exit 1
+          fi
+
+          FIXTURES_DIR="$(dirname "$SCRIPT_DIR")/references/examples"
+          if [ ! -d "$FIXTURES_DIR" ]; then
+            echo "No fixture repos found in $FIXTURES_DIR, skipping generator test"
+            exit 0
+          fi
+
+          FAILED=0
+          for fixture in "$FIXTURES_DIR"/*/; do
+            name=$(basename "$fixture")
+            echo "::group::Testing fixture: $name"
+
+            # Dry run
+            if ! bash "$GENERATOR" --dry-run "$fixture"; then
+              echo "::error::Dry run failed for $name"
+              FAILED=1
+            fi
+
+            # Force run
+            if ! bash "$GENERATOR" --force "$fixture"; then
+              echo "::error::Force run failed for $name"
+              FAILED=1
+            fi
+
+            # Regression checks
+            if [ -f "$fixture/AGENTS.md" ]; then
+              if grep -qP '^\|(\s*\|)+\s*$' "$fixture/AGENTS.md"; then
+                echo "::error::Blank table rows in $name/AGENTS.md"
+                FAILED=1
+              fi
+              if grep -q '``' "$fixture/AGENTS.md"; then
+                echo "::error::Empty backticks in $name/AGENTS.md"
+                FAILED=1
+              fi
+              if grep -qE '\{\{[A-Z][A-Z0-9_]*\}\}' "$fixture/AGENTS.md"; then
+                echo "::error::Unresolved placeholders in $name/AGENTS.md"
+                FAILED=1
+              fi
+            fi
+
+            echo "::endgroup::"
+          done
+
+          exit $FAILED
+
+  validate:
+    name: Validate Structure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Validate AGENTS.md structure
+        run: |
+          VALIDATE_SCRIPT="${{ inputs.scripts-path }}/validate-structure.sh"
+          if [ -f "$VALIDATE_SCRIPT" ]; then
+            bash "$VALIDATE_SCRIPT" . --check-freshness
+          else
+            echo "No validate-structure.sh found, skipping"
+          fi
+
+      - name: Check for unresolved placeholders
+        run: |
+          FOUND=$(find . -name "AGENTS.md" -exec grep -lE '\{\{[A-Z][A-Z0-9_]*\}\}' {} \; 2>/dev/null || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::Unresolved placeholders found in: $FOUND"
+            exit 1
+          fi
+
+      - name: Verify commands exist
+        run: |
+          VERIFY_SCRIPT="${{ inputs.scripts-path }}/verify-commands.sh"
+          if [ -f "$VERIFY_SCRIPT" ]; then
+            bash "$VERIFY_SCRIPT" .
+          else
+            echo "No verify-commands.sh found, skipping"
+          fi

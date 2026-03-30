@@ -1,5 +1,3 @@
-# Auto-merge dependency updates for repositories WITHOUT branch protection
-# Uses direct merge since --auto flag requires branch protection
 name: Auto-merge dependency PRs
 
 on:
@@ -13,9 +11,9 @@ jobs:
   auto-merge:
     name: Auto-merge dependency PRs
     runs-on: ubuntu-latest
-    # Use PR author login instead of github.actor to handle synchronize events
-    # when someone else pushes to the dependabot/renovate branch
-    if: github.event.pull_request.user.login == 'dependabot[bot]' || github.event.pull_request.user.login == 'renovate[bot]'
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' ||
+      github.event.pull_request.user.login == 'renovate[bot]'
 
     steps:
       - name: Harden Runner
@@ -30,43 +28,21 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Auto-approve PR
+      - name: Approve PR
         run: gh pr review --approve "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Wait for CI checks
+      - name: Enable auto-merge
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
         run: |
-          echo "Waiting for CI checks to complete..."
-          for i in {1..60}; do
-            CHECKS=$(gh pr checks "$PR_URL" --json name,state \
-              --jq '[.[] | select(.name | test("Auto-merge dependency PRs"; "i") | not)]')
-
-            FAILED=$(echo "$CHECKS" | jq '[.[] | select(.state == "FAILURE" or .state == "ERROR")] | length')
-            PENDING=$(echo "$CHECKS" | jq '[.[] | select(.state == "PENDING" or .state == "QUEUED" or .state == "IN_PROGRESS")] | length')
-
-            if [ "$FAILED" != "0" ]; then
-              echo "Some checks failed, skipping merge"
-              exit 1
-            fi
-
-            if [ "$PENDING" = "0" ]; then
-              echo "All checks passed!"
-              exit 0
-            fi
-
-            echo "Waiting for $PENDING check(s)... (attempt $i/60)"
-            sleep 10
-          done
-          echo "Timeout waiting for checks"
-          exit 1
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Merge PR
-        run: gh pr merge --merge "$PR_URL"
-        env:
-          PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STRATEGY=$(gh api "repos/$REPO" --jq '
+            if .allow_squash_merge then "--squash"
+            elif .allow_merge_commit then "--merge"
+            elif .allow_rebase_merge then "--rebase"
+            else "--merge" end')
+          gh pr merge --auto "$STRATEGY" "$PR_URL"
