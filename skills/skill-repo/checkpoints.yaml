@@ -204,6 +204,21 @@ mechanical:
     severity: warning
     desc: "plugin.json should have author field"
 
+  # === WORKFLOW QUALITY CHECKS ===
+  - id: SR-28
+    type: regex
+    target: .github/workflows/auto-merge-deps.yml
+    pattern: 'pull_request_target'
+    severity: error
+    desc: "Auto-merge workflow must use pull_request_target trigger for bot PR write permissions"
+
+  # === CROSS-PLATFORM COMPATIBILITY ===
+  - id: SR-29
+    type: command
+    target: "! grep -rn 'grep.*-P ' skills/ scripts/ .github/workflows/ 2>/dev/null | grep -v node_modules | grep -v '.git/' | head -1"
+    severity: warning
+    desc: "Shell scripts must not use grep -P (Perl regex) — not available on macOS BSD grep. Use grep -E (extended regex) instead"
+
 llm_reviews:
   - id: SR-30
     domain: repo-health
@@ -226,3 +241,21 @@ llm_reviews:
       4. Does it reference extended docs in references/ where appropriate?
     severity: warning
     desc: "SKILL.md clarity and completeness"
+
+  # === REUSABLE WORKFLOW USAGE ===
+  - id: SR-32
+    domain: ci
+    prompt: |
+      Check if the skill repo uses reusable workflows from skill-repo-skill:
+      1. Verify .github/workflows/ contains callers that delegate to
+         netresearch/skill-repo-skill/.github/workflows/*.yml@main
+      2. Expected reusable workflows: auto-merge-deps.yml, harness-verify.yml,
+         validate.yml, release.yml
+      3. Flag any workflow that reimplements logic available in skill-repo-skill's
+         reusable workflows (e.g., inline validation, inline auto-merge)
+      4. Exception: repo-specific test workflows (e.g., validate-agents.yml in
+         agent-rules-skill) that test repo-specific logic may use reusable
+         workflows from skill-repo-skill but also contain inline steps
+      Report missing reusable workflow usage and inline reimplementations.
+    severity: warning
+    desc: "Skill repos should use reusable workflows from skill-repo-skill for CI standardization"
