@@ -1,35 +1,183 @@
 [
   {
     "name": "create_new_skill_repo",
-    "prompt": "Create a new skill repo from scratch called 'my-awesome-skill' with proper structure",
+    "prompt": "Create a new skill repo from scratch called 'my-awesome-skill' with proper Netresearch structure",
     "assertions": [
-      {
-        "type": "content",
-        "pattern": "plugin\\.json"
-      },
-      {
-        "type": "content",
-        "pattern": "SKILL\\.md"
-      },
-      {
-        "type": "content",
-        "pattern": "LICENSE-(MIT|CC-BY-SA)"
-      }
+      { "type": "content", "pattern": "\\.claude-plugin/plugin\\.json" },
+      { "type": "content", "pattern": "SKILL\\.md" },
+      { "type": "content", "pattern": "LICENSE-MIT" },
+      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
+      { "type": "content", "pattern": "composer\\.json" },
+      { "type": "content", "pattern": "release\\.yml" }
     ]
   },
   {
     "name": "validate_skill_repo_structure",
     "prompt": "Validate this skill repo structure and tell me what's missing or wrong",
     "assertions": [
-      {
-        "type": "tool_use",
-        "tool": "Bash",
-        "pattern": "validate-skill"
-      },
-      {
-        "type": "content",
-        "pattern": "(plugin\\.json|SKILL\\.md|LICENSE)"
-      }
+      { "type": "tool_use", "tool": "Bash", "pattern": "validate-skill" },
+      { "type": "content", "pattern": "(plugin\\.json|SKILL\\.md|LICENSE)" }
+    ]
+  },
+  {
+    "name": "split_licensing_setup",
+    "prompt": "What license files does a Netresearch skill repo need and what SPDX expression goes in composer.json?",
+    "assertions": [
+      { "type": "content", "pattern": "LICENSE-MIT" },
+      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
+      { "type": "content", "pattern": "\\(MIT AND CC-BY-SA-4\\.0\\)" },
+      { "type": "content", "pattern": "Netresearch DTT GmbH" }
+    ]
+  },
+  {
+    "name": "migrate_single_license",
+    "prompt": "This repo has a single LICENSE file. Migrate it to the split licensing model required by Netresearch skill repos.",
+    "assertions": [
+      { "type": "content", "pattern": "LICENSE-MIT" },
+      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
+      { "type": "content", "pattern": "(remove|delete|old).*LICENSE" }
+    ]
+  },
+  {
+    "name": "composer_json_setup",
+    "prompt": "Set up composer.json for a skill repo called 'netresearch/typo3-testing-skill'. What fields are required?",
+    "assertions": [
+      { "type": "content", "pattern": "ai-agent-skill" },
+      { "type": "content", "pattern": "composer-agent-skill-plugin" },
+      { "type": "content", "pattern": "netresearch/typo3-testing-skill" },
+      { "type": "content", "pattern": "SKILL\\.md" }
+    ]
+  },
+  {
+    "name": "composer_no_version_field",
+    "prompt": "Should composer.json in a skill repo have a version field? Why or why not?",
+    "assertions": [
+      { "type": "content", "pattern": "(no|not|never|omit|should not|must not)" },
+      { "type": "content", "pattern": "(git tag|derive|tag)" }
+    ]
+  },
+  {
+    "name": "composer_no_lock_file",
+    "prompt": "Should a skill repo commit composer.lock?",
+    "assertions": [
+      { "type": "content", "pattern": "(no|never|must not|should not)" },
+      { "type": "content", "pattern": "(librar|skill|package)" }
+    ]
+  },
+  {
+    "name": "plugin_json_structure",
+    "prompt": "Create a valid plugin.json for a skill called 'security-audit' in .claude-plugin/",
+    "assertions": [
+      { "type": "content", "pattern": "\"name\"" },
+      { "type": "content", "pattern": "\"version\"" },
+      { "type": "content", "pattern": "\"skills\"" },
+      { "type": "content", "pattern": "\\./skills/" },
+      { "type": "content", "pattern": "netresearch\\.de" }
+    ]
+  },
+  {
+    "name": "skillmd_frontmatter_format",
+    "prompt": "Write valid SKILL.md frontmatter for a skill named 'docker-development'",
+    "assertions": [
+      { "type": "content", "pattern": "^---" },
+      { "type": "content", "pattern": "name: docker-development" },
+      { "type": "content", "pattern": "description: \"Use when" }
+    ]
+  },
+  {
+    "name": "skillmd_word_limit",
+    "prompt": "What is the word limit for SKILL.md and where should extended content go?",
+    "assertions": [
+      { "type": "content", "pattern": "500" },
+      { "type": "content", "pattern": "references/" }
+    ]
+  },
+  {
+    "name": "reusable_workflow_caller",
+    "prompt": "Create a caller workflow for validate.yml that uses the reusable workflow from skill-repo-skill",
+    "assertions": [
+      { "type": "content", "pattern": "netresearch/skill-repo-skill/\\.github/workflows/validate\\.yml@main" },
+      { "type": "content", "pattern": "uses:" }
+    ]
+  },
+  {
+    "name": "release_workflow_setup",
+    "prompt": "What release workflow does a skill repo need and how is it triggered?",
+    "assertions": [
+      { "type": "content", "pattern": "release\\.yml" },
+      { "type": "content", "pattern": "(tag|v\\*|push)" },
+      { "type": "content", "pattern": "plugin\\.json" }
+    ]
+  },
+  {
+    "name": "release_process_steps",
+    "prompt": "Walk me through the release process for a Netresearch skill repo at version 2.1.0",
+    "assertions": [
+      { "type": "content", "pattern": "plugin\\.json" },
+      { "type": "content", "pattern": "git tag" },
+      { "type": "content", "pattern": "v2\\.1\\.0" },
+      { "type": "content", "pattern": "git push" }
+    ]
+  },
+  {
+    "name": "installation_methods",
+    "prompt": "What are the three ways to install a Netresearch skill?",
+    "assertions": [
+      { "type": "content", "pattern": "(marketplace|Marketplace)" },
+      { "type": "content", "pattern": "(composer|Composer)" },
+      { "type": "content", "pattern": "(release|download|Release)" }
+    ]
+  },
+  {
+    "name": "multi_skill_package",
+    "prompt": "How do I set up composer.json and plugin.json for a repo containing two skills: jira-communication and jira-syntax?",
+    "assertions": [
+      { "type": "content", "pattern": "jira-communication" },
+      { "type": "content", "pattern": "jira-syntax" },
+      { "type": "content", "pattern": "(array|\\[)" }
+    ]
+  },
+  {
+    "name": "cross_platform_scripts",
+    "prompt": "What cross-platform rules must scripts in a skill repo follow?",
+    "assertions": [
+      { "type": "content", "pattern": "grep -E" },
+      { "type": "content", "pattern": "(macOS|BSD|darwin)" },
+      { "type": "content", "pattern": "(-P|Perl)" }
+    ]
+  },
+  {
+    "name": "license_path_mapping",
+    "prompt": "Which license applies to scripts/*.sh files and which applies to references/*.md files in a skill repo?",
+    "assertions": [
+      { "type": "content", "pattern": "MIT" },
+      { "type": "content", "pattern": "CC-BY-SA" }
+    ]
+  },
+  {
+    "name": "fix_validation_errors",
+    "prompt": "validate-skill.sh reports: ERROR: composer.json type must be 'ai-agent-skill' and ERROR: plugin.json author.url must be https://www.netresearch.de. Fix these issues.",
+    "assertions": [
+      { "type": "content", "pattern": "ai-agent-skill" },
+      { "type": "content", "pattern": "netresearch\\.de" }
+    ]
+  },
+  {
+    "name": "readme_requirements",
+    "prompt": "What sections and content must a Netresearch skill repo README.md include?",
+    "assertions": [
+      { "type": "content", "pattern": "(Installation|installation)" },
+      { "type": "content", "pattern": "(License|license)" },
+      { "type": "content", "pattern": "Netresearch" }
+    ]
+  },
+  {
+    "name": "auto_merge_workflow",
+    "prompt": "Set up the auto-merge workflow for dependency PRs in a skill repo",
+    "assertions": [
+      { "type": "content", "pattern": "auto-merge-deps" },
+      { "type": "content", "pattern": "netresearch/skill-repo-skill" },
+      { "type": "content", "pattern": "(dependabot|renovate|pull_request)" }
     ]
   }
 ]
