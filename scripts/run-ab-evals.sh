@@ -91,8 +91,8 @@ for i in $(seq 0 $((EVAL_COUNT - 1))); do
     without_file="$RESULTS_DIR/${name}_without.txt"
     with_file="$RESULTS_DIR/${name}_with.txt"
 
-    without_words=$(wc -w < "$without_file" 2>/dev/null || echo 0)
-    with_words=$(wc -w < "$with_file" 2>/dev/null || echo 0)
+    _without_words=$(wc -w < "$without_file" 2>/dev/null || echo 0)
+    _with_words=$(wc -w < "$with_file" 2>/dev/null || echo 0)
 
     # Check assertions
     pass_w=0; pass_s=0; total=0

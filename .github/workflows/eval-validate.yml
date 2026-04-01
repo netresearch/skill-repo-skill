@@ -1,0 +1,52 @@
+name: Validate Evals
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-evals:
+    name: Eval Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Checkout validation tools
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: netresearch/skill-repo-skill
+          ref: main
+          path: .skill-repo-tools
+          sparse-checkout: skills/skill-repo/scripts/
+          sparse-checkout-cone-mode: false
+
+      - name: Find evals.json
+        id: find-evals
+        run: |
+          EVALS_FILE=""
+          for candidate in skills/*/evals/evals.json evals/evals.json; do
+            if [[ -f "$candidate" ]]; then
+              EVALS_FILE="$candidate"
+              break
+            fi
+          done
+          if [[ -z "$EVALS_FILE" ]]; then
+            echo "::warning::No evals.json found, skipping validation"
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "Found: $EVALS_FILE"
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "path=$EVALS_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Validate evals structure
+        if: steps.find-evals.outputs.found == 'true'
+        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh "${{ steps.find-evals.outputs.path }}"
