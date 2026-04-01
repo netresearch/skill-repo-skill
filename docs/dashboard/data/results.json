@@ -1,0 +1,430 @@
+{
+  "generated": "2026-04-01T12:00:00Z",
+  "skills": [
+    {
+      "name": "file-search",
+      "repo": "netresearch/file-search-skill",
+      "version": "1.3.0",
+      "eval_count": 32,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.44,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.56,
+          "token_reduction_pct": 0.45,
+          "tool_call_reduction_pct": 0.60
+        }
+      },
+      "category": "tooling",
+      "top_finding": "Agents default to grep/find instead of rg/fd — 50-75% fewer tool calls with skill"
+    },
+    {
+      "name": "security-audit",
+      "repo": "netresearch/security-audit-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.49,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.51,
+          "token_reduction_pct": 0.38,
+          "tool_call_reduction_pct": 0.42
+        }
+      },
+      "category": "security",
+      "top_finding": "XXE, GHA injection, PreToolUse hook patterns missed without skill guidance"
+    },
+    {
+      "name": "docker-development",
+      "repo": "netresearch/docker-development-skill",
+      "version": "1.0.0",
+      "eval_count": 23,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.59,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.41,
+          "token_reduction_pct": 0.30,
+          "tool_call_reduction_pct": 0.35
+        }
+      },
+      "category": "devops",
+      "top_finding": "Go recipe, BuildKit secrets, 7 security anti-patterns undiscovered without skill"
+    },
+    {
+      "name": "typo3-conformance",
+      "repo": "netresearch/typo3-conformance-skill",
+      "version": "1.0.0",
+      "eval_count": 30,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.31,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.69,
+          "token_reduction_pct": 0.50,
+          "tool_call_reduction_pct": 0.55
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Quick grep recipes, scoring alignment, PHP 8.5 readiness missed without skill"
+    },
+    {
+      "name": "go-development",
+      "repo": "netresearch/go-development-skill",
+      "version": "1.0.0",
+      "eval_count": 21,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.52,
+          "with_skill_pass_rate": 0.99,
+          "delta": 0.47,
+          "token_reduction_pct": 0.35,
+          "tool_call_reduction_pct": 0.40
+        }
+      },
+      "category": "language",
+      "top_finding": "Cron, mutation testing, lefthook, slog patterns unknown without skill"
+    },
+    {
+      "name": "php-modernization",
+      "repo": "netresearch/php-modernization-skill",
+      "version": "1.0.0",
+      "eval_count": 21,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.96,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.04,
+          "token_reduction_pct": 0.10,
+          "tool_call_reduction_pct": 0.12
+        }
+      },
+      "category": "language",
+      "top_finding": "Copy-on-write, DOMDocument UTF-8 niche patterns only gap — low marginal value"
+    },
+    {
+      "name": "concourse-ci",
+      "repo": "netresearch/concourse-ci-skill",
+      "version": "1.0.0",
+      "eval_count": 22,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.62,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.38,
+          "token_reduction_pct": 0.32,
+          "tool_call_reduction_pct": 0.38
+        }
+      },
+      "category": "devops",
+      "top_finding": "Registry mirror, across modifier, GitLab JWT patterns missing without skill"
+    },
+    {
+      "name": "typo3-extension-upgrade",
+      "repo": "netresearch/typo3-extension-upgrade-skill",
+      "version": "1.0.0",
+      "eval_count": 23,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.76,
+          "with_skill_pass_rate": 0.97,
+          "delta": 0.21,
+          "token_reduction_pct": 0.20,
+          "tool_call_reduction_pct": 0.25
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Missing v13-to-v14 reference, inputLink migration patterns"
+    },
+    {
+      "name": "typo3-testing",
+      "repo": "netresearch/typo3-testing-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.10,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.90,
+          "token_reduction_pct": 0.60,
+          "tool_call_reduction_pct": 0.65
+        }
+      },
+      "category": "typo3",
+      "top_finding": "8 missing reference files, multi-version CI config completely unknown"
+    },
+    {
+      "name": "agent-rules",
+      "repo": "netresearch/agent-rules-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.40,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.60,
+          "token_reduction_pct": 0.42,
+          "tool_call_reduction_pct": 0.48
+        }
+      },
+      "category": "meta",
+      "top_finding": "Fabricated command in AGENTS.md, Never Fabricate rule critical for safety"
+    },
+    {
+      "name": "skill-repo",
+      "repo": "netresearch/skill-repo-skill",
+      "version": "1.16.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.38,
+          "with_skill_pass_rate": 0.98,
+          "delta": 0.60,
+          "token_reduction_pct": 0.44,
+          "tool_call_reduction_pct": 0.50
+        }
+      },
+      "category": "meta",
+      "top_finding": "plugin.json example, composer constraints, workflow pattern all missing"
+    },
+    {
+      "name": "typo3-docs",
+      "repo": "netresearch/typo3-docs-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.50,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.50,
+          "token_reduction_pct": 0.38,
+          "tool_call_reduction_pct": 0.42
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Permalink anchors, PHP domain limitations, card-grid directive unknown"
+    },
+    {
+      "name": "typo3-project-upgrade",
+      "repo": "netresearch/typo3-project-upgrade-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.64,
+          "with_skill_pass_rate": 0.88,
+          "delta": 0.24,
+          "token_reduction_pct": 0.22,
+          "tool_call_reduction_pct": 0.28
+        }
+      },
+      "category": "typo3",
+      "top_finding": "SCSS variable injection, compressed version (67%) scored higher"
+    },
+    {
+      "name": "typo3-ckeditor5",
+      "repo": "netresearch/typo3-ckeditor5-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.81,
+          "with_skill_pass_rate": 0.93,
+          "delta": 0.12,
+          "token_reduction_pct": 0.15,
+          "tool_call_reduction_pct": 0.18
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Schema registration, command lifecycle, jQuery migration patterns"
+    },
+    {
+      "name": "cli-tools",
+      "repo": "netresearch/cli-tools-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.32,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.68,
+          "token_reduction_pct": 0.48,
+          "tool_call_reduction_pct": 0.55
+        }
+      },
+      "category": "tooling",
+      "top_finding": "Advisory triggers, preferred-tools table, troubleshooting patterns missing"
+    },
+    {
+      "name": "context7",
+      "repo": "netresearch/context7-skill",
+      "version": "1.0.0",
+      "eval_count": 21,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.24,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.76,
+          "token_reduction_pct": 0.52,
+          "tool_call_reduction_pct": 0.58
+        }
+      },
+      "category": "meta",
+      "top_finding": "\"When NOT to Use\" section, topic extraction, mode selection all unknown"
+    },
+    {
+      "name": "data-tools",
+      "repo": "netresearch/data-tools-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.48,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.52,
+          "token_reduction_pct": 0.40,
+          "tool_call_reduction_pct": 0.45
+        }
+      },
+      "category": "tooling",
+      "top_finding": "Refuse grep/sed on structured data, format conversion recipes missing"
+    },
+    {
+      "name": "enterprise-readiness",
+      "repo": "netresearch/enterprise-readiness-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.60,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.40,
+          "token_reduction_pct": 0.30,
+          "tool_call_reduction_pct": 0.35
+        }
+      },
+      "category": "security",
+      "top_finding": "SLSA provenance, Dependabot, duplicate CI, scorecard patterns unknown"
+    },
+    {
+      "name": "git-workflow",
+      "repo": "netresearch/git-workflow-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.80,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.20,
+          "token_reduction_pct": 0.18,
+          "tool_call_reduction_pct": 0.22
+        }
+      },
+      "category": "devops",
+      "top_finding": "Branch recovery, signed commits rebase, multi-branch release patterns"
+    },
+    {
+      "name": "github-project",
+      "repo": "netresearch/github-project-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.30,
+          "with_skill_pass_rate": 0.73,
+          "delta": 0.43,
+          "token_reduction_pct": 0.28,
+          "tool_call_reduction_pct": 0.32
+        }
+      },
+      "category": "devops",
+      "top_finding": "CodeQL conflicts, signed commits, Copilot race conditions"
+    },
+    {
+      "name": "matrix",
+      "repo": "netresearch/matrix-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.88,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.12,
+          "token_reduction_pct": 0.12,
+          "tool_call_reduction_pct": 0.15
+        }
+      },
+      "category": "tooling",
+      "top_finding": "--request-keys flag, MATRIX_PASSWORD env, device verification flow"
+    },
+    {
+      "name": "netresearch-branding",
+      "repo": "netresearch/netresearch-branding-skill",
+      "version": "1.0.0",
+      "eval_count": 21,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.0,
+          "with_skill_pass_rate": 1.0,
+          "delta": 1.0,
+          "token_reduction_pct": 0.70,
+          "tool_call_reduction_pct": 0.75
+        }
+      },
+      "category": "meta",
+      "top_finding": "CSS variables, WCAG contrast, TYPO3 docs branding, breakpoints all unknown"
+    },
+    {
+      "name": "typo3-core-contributions",
+      "repo": "netresearch/typo3-core-contributions-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.50,
+          "with_skill_pass_rate": 0.77,
+          "delta": 0.27,
+          "token_reduction_pct": 0.22,
+          "tool_call_reduction_pct": 0.25
+        }
+      },
+      "category": "typo3",
+      "top_finding": "WIP management, cherry-pick refs/changes, email mismatch detection"
+    },
+    {
+      "name": "typo3-ddev",
+      "repo": "netresearch/typo3-ddev-skill",
+      "version": "1.0.0",
+      "eval_count": 25,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.20,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.80,
+          "token_reduction_pct": 0.55,
+          "tool_call_reduction_pct": 0.60
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Database tiering, PHP management, TYPO3 12 vs 13 CLI differences"
+    },
+    {
+      "name": "typo3-typoscript-ref",
+      "repo": "netresearch/typo3-typoscript-ref-skill",
+      "version": "1.0.0",
+      "eval_count": 20,
+      "results": {
+        "opus": {
+          "without_skill_pass_rate": 0.65,
+          "with_skill_pass_rate": 1.0,
+          "delta": 0.35,
+          "token_reduction_pct": 0.28,
+          "tool_call_reduction_pct": 0.32
+        }
+      },
+      "category": "typo3",
+      "top_finding": "Version-specific guidance, review workflow, reference index patterns"
+    }
+  ]
+}
