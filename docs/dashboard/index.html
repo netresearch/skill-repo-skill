@@ -27,6 +27,14 @@ body {
   line-height: 1.5;
   font-size: 14px;
 }
+a { color: var(--turquoise); text-decoration: none; }
+a:hover { color: var(--turquoise-dark); text-decoration: underline; }
+.skill-name a { font-weight: 600; }
+.delta-cell a { color: inherit; }
+.coverage-count a { color: var(--grey); }
+.coverage-count a:hover { color: var(--turquoise); }
+.discovery-skill { text-decoration: none; }
+.discovery-skill:hover { text-decoration: underline; }
 header {
   background: linear-gradient(135deg, var(--turquoise-dark), var(--turquoise));
   color: var(--white);
@@ -392,6 +400,13 @@ function classifySeverity(skill) {
 
 const severityLabels = { critical: 'Would Cause Failures', quality: 'Quality Gap', future: 'Future-Proofing' };
 
+// URL helpers
+function ghUrl(s, path) { return `https://github.com/${s.repo}/blob/main/${path}`; }
+function repoUrl(s) { return `https://github.com/${s.repo}`; }
+function releaseUrl(s) { return `https://github.com/${s.repo}/releases/tag/v${s.version}`; }
+function skillUrl(s) { return ghUrl(s, s.skill_path || `skills/${s.name}/SKILL.md`); }
+function evalsUrl(s) { return ghUrl(s, s.evals_path || `skills/${s.name}/evals/evals.json`); }
+
 // Init
 const skills = DATA.skills.map(s => ({ ...s, severity: classifySeverity(s) }));
 const categories = [...new Set(skills.map(s => s.category))].sort();
@@ -464,8 +479,8 @@ function renderTable() {
     const wp = (o.without_skill_pass_rate * 100).toFixed(0);
     const wip = (o.with_skill_pass_rate * 100).toFixed(0);
     return `<tr>
-      <td class="skill-name">${s.name}</td>
-      <td>${s.eval_count}</td>
+      <td class="skill-name"><a href="${skillUrl(s)}" target="_blank" title="View SKILL.md">${s.name}</a></td>
+      <td><a href="${evalsUrl(s)}" target="_blank" title="View evals.json">${s.eval_count}</a></td>
       <td>
         <div class="bar-container">
           <div class="bar-track">
@@ -475,9 +490,9 @@ function renderTable() {
           <span class="bar-label">${wp}% / ${wip}%</span>
         </div>
       </td>
-      <td class="delta-cell ${deltaClass(o.delta)}">+${(o.delta * 100).toFixed(0)}%</td>
+      <td class="delta-cell ${deltaClass(o.delta)}"><a href="${repoUrl(s)}" target="_blank" title="View repository">+${(o.delta * 100).toFixed(0)}%</a></td>
       <td><span class="category-badge cat-${s.category}">${s.category}</span></td>
-      <td class="finding">${s.top_finding}</td>
+      <td class="finding">${s.top_finding} <a href="${releaseUrl(s)}" target="_blank" title="Latest release" style="font-size:0.75em;opacity:0.6">v${s.version}</a></td>
     </tr>`;
   }).join('');
 
@@ -568,7 +583,7 @@ function renderDiscoveries() {
 
   listEl.innerHTML = filtered.map(s => `
     <div class="discovery-card sev-${s.severity}">
-      <span class="discovery-skill">${s.name}</span>
+      <a href="${repoUrl(s)}" target="_blank" class="discovery-skill">${s.name}</a>
       <span class="discovery-text">${s.top_finding}</span>
       <span class="discovery-severity sev-tag-${s.severity}">${severityLabels[s.severity]}</span>
     </div>
@@ -593,11 +608,11 @@ function renderCoverage() {
   const sorted = [...skills].sort((a, b) => b.eval_count - a.eval_count);
   gridEl.innerHTML = sorted.map(s => `
     <div class="coverage-card">
-      <div class="name">${s.name}</div>
+      <div class="name"><a href="${skillUrl(s)}" target="_blank">${s.name}</a></div>
       <div class="coverage-bar-outer">
         <div class="coverage-bar-fill" style="width:${(s.eval_count / maxEvals) * 100}%"></div>
       </div>
-      <div class="coverage-count">${s.eval_count} evals &middot; ${(s.results.opus.with_skill_pass_rate * 100).toFixed(0)}% pass</div>
+      <div class="coverage-count"><a href="${evalsUrl(s)}" target="_blank">${s.eval_count} evals</a> &middot; ${(s.results.opus.with_skill_pass_rate * 100).toFixed(0)}% pass</div>
     </div>
   `).join('');
 }

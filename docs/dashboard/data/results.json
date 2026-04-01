@@ -12,11 +12,13 @@
           "with_skill_pass_rate": 1.0,
           "delta": 0.56,
           "token_reduction_pct": 0.45,
-          "tool_call_reduction_pct": 0.60
+          "tool_call_reduction_pct": 0.6
         }
       },
       "category": "tooling",
-      "top_finding": "Agents default to grep/find instead of rg/fd — 50-75% fewer tool calls with skill"
+      "top_finding": "Agents default to grep/find instead of rg/fd \u2014 50-75% fewer tool calls with skill",
+      "skill_path": "skills/file-search/SKILL.md",
+      "evals_path": "skills/file-search/evals/evals.json"
     },
     {
       "name": "security-audit",
@@ -33,7 +35,9 @@
         }
       },
       "category": "security",
-      "top_finding": "XXE, GHA injection, PreToolUse hook patterns missed without skill guidance"
+      "top_finding": "XXE, GHA injection, PreToolUse hook patterns missed without skill guidance",
+      "skill_path": "skills/security-audit/SKILL.md",
+      "evals_path": "skills/security-audit/evals/evals.json"
     },
     {
       "name": "docker-development",
@@ -45,12 +49,14 @@
           "without_skill_pass_rate": 0.59,
           "with_skill_pass_rate": 1.0,
           "delta": 0.41,
-          "token_reduction_pct": 0.30,
+          "token_reduction_pct": 0.3,
           "tool_call_reduction_pct": 0.35
         }
       },
       "category": "devops",
-      "top_finding": "Go recipe, BuildKit secrets, 7 security anti-patterns undiscovered without skill"
+      "top_finding": "Go recipe, BuildKit secrets, 7 security anti-patterns undiscovered without skill",
+      "skill_path": "skills/docker-development/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "typo3-conformance",
@@ -62,12 +68,14 @@
           "without_skill_pass_rate": 0.31,
           "with_skill_pass_rate": 1.0,
           "delta": 0.69,
-          "token_reduction_pct": 0.50,
+          "token_reduction_pct": 0.5,
           "tool_call_reduction_pct": 0.55
         }
       },
       "category": "typo3",
-      "top_finding": "Quick grep recipes, scoring alignment, PHP 8.5 readiness missed without skill"
+      "top_finding": "Quick grep recipes, scoring alignment, PHP 8.5 readiness missed without skill",
+      "skill_path": "skills/typo3-conformance/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "go-development",
@@ -80,11 +88,13 @@
           "with_skill_pass_rate": 0.99,
           "delta": 0.47,
           "token_reduction_pct": 0.35,
-          "tool_call_reduction_pct": 0.40
+          "tool_call_reduction_pct": 0.4
         }
       },
       "category": "language",
-      "top_finding": "Cron, mutation testing, lefthook, slog patterns unknown without skill"
+      "top_finding": "Cron, mutation testing, lefthook, slog patterns unknown without skill",
+      "skill_path": "skills/go-development/SKILL.md",
+      "evals_path": "skills/go-development/evals/evals.json"
     },
     {
       "name": "php-modernization",
@@ -96,12 +106,14 @@
           "without_skill_pass_rate": 0.96,
           "with_skill_pass_rate": 1.0,
           "delta": 0.04,
-          "token_reduction_pct": 0.10,
+          "token_reduction_pct": 0.1,
           "tool_call_reduction_pct": 0.12
         }
       },
       "category": "language",
-      "top_finding": "Copy-on-write, DOMDocument UTF-8 niche patterns only gap — low marginal value"
+      "top_finding": "Copy-on-write, DOMDocument UTF-8 niche patterns only gap \u2014 low marginal value",
+      "skill_path": "skills/php-modernization/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "concourse-ci",
@@ -118,7 +130,9 @@
         }
       },
       "category": "devops",
-      "top_finding": "Registry mirror, across modifier, GitLab JWT patterns missing without skill"
+      "top_finding": "Registry mirror, across modifier, GitLab JWT patterns missing without skill",
+      "skill_path": "skills/concourse-ci/SKILL.md",
+      "evals_path": "skills/concourse-ci/evals/evals.json"
     },
     {
       "name": "typo3-extension-upgrade",
@@ -130,12 +144,14 @@
           "without_skill_pass_rate": 0.76,
           "with_skill_pass_rate": 0.97,
           "delta": 0.21,
-          "token_reduction_pct": 0.20,
+          "token_reduction_pct": 0.2,
           "tool_call_reduction_pct": 0.25
         }
       },
       "category": "typo3",
-      "top_finding": "Missing v13-to-v14 reference, inputLink migration patterns"
+      "top_finding": "Missing v13-to-v14 reference, inputLink migration patterns",
+      "skill_path": "skills/typo3-extension-upgrade/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "typo3-testing",
@@ -144,15 +160,17 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.10,
+          "without_skill_pass_rate": 0.1,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.90,
-          "token_reduction_pct": 0.60,
+          "delta": 0.9,
+          "token_reduction_pct": 0.6,
           "tool_call_reduction_pct": 0.65
         }
       },
       "category": "typo3",
-      "top_finding": "8 missing reference files, multi-version CI config completely unknown"
+      "top_finding": "8 missing reference files, multi-version CI config completely unknown",
+      "skill_path": "skills/typo3-testing/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "agent-rules",
@@ -161,15 +179,17 @@
       "eval_count": 25,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.40,
+          "without_skill_pass_rate": 0.4,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.60,
+          "delta": 0.6,
           "token_reduction_pct": 0.42,
           "tool_call_reduction_pct": 0.48
         }
       },
       "category": "meta",
-      "top_finding": "Fabricated command in AGENTS.md, Never Fabricate rule critical for safety"
+      "top_finding": "Fabricated command in AGENTS.md, Never Fabricate rule critical for safety",
+      "skill_path": "skills/agent-rules/SKILL.md",
+      "evals_path": "skills/agent-rules/evals/evals.json"
     },
     {
       "name": "skill-repo",
@@ -180,13 +200,15 @@
         "opus": {
           "without_skill_pass_rate": 0.38,
           "with_skill_pass_rate": 0.98,
-          "delta": 0.60,
+          "delta": 0.6,
           "token_reduction_pct": 0.44,
-          "tool_call_reduction_pct": 0.50
+          "tool_call_reduction_pct": 0.5
         }
       },
       "category": "meta",
-      "top_finding": "plugin.json example, composer constraints, workflow pattern all missing"
+      "top_finding": "plugin.json example, composer constraints, workflow pattern all missing",
+      "skill_path": "skills/skill-repo/SKILL.md",
+      "evals_path": "skills/skill-repo/evals/evals.json"
     },
     {
       "name": "typo3-docs",
@@ -195,15 +217,17 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.50,
+          "without_skill_pass_rate": 0.5,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.50,
+          "delta": 0.5,
           "token_reduction_pct": 0.38,
           "tool_call_reduction_pct": 0.42
         }
       },
       "category": "typo3",
-      "top_finding": "Permalink anchors, PHP domain limitations, card-grid directive unknown"
+      "top_finding": "Permalink anchors, PHP domain limitations, card-grid directive unknown",
+      "skill_path": "skills/typo3-docs/SKILL.md",
+      "evals_path": "skills/typo3-docs/evals/evals.json"
     },
     {
       "name": "typo3-project-upgrade",
@@ -220,7 +244,9 @@
         }
       },
       "category": "typo3",
-      "top_finding": "SCSS variable injection, compressed version (67%) scored higher"
+      "top_finding": "SCSS variable injection, compressed version (67%) scored higher",
+      "skill_path": "skills/typo3-project-upgrade/SKILL.md",
+      "evals_path": "skills/typo3-project-upgrade/evals/evals.json"
     },
     {
       "name": "typo3-ckeditor5",
@@ -237,7 +263,9 @@
         }
       },
       "category": "typo3",
-      "top_finding": "Schema registration, command lifecycle, jQuery migration patterns"
+      "top_finding": "Schema registration, command lifecycle, jQuery migration patterns",
+      "skill_path": "skills/typo3-ckeditor5/SKILL.md",
+      "evals_path": "skills/typo3-ckeditor5/evals/evals.json"
     },
     {
       "name": "cli-tools",
@@ -254,7 +282,9 @@
         }
       },
       "category": "tooling",
-      "top_finding": "Advisory triggers, preferred-tools table, troubleshooting patterns missing"
+      "top_finding": "Advisory triggers, preferred-tools table, troubleshooting patterns missing",
+      "skill_path": "skills/cli-tools/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "context7",
@@ -271,7 +301,9 @@
         }
       },
       "category": "meta",
-      "top_finding": "\"When NOT to Use\" section, topic extraction, mode selection all unknown"
+      "top_finding": "\"When NOT to Use\" section, topic extraction, mode selection all unknown",
+      "skill_path": "skills/context7/SKILL.md",
+      "evals_path": "skills/context7/evals/evals.json"
     },
     {
       "name": "data-tools",
@@ -283,12 +315,14 @@
           "without_skill_pass_rate": 0.48,
           "with_skill_pass_rate": 1.0,
           "delta": 0.52,
-          "token_reduction_pct": 0.40,
+          "token_reduction_pct": 0.4,
           "tool_call_reduction_pct": 0.45
         }
       },
       "category": "tooling",
-      "top_finding": "Refuse grep/sed on structured data, format conversion recipes missing"
+      "top_finding": "Refuse grep/sed on structured data, format conversion recipes missing",
+      "skill_path": "skills/data-tools/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "enterprise-readiness",
@@ -297,15 +331,17 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.60,
+          "without_skill_pass_rate": 0.6,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.40,
-          "token_reduction_pct": 0.30,
+          "delta": 0.4,
+          "token_reduction_pct": 0.3,
           "tool_call_reduction_pct": 0.35
         }
       },
       "category": "security",
-      "top_finding": "SLSA provenance, Dependabot, duplicate CI, scorecard patterns unknown"
+      "top_finding": "SLSA provenance, Dependabot, duplicate CI, scorecard patterns unknown",
+      "skill_path": "skills/enterprise-readiness/SKILL.md",
+      "evals_path": "skills/enterprise-readiness/evals/evals.json"
     },
     {
       "name": "git-workflow",
@@ -314,15 +350,17 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.80,
+          "without_skill_pass_rate": 0.8,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.20,
+          "delta": 0.2,
           "token_reduction_pct": 0.18,
           "tool_call_reduction_pct": 0.22
         }
       },
       "category": "devops",
-      "top_finding": "Branch recovery, signed commits rebase, multi-branch release patterns"
+      "top_finding": "Branch recovery, signed commits rebase, multi-branch release patterns",
+      "skill_path": "skills/git-workflow/SKILL.md",
+      "evals_path": "skills/git-workflow/evals/evals.json"
     },
     {
       "name": "github-project",
@@ -331,7 +369,7 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.30,
+          "without_skill_pass_rate": 0.3,
           "with_skill_pass_rate": 0.73,
           "delta": 0.43,
           "token_reduction_pct": 0.28,
@@ -339,7 +377,9 @@
         }
       },
       "category": "devops",
-      "top_finding": "CodeQL conflicts, signed commits, Copilot race conditions"
+      "top_finding": "CodeQL conflicts, signed commits, Copilot race conditions",
+      "skill_path": "skills/github-project/SKILL.md",
+      "evals_path": "skills/github-project/evals/evals.json"
     },
     {
       "name": "matrix",
@@ -356,7 +396,9 @@
         }
       },
       "category": "tooling",
-      "top_finding": "--request-keys flag, MATRIX_PASSWORD env, device verification flow"
+      "top_finding": "--request-keys flag, MATRIX_PASSWORD env, device verification flow",
+      "skill_path": "skills/matrix-communication/SKILL.md",
+      "evals_path": "skills/matrix-communication/evals/evals.json"
     },
     {
       "name": "netresearch-branding",
@@ -368,12 +410,14 @@
           "without_skill_pass_rate": 0.0,
           "with_skill_pass_rate": 1.0,
           "delta": 1.0,
-          "token_reduction_pct": 0.70,
+          "token_reduction_pct": 0.7,
           "tool_call_reduction_pct": 0.75
         }
       },
       "category": "meta",
-      "top_finding": "CSS variables, WCAG contrast, TYPO3 docs branding, breakpoints all unknown"
+      "top_finding": "CSS variables, WCAG contrast, TYPO3 docs branding, breakpoints all unknown",
+      "skill_path": "skills/netresearch-branding/SKILL.md",
+      "evals_path": "skills/netresearch-branding/evals/evals.json"
     },
     {
       "name": "typo3-core-contributions",
@@ -382,7 +426,7 @@
       "eval_count": 20,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.50,
+          "without_skill_pass_rate": 0.5,
           "with_skill_pass_rate": 0.77,
           "delta": 0.27,
           "token_reduction_pct": 0.22,
@@ -390,7 +434,9 @@
         }
       },
       "category": "typo3",
-      "top_finding": "WIP management, cherry-pick refs/changes, email mismatch detection"
+      "top_finding": "WIP management, cherry-pick refs/changes, email mismatch detection",
+      "skill_path": "skills/typo3-core-contributions/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "typo3-ddev",
@@ -399,15 +445,17 @@
       "eval_count": 25,
       "results": {
         "opus": {
-          "without_skill_pass_rate": 0.20,
+          "without_skill_pass_rate": 0.2,
           "with_skill_pass_rate": 1.0,
-          "delta": 0.80,
+          "delta": 0.8,
           "token_reduction_pct": 0.55,
-          "tool_call_reduction_pct": 0.60
+          "tool_call_reduction_pct": 0.6
         }
       },
       "category": "typo3",
-      "top_finding": "Database tiering, PHP management, TYPO3 12 vs 13 CLI differences"
+      "top_finding": "Database tiering, PHP management, TYPO3 12 vs 13 CLI differences",
+      "skill_path": "skills/typo3-ddev/SKILL.md",
+      "evals_path": "evals/evals.json"
     },
     {
       "name": "typo3-typoscript-ref",
@@ -424,7 +472,9 @@
         }
       },
       "category": "typo3",
-      "top_finding": "Version-specific guidance, review workflow, reference index patterns"
+      "top_finding": "Version-specific guidance, review workflow, reference index patterns",
+      "skill_path": "skills/typo3-typoscript-ref/SKILL.md",
+      "evals_path": "skills/typo3-typoscript-ref/evals/evals.json"
     }
   ]
 }
