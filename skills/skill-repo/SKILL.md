@@ -14,41 +14,35 @@ allowed-tools: Bash(bash:*) Bash(python3:*) Bash(jq:*) Read Write Glob Grep
 
 Standards for Netresearch skill repository layout and distribution.
 
-## When to Use
-
-- Creating a new skill repository
-- Standardizing an existing skill repo
-- Setting up release workflows
-
 ## Repository Structure
 
 ```
-{skill-name}/
-├── .claude-plugin/plugin.json  # Plugin metadata (required)
-├── SKILL.md              # AI instructions (required)
-├── README.md             # Human documentation (required)
-├── LICENSE-MIT           # Code license (required)
-├── LICENSE-CC-BY-SA-4.0  # Content license (required)
-├── composer.json         # PHP distribution
-├── references/           # Extended docs
-├── scripts/              # Automation
-└── .github/workflows/release.yml
+{repo-name}/
+├── .claude-plugin/plugin.json   # Plugin metadata (required)
+├── skills/{name}/SKILL.md       # AI instructions (required)
+├── README.md                    # Human docs (required)
+├── LICENSE-MIT                  # Code license (required)
+├── LICENSE-CC-BY-SA-4.0         # Content license (required)
+├── composer.json                # PHP distribution (required)
+├── references/                  # Extended docs for >500w content
+├── scripts/                     # Automation
+└── .github/workflows/
+    ├── release.yml              # Tag-triggered release
+    ├── validate.yml             # Caller for reusable validation
+    └── auto-merge-deps.yml      # Caller for dep auto-merge
 ```
 
-## Licensing
-
-Skill repos use split licensing:
+## Licensing (Split Model)
 
 | Path pattern | License |
 |---|---|
-| `skills/**/*.md`, `references/**`, `assets/**/*.md`, `README.md`, `docs/**` | CC-BY-SA-4.0 |
-| `scripts/**`, `Build/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
+| `skills/**/*.md`, `references/**`, `README.md`, `docs/**` | CC-BY-SA-4.0 |
+| `scripts/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
 | `composer.json`, `plugin.json`, config files | MIT |
-| Code snippets embedded in `.md` files | Dual (both apply) |
 
-Composer/plugin metadata uses SPDX compound expression: `(MIT AND CC-BY-SA-4.0)`
+SPDX expression: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` file — use split files only.
 
-## SKILL.md Requirements
+## SKILL.md Frontmatter
 
 ```yaml
 ---
@@ -57,38 +51,46 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-- Under 500 words, use references/ for extended content
+Body: max 500 words. Use `references/` for extended content.
 
-## Installation Methods
+## plugin.json (`.claude-plugin/plugin.json`)
 
-1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
-2. **Release**: Download and extract to `~/.claude/skills/{name}/`
-3. **Composer**: `composer require netresearch/{repo-name}`
+```json
+{
+  "name": "skill-name",
+  "version": "1.0.0",
+  "skills": ["./skills/skill-name"],
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": {"name": "Netresearch DTT GmbH", "url": "https://www.netresearch.de"}
+}
+```
 
-## Composer Package
+## composer.json
 
-Composer name **must match GitHub repo name** exactly.
+Name **must match GitHub repo name**. Type must be `ai-agent-skill`. No `version` field (derived from git tags). No `composer.lock`.
 
 ```json
 {
   "name": "netresearch/{repo-name}",
   "type": "ai-agent-skill",
+  "license": "(MIT AND CC-BY-SA-4.0)",
   "require": {"netresearch/composer-agent-skill-plugin": "*"},
-  "extra": {"ai-agent-skill": "SKILL.md"}
+  "extra": {"ai-agent-skill": "skills/{name}/SKILL.md"}
 }
 ```
 
-## Validation
+## Reusable Workflow Callers
 
-```bash
-scripts/validate-skill.sh
+Skill repos MUST delegate CI to skill-repo-skill reusable workflows:
+
+```yaml
+# .github/workflows/validate.yml
+uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 ```
 
-## References
+Required callers: `validate.yml`, `release.yml`, `auto-merge-deps.yml`, `harness-verify.yml`.
 
-- `references/installation-methods.md`
-- `references/composer-setup.md`
-- `templates/README.md.template`
+Auto-merge callers must use `pull_request_target` trigger (not `pull_request`).
 
 ## Releasing
 
@@ -97,25 +99,28 @@ scripts/validate-skill.sh
 3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main vX.Y.Z`
 
-## Workflow Requirements
+## Installation
 
-Skill repos MUST use reusable workflows from skill-repo-skill for CI standardization:
+1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
+2. **Release**: Download to `~/.claude/skills/{name}/`
+3. **Composer**: `composer require netresearch/{repo-name}`
 
-| Workflow | Purpose | Required |
-|----------|---------|----------|
-| `auto-merge-deps.yml` | Auto-merge Dependabot/Renovate PRs | Yes |
-| `harness-verify.yml` | Verify AGENTS.md harness consistency | Yes |
-| `validate.yml` | Validate skill structure and lint | Yes |
-| `release.yml` | Create releases on tag push | Yes |
+## Validation
 
-### Cross-platform Compatibility
+```bash
+scripts/validate-skill.sh
+```
 
-Scripts in `scripts/` and workflow `run:` blocks must work on both Linux and macOS:
+## Cross-platform Compatibility
 
-- Use `grep -E` (extended regex), NOT `grep -P` (Perl regex — macOS BSD grep lacks `-P`)
-- Use `bash` explicitly in shebangs (macOS default shell is zsh)
-- Test regex patterns with both GNU and BSD grep behavior
-- Use `[[ ]]` for conditionals, which is more robust than single-bracket `[ ]` and is a bash builtin
+- Use `grep -E` not `grep -P` (macOS BSD grep lacks `-P`)
+- Use `bash` in shebangs (macOS default is zsh)
+- Use `[[ ]]` for conditionals
+
+## References
+
+- `references/installation-methods.md`
+- `references/composer-setup.md`
 
 ---
 
