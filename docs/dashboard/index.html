@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Netresearch Skill Effectiveness Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --turquoise: #2F99A4;
+  --turquoise-dark: #247a83;
+  --turquoise-light: #e8f5f6;
+  --orange: #FF4D00;
+  --orange-light: #fff0e8;
+  --grey: #585961;
+  --grey-light: #f4f4f5;
+  --grey-border: #dddde0;
+  --white: #ffffff;
+  --black: #1a1a1a;
+  --success: #22c55e;
+  --warning: #f59e0b;
+}
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--black);
+  background: var(--grey-light);
+  line-height: 1.5;
+  font-size: 14px;
+}
+header {
+  background: linear-gradient(135deg, var(--turquoise-dark), var(--turquoise));
+  color: var(--white);
+  padding: 1.5rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.02em; }
+header .meta { display: flex; gap: 1.5rem; font-size: 0.85rem; opacity: 0.9; flex-wrap: wrap; }
+header .meta span { display: flex; align-items: center; gap: 0.35rem; }
+header .meta .num { font-weight: 700; font-size: 1.1rem; }
+nav {
+  background: var(--white);
+  border-bottom: 1px solid var(--grey-border);
+  display: flex;
+  gap: 0;
+  padding: 0 2rem;
+  overflow-x: auto;
+}
+nav button {
+  background: none;
+  border: none;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--grey);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+nav button:hover { color: var(--turquoise); }
+nav button.active { color: var(--turquoise); border-bottom-color: var(--turquoise); }
+.container { max-width: 1280px; margin: 0 auto; padding: 1.5rem 2rem; }
+.filters {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+.filters button {
+  background: var(--white);
+  border: 1px solid var(--grey-border);
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  color: var(--grey);
+  transition: all 0.15s;
+}
+.filters button:hover { border-color: var(--turquoise); color: var(--turquoise); }
+.filters button.active { background: var(--turquoise); color: var(--white); border-color: var(--turquoise); }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--white);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+th {
+  text-align: left;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--grey);
+  background: var(--grey-light);
+  border-bottom: 1px solid var(--grey-border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+th:hover { color: var(--turquoise); }
+th .sort-arrow { margin-left: 0.25rem; font-size: 0.65rem; }
+td {
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--grey-light);
+  font-size: 0.85rem;
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--turquoise-light); }
+.skill-name { font-weight: 600; color: var(--turquoise-dark); }
+.category-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cat-tooling { background: #dbeafe; color: #1d4ed8; }
+.cat-typo3 { background: #fce7f3; color: #be185d; }
+.cat-security { background: #fee2e2; color: #dc2626; }
+.cat-devops { background: #d1fae5; color: #059669; }
+.cat-language { background: #e9d5ff; color: #7c3aed; }
+.cat-meta { background: var(--orange-light); color: var(--orange); }
+.bar-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 180px;
+}
+.bar-track {
+  flex: 1;
+  height: 18px;
+  background: var(--grey-light);
+  border-radius: 3px;
+  position: relative;
+  overflow: hidden;
+}
+.bar-without {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--grey-border);
+  border-radius: 3px 0 0 3px;
+  transition: width 0.4s;
+}
+.bar-with {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--turquoise);
+  border-radius: 3px;
+  transition: width 0.4s;
+  opacity: 0.85;
+}
+.bar-label { font-size: 0.75rem; white-space: nowrap; color: var(--grey); min-width: 70px; }
+.delta-cell {
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.delta-high { color: var(--orange); }
+.delta-mid { color: var(--turquoise); }
+.delta-low { color: var(--grey); }
+.finding { font-size: 0.8rem; color: var(--grey); max-width: 320px; }
+.view { display: none; }
+.view.active { display: block; }
+
+/* Category breakdown */
+.cat-group { margin-bottom: 1.5rem; }
+.cat-group h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.cat-group .avg-delta {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--orange);
+}
+.cat-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.4rem 0;
+}
+.cat-bar-name { width: 180px; font-size: 0.85rem; font-weight: 500; }
+.cat-bar-outer {
+  flex: 1;
+  height: 24px;
+  background: var(--grey-light);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+.cat-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s;
+  display: flex;
+  align-items: center;
+  padding-left: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--white);
+}
+.cat-bar-fill.without { background: var(--grey-border); color: var(--grey); }
+.cat-bar-fill.with { background: var(--turquoise); }
+.cat-bar-delta { min-width: 50px; font-weight: 700; font-size: 0.85rem; text-align: right; }
+.cat-summary-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+}
+.cat-summary-card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  flex: 1;
+  min-width: 160px;
+  text-align: center;
+}
+.cat-summary-card .label { font-size: 0.75rem; color: var(--grey); text-transform: uppercase; letter-spacing: 0.04em; }
+.cat-summary-card .value { font-size: 1.5rem; font-weight: 700; color: var(--turquoise-dark); margin-top: 0.25rem; }
+
+/* Discoveries */
+.discovery-card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  border-left: 3px solid var(--grey-border);
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.discovery-card.sev-critical { border-left-color: var(--orange); }
+.discovery-card.sev-quality { border-left-color: var(--turquoise); }
+.discovery-card.sev-future { border-left-color: var(--warning); }
+.discovery-skill {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: var(--turquoise-dark);
+  min-width: 160px;
+}
+.discovery-text { font-size: 0.85rem; color: var(--grey); flex: 1; }
+.discovery-severity {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+.sev-tag-critical { background: #fee2e2; color: #dc2626; }
+.sev-tag-quality { background: var(--turquoise-light); color: var(--turquoise-dark); }
+.sev-tag-future { background: #fef3c7; color: #d97706; }
+
+/* Coverage */
+.coverage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+.coverage-card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.coverage-card .name { font-weight: 600; font-size: 0.85rem; color: var(--turquoise-dark); margin-bottom: 0.35rem; }
+.coverage-bar-outer {
+  height: 12px;
+  background: var(--grey-light);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.coverage-bar-fill {
+  height: 100%;
+  background: var(--turquoise);
+  border-radius: 3px;
+  transition: width 0.5s;
+}
+.coverage-count { font-size: 0.75rem; color: var(--grey); margin-top: 0.2rem; }
+.coverage-stats {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.stat-card {
+  background: var(--white);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  text-align: center;
+  min-width: 140px;
+}
+.stat-card .label { font-size: 0.75rem; color: var(--grey); text-transform: uppercase; letter-spacing: 0.04em; }
+.stat-card .value { font-size: 2rem; font-weight: 700; color: var(--turquoise-dark); }
+
+@media (max-width: 768px) {
+  header { padding: 1rem; }
+  .container { padding: 1rem; }
+  nav { padding: 0 1rem; }
+  .finding { max-width: 200px; }
+  table { font-size: 0.8rem; }
+  td, th { padding: 0.4rem 0.5rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Netresearch Skill Effectiveness Dashboard</h1>
+  <div class="meta" id="headerMeta"></div>
+</header>
+
+<nav id="nav">
+  <button class="active" data-view="value-index">Skill Value Index</button>
+  <button data-view="category-breakdown">Category Breakdown</button>
+  <button data-view="discoveries">Discoveries Log</button>
+  <button data-view="coverage">Coverage</button>
+</nav>
+
+<div class="container">
+
+  <!-- View 1: Skill Value Index -->
+  <div class="view active" id="view-value-index">
+    <div class="filters" id="categoryFilters"></div>
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="name">Skill <span class="sort-arrow"></span></th>
+          <th data-sort="eval_count">Evals <span class="sort-arrow"></span></th>
+          <th data-sort="pass_rates">Pass Rate (Without / With) <span class="sort-arrow"></span></th>
+          <th data-sort="delta">Delta <span class="sort-arrow"></span></th>
+          <th data-sort="category">Category <span class="sort-arrow"></span></th>
+          <th>Top Finding</th>
+        </tr>
+      </thead>
+      <tbody id="skillTableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- View 2: Category Breakdown -->
+  <div class="view" id="view-category-breakdown">
+    <div class="cat-summary-row" id="catSummary"></div>
+    <div id="catBreakdown"></div>
+  </div>
+
+  <!-- View 3: Discoveries Log -->
+  <div class="view" id="view-discoveries">
+    <div class="filters" id="sevFilters"></div>
+    <div id="discoveriesList"></div>
+  </div>
+
+  <!-- View 4: Coverage -->
+  <div class="view" id="view-coverage">
+    <div class="coverage-stats" id="coverageStats"></div>
+    <div class="coverage-grid" id="coverageGrid"></div>
+  </div>
+
+</div>
+
+<script>
+const DATA = {"generated": "2026-04-01T12:00:00Z", "skills": [{"name": "file-search", "repo": "netresearch/file-search-skill", "version": "1.3.0", "eval_count": 32, "results": {"opus": {"without_skill_pass_rate": 0.44, "with_skill_pass_rate": 1.0, "delta": 0.56, "token_reduction_pct": 0.45, "tool_call_reduction_pct": 0.6}}, "category": "tooling", "top_finding": "Agents default to grep/find instead of rg/fd \u2014 50-75% fewer tool calls with skill"}, {"name": "security-audit", "repo": "netresearch/security-audit-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.49, "with_skill_pass_rate": 1.0, "delta": 0.51, "token_reduction_pct": 0.38, "tool_call_reduction_pct": 0.42}}, "category": "security", "top_finding": "XXE, GHA injection, PreToolUse hook patterns missed without skill guidance"}, {"name": "docker-development", "repo": "netresearch/docker-development-skill", "version": "1.0.0", "eval_count": 23, "results": {"opus": {"without_skill_pass_rate": 0.59, "with_skill_pass_rate": 1.0, "delta": 0.41, "token_reduction_pct": 0.3, "tool_call_reduction_pct": 0.35}}, "category": "devops", "top_finding": "Go recipe, BuildKit secrets, 7 security anti-patterns undiscovered without skill"}, {"name": "typo3-conformance", "repo": "netresearch/typo3-conformance-skill", "version": "1.0.0", "eval_count": 30, "results": {"opus": {"without_skill_pass_rate": 0.31, "with_skill_pass_rate": 1.0, "delta": 0.69, "token_reduction_pct": 0.5, "tool_call_reduction_pct": 0.55}}, "category": "typo3", "top_finding": "Quick grep recipes, scoring alignment, PHP 8.5 readiness missed without skill"}, {"name": "go-development", "repo": "netresearch/go-development-skill", "version": "1.0.0", "eval_count": 21, "results": {"opus": {"without_skill_pass_rate": 0.52, "with_skill_pass_rate": 0.99, "delta": 0.47, "token_reduction_pct": 0.35, "tool_call_reduction_pct": 0.4}}, "category": "language", "top_finding": "Cron, mutation testing, lefthook, slog patterns unknown without skill"}, {"name": "php-modernization", "repo": "netresearch/php-modernization-skill", "version": "1.0.0", "eval_count": 21, "results": {"opus": {"without_skill_pass_rate": 0.96, "with_skill_pass_rate": 1.0, "delta": 0.04, "token_reduction_pct": 0.1, "tool_call_reduction_pct": 0.12}}, "category": "language", "top_finding": "Copy-on-write, DOMDocument UTF-8 niche patterns only gap \u2014 low marginal value"}, {"name": "concourse-ci", "repo": "netresearch/concourse-ci-skill", "version": "1.0.0", "eval_count": 22, "results": {"opus": {"without_skill_pass_rate": 0.62, "with_skill_pass_rate": 1.0, "delta": 0.38, "token_reduction_pct": 0.32, "tool_call_reduction_pct": 0.38}}, "category": "devops", "top_finding": "Registry mirror, across modifier, GitLab JWT patterns missing without skill"}, {"name": "typo3-extension-upgrade", "repo": "netresearch/typo3-extension-upgrade-skill", "version": "1.0.0", "eval_count": 23, "results": {"opus": {"without_skill_pass_rate": 0.76, "with_skill_pass_rate": 0.97, "delta": 0.21, "token_reduction_pct": 0.2, "tool_call_reduction_pct": 0.25}}, "category": "typo3", "top_finding": "Missing v13-to-v14 reference, inputLink migration patterns"}, {"name": "typo3-testing", "repo": "netresearch/typo3-testing-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.1, "with_skill_pass_rate": 1.0, "delta": 0.9, "token_reduction_pct": 0.6, "tool_call_reduction_pct": 0.65}}, "category": "typo3", "top_finding": "8 missing reference files, multi-version CI config completely unknown"}, {"name": "agent-rules", "repo": "netresearch/agent-rules-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.4, "with_skill_pass_rate": 1.0, "delta": 0.6, "token_reduction_pct": 0.42, "tool_call_reduction_pct": 0.48}}, "category": "meta", "top_finding": "Fabricated command in AGENTS.md, Never Fabricate rule critical for safety"}, {"name": "skill-repo", "repo": "netresearch/skill-repo-skill", "version": "1.16.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.38, "with_skill_pass_rate": 0.98, "delta": 0.6, "token_reduction_pct": 0.44, "tool_call_reduction_pct": 0.5}}, "category": "meta", "top_finding": "plugin.json example, composer constraints, workflow pattern all missing"}, {"name": "typo3-docs", "repo": "netresearch/typo3-docs-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.5, "with_skill_pass_rate": 1.0, "delta": 0.5, "token_reduction_pct": 0.38, "tool_call_reduction_pct": 0.42}}, "category": "typo3", "top_finding": "Permalink anchors, PHP domain limitations, card-grid directive unknown"}, {"name": "typo3-project-upgrade", "repo": "netresearch/typo3-project-upgrade-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.64, "with_skill_pass_rate": 0.88, "delta": 0.24, "token_reduction_pct": 0.22, "tool_call_reduction_pct": 0.28}}, "category": "typo3", "top_finding": "SCSS variable injection, compressed version (67%) scored higher"}, {"name": "typo3-ckeditor5", "repo": "netresearch/typo3-ckeditor5-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.81, "with_skill_pass_rate": 0.93, "delta": 0.12, "token_reduction_pct": 0.15, "tool_call_reduction_pct": 0.18}}, "category": "typo3", "top_finding": "Schema registration, command lifecycle, jQuery migration patterns"}, {"name": "cli-tools", "repo": "netresearch/cli-tools-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.32, "with_skill_pass_rate": 1.0, "delta": 0.68, "token_reduction_pct": 0.48, "tool_call_reduction_pct": 0.55}}, "category": "tooling", "top_finding": "Advisory triggers, preferred-tools table, troubleshooting patterns missing"}, {"name": "context7", "repo": "netresearch/context7-skill", "version": "1.0.0", "eval_count": 21, "results": {"opus": {"without_skill_pass_rate": 0.24, "with_skill_pass_rate": 1.0, "delta": 0.76, "token_reduction_pct": 0.52, "tool_call_reduction_pct": 0.58}}, "category": "meta", "top_finding": "\"When NOT to Use\" section, topic extraction, mode selection all unknown"}, {"name": "data-tools", "repo": "netresearch/data-tools-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.48, "with_skill_pass_rate": 1.0, "delta": 0.52, "token_reduction_pct": 0.4, "tool_call_reduction_pct": 0.45}}, "category": "tooling", "top_finding": "Refuse grep/sed on structured data, format conversion recipes missing"}, {"name": "enterprise-readiness", "repo": "netresearch/enterprise-readiness-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.6, "with_skill_pass_rate": 1.0, "delta": 0.4, "token_reduction_pct": 0.3, "tool_call_reduction_pct": 0.35}}, "category": "security", "top_finding": "SLSA provenance, Dependabot, duplicate CI, scorecard patterns unknown"}, {"name": "git-workflow", "repo": "netresearch/git-workflow-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.8, "with_skill_pass_rate": 1.0, "delta": 0.2, "token_reduction_pct": 0.18, "tool_call_reduction_pct": 0.22}}, "category": "devops", "top_finding": "Branch recovery, signed commits rebase, multi-branch release patterns"}, {"name": "github-project", "repo": "netresearch/github-project-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.3, "with_skill_pass_rate": 0.73, "delta": 0.43, "token_reduction_pct": 0.28, "tool_call_reduction_pct": 0.32}}, "category": "devops", "top_finding": "CodeQL conflicts, signed commits, Copilot race conditions"}, {"name": "matrix", "repo": "netresearch/matrix-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.88, "with_skill_pass_rate": 1.0, "delta": 0.12, "token_reduction_pct": 0.12, "tool_call_reduction_pct": 0.15}}, "category": "tooling", "top_finding": "--request-keys flag, MATRIX_PASSWORD env, device verification flow"}, {"name": "netresearch-branding", "repo": "netresearch/netresearch-branding-skill", "version": "1.0.0", "eval_count": 21, "results": {"opus": {"without_skill_pass_rate": 0.0, "with_skill_pass_rate": 1.0, "delta": 1.0, "token_reduction_pct": 0.7, "tool_call_reduction_pct": 0.75}}, "category": "meta", "top_finding": "CSS variables, WCAG contrast, TYPO3 docs branding, breakpoints all unknown"}, {"name": "typo3-core-contributions", "repo": "netresearch/typo3-core-contributions-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.5, "with_skill_pass_rate": 0.77, "delta": 0.27, "token_reduction_pct": 0.22, "tool_call_reduction_pct": 0.25}}, "category": "typo3", "top_finding": "WIP management, cherry-pick refs/changes, email mismatch detection"}, {"name": "typo3-ddev", "repo": "netresearch/typo3-ddev-skill", "version": "1.0.0", "eval_count": 25, "results": {"opus": {"without_skill_pass_rate": 0.2, "with_skill_pass_rate": 1.0, "delta": 0.8, "token_reduction_pct": 0.55, "tool_call_reduction_pct": 0.6}}, "category": "typo3", "top_finding": "Database tiering, PHP management, TYPO3 12 vs 13 CLI differences"}, {"name": "typo3-typoscript-ref", "repo": "netresearch/typo3-typoscript-ref-skill", "version": "1.0.0", "eval_count": 20, "results": {"opus": {"without_skill_pass_rate": 0.65, "with_skill_pass_rate": 1.0, "delta": 0.35, "token_reduction_pct": 0.28, "tool_call_reduction_pct": 0.32}}, "category": "typo3", "top_finding": "Version-specific guidance, review workflow, reference index patterns"}]};
+
+// Severity classification based on delta and finding content
+function classifySeverity(skill) {
+  const d = skill.results.opus.delta;
+  const f = skill.top_finding.toLowerCase();
+  if (d >= 0.5 || f.includes('security') || f.includes('injection') || f.includes('fabricat') || f.includes('xxe') || f.includes('anti-pattern'))
+    return 'critical';
+  if (d >= 0.2)
+    return 'quality';
+  return 'future';
+}
+
+const severityLabels = { critical: 'Would Cause Failures', quality: 'Quality Gap', future: 'Future-Proofing' };
+
+// Init
+const skills = DATA.skills.map(s => ({ ...s, severity: classifySeverity(s) }));
+const categories = [...new Set(skills.map(s => s.category))].sort();
+let currentSort = { key: 'delta', dir: 'desc' };
+let activeCategory = 'all';
+let activeSeverity = 'all';
+
+// Header
+const totalEvals = skills.reduce((s, sk) => s + sk.eval_count, 0);
+const avgDelta = skills.reduce((s, sk) => s + sk.results.opus.delta, 0) / skills.length;
+document.getElementById('headerMeta').innerHTML =
+  `<span><span class="num">${skills.length}</span> skills</span>` +
+  `<span><span class="num">${totalEvals}</span> evals</span>` +
+  `<span><span class="num">+${(avgDelta * 100).toFixed(0)}%</span> avg delta</span>` +
+  `<span>${DATA.generated.split('T')[0]}</span>`;
+
+// Nav
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  });
+});
+
+// Category filters
+function renderCategoryFilters() {
+  const el = document.getElementById('categoryFilters');
+  el.innerHTML = `<button class="${activeCategory === 'all' ? 'active' : ''}" data-cat="all">All</button>` +
+    categories.map(c => `<button class="${activeCategory === c ? 'active' : ''}" data-cat="${c}">${c}</button>`).join('');
+  el.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeCategory = btn.dataset.cat;
+      renderCategoryFilters();
+      renderTable();
+    });
+  });
+}
+
+// Sort
+function sortSkills(list) {
+  const k = currentSort.key;
+  const d = currentSort.dir === 'asc' ? 1 : -1;
+  return [...list].sort((a, b) => {
+    let va, vb;
+    if (k === 'name') { va = a.name; vb = b.name; }
+    else if (k === 'eval_count') { va = a.eval_count; vb = b.eval_count; }
+    else if (k === 'delta') { va = a.results.opus.delta; vb = b.results.opus.delta; }
+    else if (k === 'pass_rates') { va = a.results.opus.with_skill_pass_rate; vb = b.results.opus.with_skill_pass_rate; }
+    else if (k === 'category') { va = a.category; vb = b.category; }
+    else return 0;
+    if (typeof va === 'string') return d * va.localeCompare(vb);
+    return d * (va - vb);
+  });
+}
+
+function deltaClass(d) {
+  if (d >= 0.5) return 'delta-high';
+  if (d >= 0.2) return 'delta-mid';
+  return 'delta-low';
+}
+
+function renderTable() {
+  let filtered = activeCategory === 'all' ? skills : skills.filter(s => s.category === activeCategory);
+  filtered = sortSkills(filtered);
+  const tbody = document.getElementById('skillTableBody');
+  tbody.innerHTML = filtered.map(s => {
+    const o = s.results.opus;
+    const wp = (o.without_skill_pass_rate * 100).toFixed(0);
+    const wip = (o.with_skill_pass_rate * 100).toFixed(0);
+    return `<tr>
+      <td class="skill-name">${s.name}</td>
+      <td>${s.eval_count}</td>
+      <td>
+        <div class="bar-container">
+          <div class="bar-track">
+            <div class="bar-with" style="width:${wip}%"></div>
+            <div class="bar-without" style="width:${wp}%"></div>
+          </div>
+          <span class="bar-label">${wp}% / ${wip}%</span>
+        </div>
+      </td>
+      <td class="delta-cell ${deltaClass(o.delta)}">+${(o.delta * 100).toFixed(0)}%</td>
+      <td><span class="category-badge cat-${s.category}">${s.category}</span></td>
+      <td class="finding">${s.top_finding}</td>
+    </tr>`;
+  }).join('');
+
+  // Update sort arrows
+  document.querySelectorAll('th[data-sort]').forEach(th => {
+    const arrow = th.querySelector('.sort-arrow');
+    if (th.dataset.sort === currentSort.key) {
+      arrow.textContent = currentSort.dir === 'asc' ? '\u25B2' : '\u25BC';
+    } else {
+      arrow.textContent = '';
+    }
+  });
+}
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const k = th.dataset.sort;
+    if (currentSort.key === k) {
+      currentSort.dir = currentSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      currentSort = { key: k, dir: k === 'name' || k === 'category' ? 'asc' : 'desc' };
+    }
+    renderTable();
+  });
+});
+
+// Category Breakdown
+function renderCategoryBreakdown() {
+  const groups = {};
+  skills.forEach(s => {
+    if (!groups[s.category]) groups[s.category] = [];
+    groups[s.category].push(s);
+  });
+
+  const summaryEl = document.getElementById('catSummary');
+  const breakdownEl = document.getElementById('catBreakdown');
+
+  const catStats = Object.entries(groups).map(([cat, sks]) => {
+    const avg = sks.reduce((s, sk) => s + sk.results.opus.delta, 0) / sks.length;
+    return { cat, count: sks.length, avg, skills: sks };
+  }).sort((a, b) => b.avg - a.avg);
+
+  summaryEl.innerHTML = catStats.map(cs => `
+    <div class="cat-summary-card">
+      <div class="label"><span class="category-badge cat-${cs.cat}">${cs.cat}</span></div>
+      <div class="value">+${(cs.avg * 100).toFixed(0)}%</div>
+      <div class="label">${cs.count} skills</div>
+    </div>
+  `).join('');
+
+  breakdownEl.innerHTML = catStats.map(cs => `
+    <div class="cat-group">
+      <h3><span class="category-badge cat-${cs.cat}">${cs.cat}</span> <span class="avg-delta">avg +${(cs.avg * 100).toFixed(0)}%</span></h3>
+      ${cs.skills.sort((a, b) => b.results.opus.delta - a.results.opus.delta).map(s => {
+        const o = s.results.opus;
+        return `<div class="cat-bar-row">
+          <span class="cat-bar-name">${s.name}</span>
+          <div class="cat-bar-outer">
+            <div class="cat-bar-fill with" style="width:${o.with_skill_pass_rate * 100}%"></div>
+          </div>
+          <div class="cat-bar-outer" style="max-width:80px">
+            <div class="cat-bar-fill without" style="width:${o.without_skill_pass_rate * 100}%"></div>
+          </div>
+          <span class="cat-bar-delta delta-cell ${deltaClass(o.delta)}">+${(o.delta * 100).toFixed(0)}%</span>
+        </div>`;
+      }).join('')}
+    </div>
+  `).join('');
+}
+
+// Discoveries
+function renderDiscoveries() {
+  const filtersEl = document.getElementById('sevFilters');
+  const listEl = document.getElementById('discoveriesList');
+  const sevs = ['all', 'critical', 'quality', 'future'];
+  filtersEl.innerHTML = sevs.map(s =>
+    `<button class="${activeSeverity === s ? 'active' : ''}" data-sev="${s}">${s === 'all' ? 'All' : severityLabels[s]}</button>`
+  ).join('');
+  filtersEl.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeSeverity = btn.dataset.sev;
+      renderDiscoveries();
+    });
+  });
+
+  let filtered = activeSeverity === 'all' ? skills : skills.filter(s => s.severity === activeSeverity);
+  filtered = [...filtered].sort((a, b) => b.results.opus.delta - a.results.opus.delta);
+
+  listEl.innerHTML = filtered.map(s => `
+    <div class="discovery-card sev-${s.severity}">
+      <span class="discovery-skill">${s.name}</span>
+      <span class="discovery-text">${s.top_finding}</span>
+      <span class="discovery-severity sev-tag-${s.severity}">${severityLabels[s.severity]}</span>
+    </div>
+  `).join('');
+}
+
+// Coverage
+function renderCoverage() {
+  const statsEl = document.getElementById('coverageStats');
+  const gridEl = document.getElementById('coverageGrid');
+  const maxEvals = Math.max(...skills.map(s => s.eval_count));
+  const perfectPass = skills.filter(s => s.results.opus.with_skill_pass_rate >= 1.0).length;
+
+  statsEl.innerHTML = `
+    <div class="stat-card"><div class="label">Total Skills</div><div class="value">${skills.length}</div></div>
+    <div class="stat-card"><div class="label">Total Evals</div><div class="value">${totalEvals}</div></div>
+    <div class="stat-card"><div class="label">100% Pass Rate</div><div class="value">${perfectPass}</div></div>
+    <div class="stat-card"><div class="label">Max Evals/Skill</div><div class="value">${maxEvals}</div></div>
+    <div class="stat-card"><div class="label">Avg Delta</div><div class="value">+${(avgDelta * 100).toFixed(0)}%</div></div>
+  `;
+
+  const sorted = [...skills].sort((a, b) => b.eval_count - a.eval_count);
+  gridEl.innerHTML = sorted.map(s => `
+    <div class="coverage-card">
+      <div class="name">${s.name}</div>
+      <div class="coverage-bar-outer">
+        <div class="coverage-bar-fill" style="width:${(s.eval_count / maxEvals) * 100}%"></div>
+      </div>
+      <div class="coverage-count">${s.eval_count} evals &middot; ${(s.results.opus.with_skill_pass_rate * 100).toFixed(0)}% pass</div>
+    </div>
+  `).join('');
+}
+
+// Initialize
+renderCategoryFilters();
+renderTable();
+renderCategoryBreakdown();
+renderDiscoveries();
+renderCoverage();
+</script>
+
+</body>
+</html>
