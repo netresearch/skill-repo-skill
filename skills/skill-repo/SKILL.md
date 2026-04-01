@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires bash 4.3+, python3, jq."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.16.0"
+  version: "1.17.0"
   repository: https://github.com/netresearch/skill-repo-skill
 allowed-tools: Bash(bash:*) Bash(python3:*) Bash(jq:*) Read Write Glob Grep
 ---
