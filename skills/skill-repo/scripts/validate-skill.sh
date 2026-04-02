@@ -105,6 +105,14 @@ if [[ -n "$SKILL_FILE" ]]; then
     else
         error "SKILL.md is $WORDS words (max 500)"
     fi
+    # Check for relative script paths that should use ${CLAUDE_SKILL_DIR}
+    # Matches: uv run scripts/, python3 scripts/, python scripts/, bash scripts/, ./scripts/, sh scripts/
+    # But ignores lines already using ${CLAUDE_SKILL_DIR}
+    RELATIVE_PATHS=$(grep -nE '(uv run|python3?|bash|sh|\./)([ ]+)scripts/' "$SKILL_FILE" | grep -v 'CLAUDE_SKILL_DIR' || true)
+    if [[ -n "$RELATIVE_PATHS" ]]; then
+        COUNT=$(echo "$RELATIVE_PATHS" | wc -l)
+        warning "SKILL.md has $COUNT script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
+    fi
 else
     error "SKILL.md not found (checked root and skills/*/)"
 fi
