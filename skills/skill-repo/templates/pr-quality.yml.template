@@ -1,3 +1,13 @@
+# SECURITY: This caller runs on `pull_request_target`, so the job receives
+# base-branch permissions (including `pull-requests: write`). Do NOT add an
+# `actions/checkout` of the PR head or otherwise execute PR-controlled code
+# here — that would escalate untrusted code to write scope. All logic lives
+# in the reusable workflow; this file must stay a thin caller.
+#
+# Bootstrap: when first adding this file to a repo, the PR that introduces
+# it must be merged manually (the workflow isn't on the base branch yet).
+# All subsequent PRs auto-approve via the reusable workflow.
+
 name: PR Quality Gates
 
 on:
