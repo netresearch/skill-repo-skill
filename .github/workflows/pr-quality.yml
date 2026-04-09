@@ -54,7 +54,10 @@ jobs:
                   echo "permission=$PERMISSION" >> "$GITHUB_OUTPUT"
 
             - name: Auto-approve PR
-              if: steps.check-permission.outputs.permission == 'admin' || steps.check-permission.outputs.permission == 'write'
+              # Matches the permission levels GitHub returns for repository
+              # collaborators with write-or-higher access: admin, maintain, write.
+              # (read/triage are explicitly excluded; none means not a collaborator.)
+              if: contains(fromJSON('["admin","maintain","write"]'), steps.check-permission.outputs.permission)
               env:
                   PR_URL: ${{ github.event.pull_request.html_url }}
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
