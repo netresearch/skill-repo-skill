@@ -1,0 +1,128 @@
+{
+  "skill_name": "test-unified-format",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "create_rest_endpoint",
+      "prompt": "Create a REST endpoint for managing users with CRUD operations",
+      "expected_output": "REST API endpoints for user CRUD",
+      "expectations": [
+        "Response implements GET, POST, PUT, and DELETE endpoints",
+        "Response follows RESTful naming conventions"
+      ],
+      "assertions": [
+        { "type": "content", "pattern": "(GET|POST|PUT|DELETE)" },
+        { "type": "content", "pattern": "/users" }
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "input_validation",
+      "prompt": "Add input validation to a user registration endpoint that checks email format and password strength",
+      "expected_output": "Input validation for registration",
+      "expectations": [
+        "Response validates email format using a regex or library",
+        "Response checks password meets minimum strength requirements"
+      ],
+      "assertions": [
+        { "type": "content", "pattern": "(email|@)" },
+        { "type": "content", "pattern": "(password|strength)" }
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "rate_limiting",
+      "prompt": "Implement rate limiting middleware that allows 100 requests per minute per IP",
+      "expected_output": "Rate limiting middleware implementation",
+      "expectations": [
+        "Response implements per-IP rate limiting",
+        "Response uses a sliding window or token bucket algorithm",
+        "Response returns 429 status when limit is exceeded"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "caching_layer",
+      "prompt": "Add Redis caching to a product listing endpoint with a 5-minute TTL",
+      "expected_output": "Redis caching implementation for product listing",
+      "expectations": [
+        "Response connects to Redis for caching",
+        "Response sets a TTL of 5 minutes on cached data"
+      ],
+      "assertions": [
+        { "type": "content", "pattern": "[Rr]edis" },
+        { "type": "content", "pattern": "(TTL|ttl|300|expire)" }
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "pagination_support",
+      "prompt": "Implement cursor-based pagination for a list endpoint that returns 20 items per page",
+      "expected_output": "Cursor-based pagination implementation",
+      "assertions": [
+        { "type": "content", "pattern": "(cursor|page)" },
+        { "type": "content", "pattern": "(20|limit|per_page)" }
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "websocket_handler",
+      "prompt": "Create a WebSocket handler for real-time chat messages with room support",
+      "expected_output": "WebSocket chat handler with rooms",
+      "expectations": [
+        "Response implements WebSocket connection handling",
+        "Response supports chat rooms or channels",
+        "Response broadcasts messages to room members"
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "file_upload",
+      "prompt": "Implement a file upload endpoint that accepts images up to 5MB and stores them in S3",
+      "expected_output": "File upload endpoint with S3 storage",
+      "expectations": [
+        "Response handles multipart file uploads",
+        "Response validates file size limit of 5MB"
+      ],
+      "assertions": [
+        { "type": "content", "pattern": "(upload|multer|multipart)" },
+        { "type": "content", "pattern": "(S3|s3|aws)" }
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "health_check",
+      "prompt": "Create a health check endpoint that verifies database and cache connectivity",
+      "expected_output": "Health check endpoint with dependency verification",
+      "expectations": [
+        "Response checks database connectivity",
+        "Response checks cache service availability",
+        "Response returns appropriate health status"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "request_logging",
+      "prompt": "Add request logging middleware that logs method, path, status code, and response time",
+      "expected_output": "Request logging middleware",
+      "assertions": [
+        { "type": "content", "pattern": "(method|GET|POST)" },
+        { "type": "content", "pattern": "(status|statusCode)" }
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "graceful_shutdown",
+      "prompt": "Implement graceful shutdown handling that closes database connections and finishes pending requests",
+      "expected_output": "Graceful shutdown implementation",
+      "expectations": [
+        "Response handles SIGTERM and SIGINT signals",
+        "Response closes database connections before exiting"
+      ],
+      "assertions": [
+        { "type": "content", "pattern": "(SIGTERM|SIGINT|signal)" },
+        { "type": "content", "pattern": "(close|shutdown|disconnect)" }
+      ]
+    }
+  ]
+}

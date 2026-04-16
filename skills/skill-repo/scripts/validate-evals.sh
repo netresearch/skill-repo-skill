@@ -1,8 +1,12 @@
 #!/bin/bash
 # validate-evals.sh - Structural validation of evals.json files
-# Supports two formats:
-#   Format A: {"skill_name": "...", "evals": [{id, eval_name, prompt, assertions: ["..."]}]}
-#   Format B: [{name, prompt, assertions: [{type, value/pattern, description?}]}]
+# Supports three formats:
+#   Unified (recommended): {"skill_name": "...", "evals": [{id, eval_name, prompt,
+#       expected_output?, expectations?: ["..."], assertions?: [{type, pattern}]}]}
+#     - Evals may use expectations (string[], LLM-as-judge), assertions (object[],
+#       regex matching), or both. At least one grading mechanism is required.
+#   Legacy A: {"skill_name": "...", "evals": [{id, eval_name, prompt, assertions: [...]}]}
+#   Legacy B: [{name, prompt, assertions: [{type, value/pattern, description?}]}]
 #
 # Usage: bash validate-evals.sh [path-to-evals.json]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
@@ -98,59 +102,97 @@ for i, ev in enumerate(evals):
         print(f"FAIL|{label}: not an object")
         continue
 
-    # Name check (supports both 'name' and 'eval_name')
-    name = ev.get("name") or ev.get("eval_name") or ""
-    if not name or not str(name).strip():
-        print(f"FAIL|{label}: missing or empty name/eval_name")
-    else:
-        names.append(str(name).strip())
+    # Name/ID check: accept 'name', 'eval_name', or 'id' (integer) as identifier
+    name = str(ev.get("name") or ev.get("eval_name") or "").strip()
+    if not name:
+        # Fall back to id as identifier for Anthropic format
+        eid = ev.get("id")
+        if isinstance(eid, int):
+            name = f"id={eid}"
+        else:
+            print(f"FAIL|{label}: missing or empty name/eval_name/id")
+    if name:
+        names.append(name)
 
-    # Prompt check
-    prompt = ev.get("prompt", "")
+    # Prompt check (accept 'prompt' or legacy 'input')
+    prompt = ev.get("prompt") or ev.get("input") or ""
     if not prompt or not str(prompt).strip():
-        print(f"FAIL|{label} ({name}): missing or empty prompt")
+        print(f"FAIL|{label} ({name}): missing or empty prompt/input")
     else:
         print(f"PASS|{label} ({name}): has prompt")
 
-    # ID check (optional but validated if present)
+    # ID check (optional but validated if present; must be integer)
     if "id" in ev:
-        has_ids = True
-        ids_found.append(ev["id"])
-
-    # Assertions check
-    assertions = ev.get("assertions")
-    if assertions is None:
-        print(f"FAIL|{label} ({name}): missing assertions")
-        continue
-
-    if not isinstance(assertions, list):
-        print(f"FAIL|{label} ({name}): assertions must be an array")
-        continue
-
-    if len(assertions) < 2:
-        print(f"FAIL|{label} ({name}): has {len(assertions)} assertions, need >= 2")
-        continue
-
-    # Validate assertion contents
-    empty_assertions = 0
-    for j, a in enumerate(assertions):
-        if isinstance(a, str):
-            if not a.strip():
-                empty_assertions += 1
-        elif isinstance(a, dict):
-            # Object assertions: need at least type + (value or pattern)
-            if "type" not in a:
-                print(f"FAIL|{label} ({name}): assertion[{j}] missing 'type'")
-            val = a.get("value") or a.get("pattern") or ""
-            if not str(val).strip():
-                print(f"FAIL|{label} ({name}): assertion[{j}] missing 'value' or 'pattern'")
+        if not isinstance(ev["id"], int):
+            print(f"FAIL|{label} ({name}): id must be an integer")
         else:
-            print(f"FAIL|{label} ({name}): assertion[{j}] invalid type (not string or object)")
+            has_ids = True
+            ids_found.append(ev["id"])
 
-    if empty_assertions > 0:
-        print(f"FAIL|{label} ({name}): {empty_assertions} empty string assertion(s)")
-    else:
-        print(f"PASS|{label} ({name}): {len(assertions)} valid assertions")
+    # expected_output check (recommended for unified format, skip for legacy)
+    is_unified = any(key in ev for key in ("eval_name", "id", "expectations", "expected_output"))
+    if is_unified and "expected_output" not in ev:
+        print(f"WARN|{label} ({name}): missing expected_output (recommended)")
+
+    # Grading check: must have expectations OR assertions (or both)
+    expectations = ev.get("expectations")
+    assertions = ev.get("assertions")
+    has_expectations = False
+    has_assertions = False
+
+    # Validate expectations (string[], 2+ items)
+    if expectations is not None:
+        if not isinstance(expectations, list):
+            print(f"FAIL|{label} ({name}): expectations must be an array")
+        elif len(expectations) < 2:
+            print(f"FAIL|{label} ({name}): has {len(expectations)} expectations, need >= 2")
+        else:
+            invalid_exp = 0
+            for j, e in enumerate(expectations):
+                if not isinstance(e, str):
+                    invalid_exp += 1
+                    print(f"FAIL|{label} ({name}): expectations[{j}] must be a string")
+                elif not e.strip():
+                    invalid_exp += 1
+                    print(f"FAIL|{label} ({name}): expectations[{j}] is empty")
+            if invalid_exp == 0:
+                has_expectations = True
+                print(f"PASS|{label} ({name}): {len(expectations)} valid expectations")
+
+    # Validate assertions (object[] or string[], 2+ items)
+    if assertions is not None:
+        if not isinstance(assertions, list):
+            print(f"FAIL|{label} ({name}): assertions must be an array")
+        elif len(assertions) < 2:
+            print(f"FAIL|{label} ({name}): has {len(assertions)} assertions, need >= 2")
+        else:
+            invalid_assertions = 0
+            for j, a in enumerate(assertions):
+                if isinstance(a, str):
+                    if not a.strip():
+                        invalid_assertions += 1
+                        print(f"FAIL|{label} ({name}): assertion[{j}] is empty")
+                elif isinstance(a, dict):
+                    if "type" not in a:
+                        invalid_assertions += 1
+                        print(f"FAIL|{label} ({name}): assertion[{j}] missing 'type'")
+                    val = a.get("value") or a.get("pattern") or ""
+                    if not str(val).strip():
+                        invalid_assertions += 1
+                        print(f"FAIL|{label} ({name}): assertion[{j}] missing 'value' or 'pattern'")
+                else:
+                    invalid_assertions += 1
+                    print(f"FAIL|{label} ({name}): assertion[{j}] invalid type (not string or object)")
+
+            if invalid_assertions == 0:
+                has_assertions = True
+                print(f"PASS|{label} ({name}): {len(assertions)} valid assertions")
+
+    # Must have at least one grading mechanism
+    if not has_expectations and not has_assertions:
+        if expectations is None and assertions is None:
+            print(f"FAIL|{label} ({name}): missing grading (need expectations or assertions)")
+        # else: already reported specific validation errors above
 
 # Duplicate names
 seen = set()

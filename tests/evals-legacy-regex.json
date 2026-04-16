@@ -1,0 +1,86 @@
+[
+  {
+    "name": "create_dockerfile",
+    "prompt": "Create a multi-stage Dockerfile for a Node.js application with a build and production stage",
+    "assertions": [
+      { "type": "content", "pattern": "FROM.*node.*AS" },
+      { "type": "content", "pattern": "(COPY|ADD)" },
+      { "type": "content", "pattern": "(CMD|ENTRYPOINT)" }
+    ]
+  },
+  {
+    "name": "setup_nginx_reverse_proxy",
+    "prompt": "Configure Nginx as a reverse proxy for a Node.js app running on port 3000",
+    "assertions": [
+      { "type": "content", "pattern": "proxy_pass" },
+      { "type": "content", "pattern": "3000" }
+    ]
+  },
+  {
+    "name": "git_hooks_setup",
+    "prompt": "Set up pre-commit and pre-push git hooks using Husky for linting and testing",
+    "assertions": [
+      { "type": "content", "pattern": "[Hh]usky" },
+      { "type": "content", "pattern": "pre-commit" },
+      { "type": "content", "pattern": "(lint|eslint)" }
+    ]
+  },
+  {
+    "name": "env_file_template",
+    "prompt": "Create a .env.example file for a web application with database, cache, and API key settings",
+    "assertions": [
+      { "type": "content", "pattern": "DB_(HOST|URL|CONNECTION)" },
+      { "type": "content", "pattern": "REDIS" }
+    ]
+  },
+  {
+    "name": "terraform_basic_setup",
+    "prompt": "Write a basic Terraform configuration for an AWS EC2 instance with a security group",
+    "assertions": [
+      { "type": "content", "pattern": "aws_instance" },
+      { "type": "content", "pattern": "aws_security_group" }
+    ]
+  },
+  {
+    "name": "makefile_targets",
+    "prompt": "Create a Makefile with build, test, lint, and clean targets for a Go project",
+    "assertions": [
+      { "type": "content", "pattern": "build:" },
+      { "type": "content", "pattern": "test:" },
+      { "type": "content", "pattern": "(lint|vet):" }
+    ]
+  },
+  {
+    "name": "kubernetes_deployment",
+    "prompt": "Write a Kubernetes Deployment manifest for a web app with 3 replicas and resource limits",
+    "assertions": [
+      { "type": "content", "pattern": "replicas:\\s*3" },
+      { "type": "content", "pattern": "(limits|resources)" }
+    ]
+  },
+  {
+    "name": "graphql_schema",
+    "prompt": "Define a GraphQL schema for a blog with Post and Author types including queries and mutations",
+    "assertions": [
+      { "type": "content", "pattern": "type Post" },
+      { "type": "content", "pattern": "type Author" },
+      { "type": "content", "pattern": "(Query|Mutation)" }
+    ]
+  },
+  {
+    "name": "openapi_spec",
+    "prompt": "Write an OpenAPI 3.0 specification for a pet store API with list and create endpoints",
+    "assertions": [
+      { "type": "content", "pattern": "openapi.*3" },
+      { "type": "content", "pattern": "/pets" }
+    ]
+  },
+  {
+    "name": "monitoring_setup",
+    "prompt": "Configure Prometheus metrics collection for a Node.js Express application",
+    "assertions": [
+      { "type": "content", "pattern": "[Pp]rometheus" },
+      { "type": "content", "pattern": "(metrics|counter|histogram)" }
+    ]
+  }
+]
