@@ -253,6 +253,8 @@ print(len(evals[$i].get('assertions', [])))
         pass_w=0; pass_s=0; total=0
         while IFS= read -r pattern; do
             [[ -z "$pattern" ]] && continue
+            # Strip PCRE inline flags (e.g. (?i)) — grep -i already handles case
+            pattern="${pattern#'(?i)'}"
             ((total++)) || true
             grep -qiE "$pattern" "$without_file" 2>/dev/null && ((pass_w++)) || true
             grep -qiE "$pattern" "$with_file" 2>/dev/null && ((pass_s++)) || true
