@@ -8,32 +8,67 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-EVALS_FILE="$REPO_DIR/skills/skill-repo/evals/evals.json"
-SKILL_FILE="$REPO_DIR/skills/skill-repo/SKILL.md"
-RESULTS_DIR="$REPO_DIR/scripts/ab-results"
 
-# Parse flags
+# Parse flags and positional args
 NO_LLM=false
 CONCURRENCY=4
+EVALS_FILE=""
+SKILL_FILE=""
 for arg in "$@"; do
     case "$arg" in
         --no-llm) NO_LLM=true ;;
+        --evals=*) EVALS_FILE="${arg#--evals=}" ;;
+        --skill=*) SKILL_FILE="${arg#--skill=}" ;;
         [0-9]*) CONCURRENCY="$arg" ;;
     esac
 done
 
+# Defaults if not provided
+EVALS_FILE="${EVALS_FILE:-$REPO_DIR/skills/skill-repo/evals/evals.json}"
+SKILL_FILE="${SKILL_FILE:-$REPO_DIR/skills/skill-repo/SKILL.md}"
+RESULTS_DIR="${REPO_DIR}/scripts/ab-results"
+
 mkdir -p "$RESULTS_DIR"
 
-EVAL_COUNT=$(python3 -c "import json; print(len(json.load(open('$EVALS_FILE'))))")
+# Normalize: support both top-level array and {evals: [...]} wrapper
+EVAL_COUNT=$(python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(len(evals))
+")
 echo "Found $EVAL_COUNT evals, concurrency=$CONCURRENCY"
+echo "Evals: $EVALS_FILE"
+echo "Skill: $SKILL_FILE"
+
+# Helper: get eval name (supports 'name', 'eval_name', or 'id' fallback)
+get_eval_name() {
+    python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+e = evals[$1]
+print(e.get('name') or e.get('eval_name') or f\"eval_{e.get('id', $1)}\")
+"
+}
+
+# Helper: get eval field
+get_eval_field() {
+    python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(evals[$1].get('$2', ''))
+"
+}
 
 run_single() {
     local idx="$1"
     local mode="$2"
     local name prompt output_file
 
-    name=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['name'])")
-    prompt=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['prompt'])")
+    name=$(get_eval_name "$idx")
+    prompt=$(get_eval_field "$idx" "prompt")
     output_file="$RESULTS_DIR/${name}_${mode}.txt"
 
     if [[ "$mode" == "without" ]]; then
@@ -59,7 +94,7 @@ run_single() {
 run_pair() {
     local idx="$1"
     local name
-    name=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['name'])")
+    name=$(get_eval_name "$idx")
     echo "  Starting eval $idx: $name"
     run_single "$idx" "without" &
     local pid1=$!
@@ -76,16 +111,17 @@ grade_expectations() {
     local mode="$2"
     local name prompt output_file expectations_count grader_file
 
-    name=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['name'])")
-    prompt=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['prompt'])")
+    name=$(get_eval_name "$idx")
+    prompt=$(get_eval_field "$idx" "prompt")
     output_file="$RESULTS_DIR/${name}_${mode}.txt"
     grader_file="$RESULTS_DIR/${name}_${mode}_expectations.txt"
 
     # Get expectations as numbered list
     expectations_count=$(python3 -c "
 import json
-exps = json.load(open('$EVALS_FILE'))[$idx].get('expectations', [])
-print(len(exps))
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(len(evals[$idx].get('expectations', [])))
 ")
 
     if [[ "$expectations_count" -eq 0 ]]; then
@@ -95,8 +131,9 @@ print(len(exps))
     local expectations_list
     expectations_list=$(python3 -c "
 import json
-exps = json.load(open('$EVALS_FILE'))[$idx].get('expectations', [])
-for i, e in enumerate(exps, 1):
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+for i, e in enumerate(evals[$idx].get('expectations', []), 1):
     print(f'{i}. {e}')
 ")
 
@@ -153,7 +190,8 @@ if [[ "$NO_LLM" == "false" ]]; then
     # Check which evals have expectations
     HAS_ANY_EXPECTATIONS=$(python3 -c "
 import json
-evals = json.load(open('$EVALS_FILE'))
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 print('yes' if any(e.get('expectations') for e in evals) else 'no')
 ")
     if [[ "$HAS_ANY_EXPECTATIONS" == "yes" ]]; then
@@ -164,7 +202,12 @@ print('yes' if any(e.get('expectations') for e in evals) else 'no')
             [[ $batch_end -ge $EVAL_COUNT ]] && batch_end=$((EVAL_COUNT - 1))
 
             for i in $(seq "$batch_start" "$batch_end"); do
-                exp_count=$(python3 -c "import json; print(len(json.load(open('$EVALS_FILE'))[$i].get('expectations', [])))")
+                exp_count=$(python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(len(evals[$i].get('expectations', [])))
+")
                 if [[ "$exp_count" -gt 0 ]]; then
                     grade_expectations "$i" "without" &
                     grade_expectations "$i" "with" &
@@ -194,13 +237,18 @@ TOTAL_EXP_WITH=0
 TOTAL_EXPECTATIONS=0
 
 for i in $(seq 0 $((EVAL_COUNT - 1))); do
-    name=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$i]['name'])")
+    name=$(get_eval_name "$i")
 
     without_file="$RESULTS_DIR/${name}_without.txt"
     with_file="$RESULTS_DIR/${name}_with.txt"
 
     # Check regex assertions
-    assertion_count=$(python3 -c "import json; print(len(json.load(open('$EVALS_FILE'))[$i].get('assertions', [])))")
+    assertion_count=$(python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(len(evals[$i].get('assertions', [])))
+")
     if [[ "$assertion_count" -gt 0 ]]; then
         pass_w=0; pass_s=0; total=0
         while IFS= read -r pattern; do
@@ -210,7 +258,8 @@ for i in $(seq 0 $((EVAL_COUNT - 1))); do
             grep -qiE "$pattern" "$with_file" 2>/dev/null && ((pass_s++)) || true
         done <<< "$(python3 -c "
 import json
-evals = json.load(open('$EVALS_FILE'))
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 for a in evals[$i].get('assertions', []):
     print(a.get('pattern', ''))
 ")"
@@ -227,7 +276,12 @@ for a in evals[$i].get('assertions', []):
     fi
 
     # Check LLM-graded expectations
-    exp_count=$(python3 -c "import json; print(len(json.load(open('$EVALS_FILE'))[$i].get('expectations', [])))")
+    exp_count=$(python3 -c "
+import json
+raw = json.load(open('$EVALS_FILE'))
+evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
+print(len(evals[$i].get('expectations', [])))
+")
     if [[ "$exp_count" -gt 0 ]]; then
         if [[ "$NO_LLM" == "true" ]]; then
             echo "| $((i+1)) | $name | llm | skipped | skipped | -- |" >> "$SUMMARY_FILE"
