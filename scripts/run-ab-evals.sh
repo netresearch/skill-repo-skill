@@ -74,7 +74,7 @@ run_pair() {
 grade_expectations() {
     local idx="$1"
     local mode="$2"
-    local name prompt output_file expectations_count grader_output grader_file
+    local name prompt output_file expectations_count grader_file
 
     name=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['name'])")
     prompt=$(python3 -c "import json; print(json.load(open('$EVALS_FILE'))[$idx]['prompt'])")
