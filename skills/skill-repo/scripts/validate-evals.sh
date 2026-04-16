@@ -103,17 +103,15 @@ for i, ev in enumerate(evals):
         continue
 
     # Name/ID check: accept 'name', 'eval_name', or 'id' (integer) as identifier
-    name = ev.get("name") or ev.get("eval_name") or ""
-    if not name or not str(name).strip():
+    name = str(ev.get("name") or ev.get("eval_name") or "").strip()
+    if not name:
         # Fall back to id as identifier for Anthropic format
         eid = ev.get("id")
-        if eid is not None and isinstance(eid, int):
+        if isinstance(eid, int):
             name = f"id={eid}"
         else:
             print(f"FAIL|{label}: missing or empty name/eval_name/id")
-    if name and name not in ("", f"id={ev.get('id')}"):
-        names.append(str(name).strip())
-    elif name.startswith("id="):
+    if name:
         names.append(name)
 
     # Prompt check (accept 'prompt' or legacy 'input')
@@ -123,13 +121,17 @@ for i, ev in enumerate(evals):
     else:
         print(f"PASS|{label} ({name}): has prompt")
 
-    # ID check (optional but validated if present)
+    # ID check (optional but validated if present; must be integer)
     if "id" in ev:
-        has_ids = True
-        ids_found.append(ev["id"])
+        if not isinstance(ev["id"], int):
+            print(f"FAIL|{label} ({name}): id must be an integer")
+        else:
+            has_ids = True
+            ids_found.append(ev["id"])
 
-    # expected_output check (recommended, not required)
-    if "expected_output" not in ev:
+    # expected_output check (recommended for unified format, skip for legacy)
+    is_unified = any(key in ev for key in ("eval_name", "id", "expectations", "expected_output"))
+    if is_unified and "expected_output" not in ev:
         print(f"WARN|{label} ({name}): missing expected_output (recommended)")
 
     # Grading check: must have expectations OR assertions (or both)
@@ -145,15 +147,15 @@ for i, ev in enumerate(evals):
         elif len(expectations) < 2:
             print(f"FAIL|{label} ({name}): has {len(expectations)} expectations, need >= 2")
         else:
-            empty_exp = 0
+            invalid_exp = 0
             for j, e in enumerate(expectations):
                 if not isinstance(e, str):
+                    invalid_exp += 1
                     print(f"FAIL|{label} ({name}): expectations[{j}] must be a string")
                 elif not e.strip():
-                    empty_exp += 1
-            if empty_exp > 0:
-                print(f"FAIL|{label} ({name}): {empty_exp} empty expectation string(s)")
-            else:
+                    invalid_exp += 1
+                    print(f"FAIL|{label} ({name}): expectations[{j}] is empty")
+            if invalid_exp == 0:
                 has_expectations = True
                 print(f"PASS|{label} ({name}): {len(expectations)} valid expectations")
 
@@ -164,24 +166,25 @@ for i, ev in enumerate(evals):
         elif len(assertions) < 2:
             print(f"FAIL|{label} ({name}): has {len(assertions)} assertions, need >= 2")
         else:
-            empty_assertions = 0
+            invalid_assertions = 0
             for j, a in enumerate(assertions):
                 if isinstance(a, str):
                     if not a.strip():
-                        empty_assertions += 1
+                        invalid_assertions += 1
+                        print(f"FAIL|{label} ({name}): assertion[{j}] is empty")
                 elif isinstance(a, dict):
-                    # Object assertions: need at least type + (value or pattern)
                     if "type" not in a:
+                        invalid_assertions += 1
                         print(f"FAIL|{label} ({name}): assertion[{j}] missing 'type'")
                     val = a.get("value") or a.get("pattern") or ""
                     if not str(val).strip():
+                        invalid_assertions += 1
                         print(f"FAIL|{label} ({name}): assertion[{j}] missing 'value' or 'pattern'")
                 else:
+                    invalid_assertions += 1
                     print(f"FAIL|{label} ({name}): assertion[{j}] invalid type (not string or object)")
 
-            if empty_assertions > 0:
-                print(f"FAIL|{label} ({name}): {empty_assertions} empty string assertion(s)")
-            else:
+            if invalid_assertions == 0:
                 has_assertions = True
                 print(f"PASS|{label} ({name}): {len(assertions)} valid assertions")
 
