@@ -1,0 +1,110 @@
+{
+  "skill_name": "test-expectations-only",
+  "evals": [
+    {
+      "id": 1,
+      "eval_name": "setup_project_structure",
+      "prompt": "Create a new project with standard directory layout including src, tests, and docs directories",
+      "expected_output": "Project structure created with src/, tests/, and docs/ directories",
+      "expectations": [
+        "Response describes creating src/, tests/, and docs/ directories",
+        "Response mentions initializing the project with a standard layout"
+      ]
+    },
+    {
+      "id": 2,
+      "eval_name": "configure_linting",
+      "prompt": "Set up ESLint with the recommended configuration for a TypeScript project",
+      "expected_output": "ESLint configured with TypeScript support",
+      "expectations": [
+        "Response includes ESLint configuration for TypeScript",
+        "Response mentions installing @typescript-eslint/parser and plugin",
+        "Response shows a valid .eslintrc configuration file"
+      ]
+    },
+    {
+      "id": 3,
+      "eval_name": "write_unit_tests",
+      "prompt": "Write unit tests for a UserService class that has getById and create methods",
+      "expected_output": "Unit tests covering getById and create methods",
+      "expectations": [
+        "Response includes test cases for getById method",
+        "Response includes test cases for create method",
+        "Response covers both success and error scenarios"
+      ]
+    },
+    {
+      "id": 4,
+      "eval_name": "implement_auth_middleware",
+      "prompt": "Create an Express middleware that validates JWT tokens from the Authorization header",
+      "expected_output": "JWT validation middleware for Express",
+      "expectations": [
+        "Response extracts the token from the Authorization header",
+        "Response validates the JWT token and handles invalid tokens"
+      ]
+    },
+    {
+      "id": 5,
+      "eval_name": "database_migration",
+      "prompt": "Create a database migration that adds a users table with email, name, and created_at columns",
+      "expected_output": "Migration file for users table creation",
+      "expectations": [
+        "Response creates a migration with a users table",
+        "Response includes email, name, and created_at columns",
+        "Response includes both up and down migration functions"
+      ]
+    },
+    {
+      "id": 6,
+      "eval_name": "api_error_handling",
+      "prompt": "Implement a global error handler for a REST API that returns consistent error responses",
+      "expected_output": "Global error handling middleware with consistent error format",
+      "expectations": [
+        "Response implements a centralized error handler",
+        "Response returns a consistent JSON error response structure"
+      ]
+    },
+    {
+      "id": 7,
+      "eval_name": "docker_compose_setup",
+      "prompt": "Create a docker-compose.yml for a Node.js app with PostgreSQL and Redis services",
+      "expected_output": "Docker Compose configuration with three services",
+      "expectations": [
+        "Response includes a Node.js application service",
+        "Response includes a PostgreSQL database service",
+        "Response includes a Redis cache service"
+      ]
+    },
+    {
+      "id": 8,
+      "eval_name": "ci_pipeline_config",
+      "prompt": "Set up a GitHub Actions CI pipeline that runs linting, tests, and builds on every pull request",
+      "expected_output": "GitHub Actions workflow for CI on pull requests",
+      "expectations": [
+        "Response creates a workflow triggered on pull requests",
+        "Response includes steps for linting, testing, and building"
+      ]
+    },
+    {
+      "id": 9,
+      "eval_name": "env_config_management",
+      "prompt": "Implement a configuration module that loads settings from environment variables with defaults and validation",
+      "expected_output": "Configuration module with env var loading and validation",
+      "expectations": [
+        "Response reads configuration from environment variables",
+        "Response provides sensible default values",
+        "Response validates required configuration values"
+      ]
+    },
+    {
+      "id": 10,
+      "eval_name": "logging_setup",
+      "prompt": "Set up structured logging with different log levels and a JSON output format for production",
+      "expected_output": "Structured logging configuration with JSON format",
+      "expectations": [
+        "Response configures multiple log levels (debug, info, warn, error)",
+        "Response outputs logs in JSON format for production use"
+      ]
+    }
+  ]
+}
