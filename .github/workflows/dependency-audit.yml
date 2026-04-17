@@ -1,0 +1,114 @@
+name: Dependency Audit
+
+on:
+  workflow_call:
+    inputs:
+      scripts-paths:
+        description: "JSON array of directories to scan recursively for Python scripts with PEP 723 inline metadata."
+        type: string
+        default: '["skills"]'
+      pip-audit-args:
+        description: "Extra arguments passed to pip-audit."
+        type: string
+        default: "--desc"
+
+permissions: {}
+
+jobs:
+  audit:
+    name: Audit PEP 723 inline dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Collect PEP 723 dependencies
+        env:
+          SCAN_PATHS_JSON: ${{ inputs.scripts-paths }}
+        run: |
+          python3 - <<'PYEOF'
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+          import tomllib
+
+          # Canonical PEP 723 parser per https://peps.python.org/pep-0723/#reference-implementation
+          PEP723_RE = re.compile(
+              r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+          )
+
+          def read_script_block(source: str) -> dict | None:
+              matches = [m for m in PEP723_RE.finditer(source) if m.group("type") == "script"]
+              if len(matches) > 1:
+                  raise ValueError("multiple 'script' blocks")
+              if not matches:
+                  return None
+              content = "".join(
+                  line[2:] if line.startswith("# ") else line[1:]
+                  for line in matches[0].group("content").splitlines(keepends=True)
+              )
+              return tomllib.loads(content)
+
+          deps: set[str] = set()
+          scanned = 0
+          skipped_decode = 0
+          skipped_parse = 0
+          for path in json.loads(os.environ["SCAN_PATHS_JSON"]):
+              root = pathlib.Path(path)
+              if not root.exists():
+                  print(f"::warning::{path} does not exist, skipping")
+                  continue
+              for f in root.rglob("*.py"):
+                  scanned += 1
+                  try:
+                      source = f.read_text(encoding="utf-8", errors="replace")
+                  except OSError as e:
+                      print(f"::warning file={f}::cannot read: {e}")
+                      skipped_decode += 1
+                      continue
+                  try:
+                      block = read_script_block(source)
+                  except (ValueError, tomllib.TOMLDecodeError) as e:
+                      print(f"::warning file={f}::malformed PEP 723 block: {e}")
+                      skipped_parse += 1
+                      continue
+                  if block:
+                      for dep in block.get("dependencies", []):
+                          deps.add(dep)
+
+          pathlib.Path("/tmp/requirements-audit.txt").write_text(
+              "\n".join(sorted(deps)) + ("\n" if deps else "")
+          )
+          print(
+              f"Scanned {scanned} file(s); {skipped_decode} unreadable, "
+              f"{skipped_parse} malformed; {len(deps)} unique dependencies:"
+          )
+          for d in sorted(deps):
+              print(f"  {d}")
+          if not deps:
+              print("::notice::No PEP 723 dependencies discovered; pip-audit will be skipped.")
+          PYEOF
+
+      - name: Audit dependencies
+        env:
+          PIP_AUDIT_ARGS: ${{ inputs.pip-audit-args }}
+        run: |
+          if [[ ! -s /tmp/requirements-audit.txt ]]; then
+            echo "No dependencies to audit."
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          uv run --with pip-audit pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
