@@ -1,0 +1,76 @@
+name: Dependency Audit
+
+on:
+  workflow_call:
+    inputs:
+      scripts-paths:
+        description: "JSON array of directories to scan recursively for Python scripts with PEP 723 inline metadata."
+        type: string
+        default: '["skills"]'
+      pip-audit-args:
+        description: "Extra arguments passed to pip-audit."
+        type: string
+        default: "--desc"
+
+permissions: {}
+
+jobs:
+  audit:
+    name: Audit PEP 723 inline dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+
+      - name: Collect PEP 723 dependencies
+        env:
+          SCAN_PATHS_JSON: ${{ inputs.scripts-paths }}
+        run: |
+          python3 - <<'PYEOF'
+          import json, os, pathlib, re, sys
+
+          deps: set[str] = set()
+          scanned = 0
+          for path in json.loads(os.environ["SCAN_PATHS_JSON"]):
+              root = pathlib.Path(path)
+              if not root.exists():
+                  print(f"WARN: {path} does not exist, skipping", file=sys.stderr)
+                  continue
+              for f in root.rglob("*.py"):
+                  scanned += 1
+                  m = re.search(r"# dependencies = \[(.+?)\]", f.read_text(), re.DOTALL)
+                  if m:
+                      for dm in re.finditer(r'"([^"]+)"', m.group(1)):
+                          deps.add(dm.group(1))
+
+          pathlib.Path("/tmp/requirements-audit.txt").write_text(
+              "\n".join(sorted(deps)) + ("\n" if deps else "")
+          )
+          print(f"Scanned {scanned} Python file(s); found {len(deps)} unique dependencies:")
+          for d in sorted(deps):
+              print(f"  {d}")
+          if not deps:
+              print("::notice::No PEP 723 dependencies discovered; pip-audit will be skipped.")
+          PYEOF
+
+      - name: Audit dependencies
+        env:
+          PIP_AUDIT_ARGS: ${{ inputs.pip-audit-args }}
+        run: |
+          if [[ ! -s /tmp/requirements-audit.txt ]]; then
+            echo "No dependencies to audit."
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          uv run --with pip-audit pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
