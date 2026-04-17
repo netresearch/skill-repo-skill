@@ -23,7 +23,7 @@ jobs:
       contents: read
     steps:
       - name: Harden Runner
-        uses: step-security/harden-runner@fa2e9d605c4eeb9fcad4c99c224cee0c6c7f3594 # v2.16.0
+        uses: step-security/harden-runner@6c3c2f2c1c457b00c10c4848d6f5491db3b629df # v2.18.0
         with:
           egress-policy: audit
 
@@ -38,26 +38,64 @@ jobs:
           SCAN_PATHS_JSON: ${{ inputs.scripts-paths }}
         run: |
           python3 - <<'PYEOF'
-          import json, os, pathlib, re, sys
+          import json
+          import os
+          import pathlib
+          import re
+          import sys
+          import tomllib
+
+          # Canonical PEP 723 parser per https://peps.python.org/pep-0723/#reference-implementation
+          PEP723_RE = re.compile(
+              r"(?m)^# /// (?P<type>[a-zA-Z0-9-]+)$\s(?P<content>(^#(| .*)$\s)+)^# ///$"
+          )
+
+          def read_script_block(source: str) -> dict | None:
+              matches = [m for m in PEP723_RE.finditer(source) if m.group("type") == "script"]
+              if len(matches) > 1:
+                  raise ValueError("multiple 'script' blocks")
+              if not matches:
+                  return None
+              content = "".join(
+                  line[2:] if line.startswith("# ") else line[1:]
+                  for line in matches[0].group("content").splitlines(keepends=True)
+              )
+              return tomllib.loads(content)
 
           deps: set[str] = set()
           scanned = 0
+          skipped_decode = 0
+          skipped_parse = 0
           for path in json.loads(os.environ["SCAN_PATHS_JSON"]):
               root = pathlib.Path(path)
               if not root.exists():
-                  print(f"WARN: {path} does not exist, skipping", file=sys.stderr)
+                  print(f"::warning::{path} does not exist, skipping")
                   continue
               for f in root.rglob("*.py"):
                   scanned += 1
-                  m = re.search(r"# dependencies = \[(.+?)\]", f.read_text(), re.DOTALL)
-                  if m:
-                      for dm in re.finditer(r'"([^"]+)"', m.group(1)):
-                          deps.add(dm.group(1))
+                  try:
+                      source = f.read_text(encoding="utf-8", errors="replace")
+                  except OSError as e:
+                      print(f"::warning file={f}::cannot read: {e}")
+                      skipped_decode += 1
+                      continue
+                  try:
+                      block = read_script_block(source)
+                  except (ValueError, tomllib.TOMLDecodeError) as e:
+                      print(f"::warning file={f}::malformed PEP 723 block: {e}")
+                      skipped_parse += 1
+                      continue
+                  if block:
+                      for dep in block.get("dependencies", []):
+                          deps.add(dep)
 
           pathlib.Path("/tmp/requirements-audit.txt").write_text(
               "\n".join(sorted(deps)) + ("\n" if deps else "")
           )
-          print(f"Scanned {scanned} Python file(s); found {len(deps)} unique dependencies:")
+          print(
+              f"Scanned {scanned} file(s); {skipped_decode} unreadable, "
+              f"{skipped_parse} malformed; {len(deps)} unique dependencies:"
+          )
           for d in sorted(deps):
               print(f"  {d}")
           if not deps:
