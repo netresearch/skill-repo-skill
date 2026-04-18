@@ -15,40 +15,24 @@ RIGHT: open bump PR → merge → pull main → git tag -s v1.2.4 → git push
 
 Before pushing any tag, all version identifiers must match. This is the single check that would have prevented the 30-repo release failure.
 
+Use the shipped script `scripts/check-version-parity.sh` (in this repo under `skills/skill-repo/scripts/check-version-parity.sh`):
+
 ```bash
-#!/bin/bash
-# scripts/check-version-parity.sh
-set -euo pipefail
+# No arguments — compare plugin.json against SKILL.md metadata.version
+skills/skill-repo/scripts/check-version-parity.sh
 
-PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
-TAG_VERSION="${1:-}"  # e.g. v1.2.4 → strip the v → 1.2.4
-TAG_VERSION="${TAG_VERSION#v}"
-
-# composer.json MUST NOT have a version field (derived from git tag)
-if jq -e '.version' composer.json >/dev/null 2>&1; then
-  echo "ERROR: composer.json has a version field — remove it (git tag is source of truth)"
-  exit 1
-fi
-
-# plugin.json version MUST match the tag
-if [[ -n "$TAG_VERSION" && "$PLUGIN_VERSION" != "$TAG_VERSION" ]]; then
-  echo "ERROR: plugin.json=$PLUGIN_VERSION tag=$TAG_VERSION — mismatch"
-  exit 1
-fi
-
-# If SKILL.md frontmatter has metadata.version, it must match too
-for skill_md in skills/*/SKILL.md; do
-  SKILL_VERSION=$(awk '/^  version:/ {gsub(/"/,"",$2); print $2; exit}' "$skill_md")
-  if [[ -n "$SKILL_VERSION" && "$SKILL_VERSION" != "$PLUGIN_VERSION" ]]; then
-    echo "ERROR: $skill_md version=$SKILL_VERSION plugin.json=$PLUGIN_VERSION — mismatch"
-    exit 1
-  fi
-done
-
-echo "OK: version parity confirmed at $PLUGIN_VERSION"
+# With tag argument — also require plugin.json.version == tag (v prefix optional)
+skills/skill-repo/scripts/check-version-parity.sh v1.2.4
 ```
 
-Run before every `git push origin vX.Y.Z`.
+What it checks:
+
+- `.claude-plugin/plugin.json` has a `.version` field — exits with an error if missing.
+- `composer.json` does **not** have a `.version` field — composer versions come from the git tag via the Release workflow, so a hard-coded version drifts silently.
+- If a tag argument is provided, `plugin.json.version` equals that tag with the `v` prefix stripped.
+- Every `skills/*/SKILL.md` that declares `metadata.version` in frontmatter matches `plugin.json.version`.
+
+If called without an argument and all parity passes, the script prints an advisory suggesting the next tag call. Run before every `git push origin vX.Y.Z`.
 
 ## Cache Safety: Never Edit the Installed Copy
 
