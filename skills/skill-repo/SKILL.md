@@ -94,10 +94,7 @@ Auto-merge and pr-quality callers must use `pull_request_target` trigger (not `p
 
 ## Releasing
 
-1. Bump version in `.claude-plugin/plugin.json`
-2. Commit: `chore: release vX.Y.Z`
-3. Tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
-4. Push: `git push origin main vX.Y.Z`
+Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged** (tag-before-bump runs Release against the wrong version). Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require a dry-run manifest + approval. See `references/release-discipline.md`.
 
 ## Installation
 
@@ -121,6 +118,7 @@ scripts/validate-skill.sh
 
 - `references/installation-methods.md`
 - `references/composer-setup.md`
+- `references/release-discipline.md` — version-parity check, cache safety, multi-repo dry-run
 
 ---
 
