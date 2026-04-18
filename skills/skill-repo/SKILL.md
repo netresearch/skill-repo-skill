@@ -94,19 +94,7 @@ Auto-merge and pr-quality callers must use `pull_request_target` trigger (not `p
 
 ## Releasing
 
-1. Bump version in `.claude-plugin/plugin.json` — open as PR, do not commit to main
-2. Merge the bump PR after CI green and approval
-3. Pull main locally; verify the merged version is present
-4. Run version-parity check — all identifiers must match the target tag
-5. Create signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
-6. Push tag: `git push origin vX.Y.Z`
-7. Monitor the Release workflow to green before declaring done
-
-**Tag only after the bump PR is merged.** Tag-before-bump causes Release workflows to run against the wrong version. See `references/release-discipline.md`.
-
-**Never edit installed skill paths** (`~/.claude/skills/**`, `~/.claude/plugins/**`). Always edit the repo worktree — cache edits are silently clobbered on next update.
-
-For multi-skill-repo releases (>3 repos at once), produce a dry-run manifest and wait for explicit approval. See `references/release-discipline.md`.
+Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged** (tag-before-bump runs Release against the wrong version). Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require a dry-run manifest + approval. See `references/release-discipline.md`.
 
 ## Installation
 
