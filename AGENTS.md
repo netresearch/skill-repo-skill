@@ -81,9 +81,7 @@ The `release.yml` workflow triggers on `v*` tags, validates that the tag matches
 
 ### Reusable Workflows (consumed by other repos)
 
-Other skill repos call these workflows with `uses: netresearch/skill-repo-skill/.github/workflows/<name>.yml@main`.
-
-**`validate.yml`** -- the main validation pipeline:
+**`validate.yml`** -- the main validation pipeline, hosted in this repo. Other skill repos call it with `uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main`:
 
 - Checks out the calling repo and sparse-checks out validation tools from this repo
 - Runs `validate-skill.sh` (structure, frontmatter, licensing, metadata consistency)
@@ -94,7 +92,7 @@ Other skill repos call these workflows with `uses: netresearch/skill-repo-skill/
 - Python lint via `ruff` on all `*.py` files
 - Validates checkpoint YAML schemas
 
-**`auto-merge-deps.yml`** -- auto-merge for repos without branch protection:
+**auto-merge for dependency PRs** -- lives in the org-level `netresearch/.github` repo, not here. Skill repos call it with `uses: netresearch/.github/.github/workflows/auto-merge-deps.yml@main`:
 
 - Triggers on PRs from `dependabot[bot]` or `renovate[bot]`
 - Auto-approves, waits for all CI checks to pass, then merges
@@ -102,7 +100,7 @@ Other skill repos call these workflows with `uses: netresearch/skill-repo-skill/
 ### This Repo's Own CI
 
 - `lint.yml` runs markdown lint, ShellCheck, and skill validation on push to main and PRs
-- `auto-merge-deps-caller.yml` calls the local `auto-merge-deps.yml` workflow
+- `auto-merge-deps-caller.yml` is this repo's own caller for the org-level auto-merge workflow
 
 ### Caller Workflow Pattern
 
@@ -127,6 +125,7 @@ Example for auto-merge:
 name: Auto-merge dependency PRs
 on:
   pull_request_target:
+permissions: {}
 jobs:
   auto-merge:
     uses: netresearch/.github/.github/workflows/auto-merge-deps.yml@main
