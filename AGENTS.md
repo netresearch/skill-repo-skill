@@ -126,10 +126,10 @@ Example for auto-merge:
 # .github/workflows/auto-merge-deps.yml
 name: Auto-merge dependency PRs
 on:
-  pull_request:
+  pull_request_target:
 jobs:
   auto-merge:
-    uses: netresearch/skill-repo-skill/.github/workflows/auto-merge-deps.yml@main
+    uses: netresearch/.github/.github/workflows/auto-merge-deps.yml@main
     permissions:
       contents: write
       pull-requests: write
