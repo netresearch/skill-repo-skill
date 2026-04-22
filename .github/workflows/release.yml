@@ -135,19 +135,22 @@ jobs:
           set -euo pipefail
           COMMIT_SHA=$(gh api "repos/${{ github.repository }}/commits/main" --jq '.sha')
 
-          # Create annotated tag object (GitHub signs it)
-          gh api "repos/${{ github.repository }}/git/tags" \
+          # Create annotated tag object (GitHub signs it with its web-flow key)
+          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/tags" \
             -f tag="v$NEW" \
             -f message="Release v$NEW" \
             -f object="$COMMIT_SHA" \
-            -f type="commit"
+            -f type="commit" \
+            --jq '.sha')
 
-          # Create tag ref
+          # Point the tag ref at the annotated tag object, not at the commit.
+          # Pointing at the commit would create a lightweight (unsigned) tag
+          # and orphan the tag object we just created.
           gh api "repos/${{ github.repository }}/git/refs" \
             -f ref="refs/tags/v$NEW" \
-            -f sha="$COMMIT_SHA"
+            -f sha="$TAG_SHA"
 
-          echo "Created tag v$NEW at $COMMIT_SHA"
+          echo "Created signed tag v$NEW ($TAG_SHA) at commit $COMMIT_SHA"
 
   # --- Job 2: Build and release (runs on tag push OR after bump) ---
   release:
