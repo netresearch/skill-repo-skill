@@ -223,16 +223,15 @@ mechanical:
   - id: SR-30
     type: regex
     target: .github/workflows/release.yml
-    pattern: "^\\s*workflow_dispatch:"
+    pattern: "^\\s*tags:"
     severity: error
-    desc: "Release workflow must include workflow_dispatch trigger for manual re-triggering of failed releases"
+    desc: "Release workflow must trigger on tag push (releases require a signed annotated tag pushed locally)"
 
   - id: SR-31
-    type: regex
-    target: .github/workflows/release.yml
-    pattern: "^\\s*pull-requests:\\s*write"
-    severity: error
-    desc: "Release workflow must grant pull-requests: write permission (required by shared workflow bump job)"
+    type: command
+    pattern: "! grep -qE '(^|[^_])workflow_dispatch:|--admin' .github/workflows/release.yml"
+    severity: warning
+    desc: "Release workflow should not use workflow_dispatch or --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only."
 
 llm_reviews:
   - id: SR-32

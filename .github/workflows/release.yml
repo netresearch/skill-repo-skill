@@ -1,162 +1,47 @@
 name: Release Skill
 
+# Reusable release workflow for skill repos.
+#
+# Trigger model: signed-tag-push only.
+#
+# To release a skill:
+#   1. Bump versions locally (plugin.json + each skill's SKILL.md frontmatter)
+#   2. Commit, open a release PR, get it merged to main
+#   3. Tag locally with a signed annotated tag, then push:
+#         git tag -s -m "vX.Y.Z" vX.Y.Z
+#         git push origin vX.Y.Z
+#   4. This workflow verifies the tag is signed, then builds and publishes
+#      the GitHub Release with archives + SHA256SUMS.
+#
+# Why no auto-bump path: the previous version of this workflow had a
+# `workflow_dispatch` `bump` input that asked the workflow to bump versions,
+# create a release PR, --admin-merge it, and create a tag via the GitHub
+# API. The tag-via-API path produces an UNSIGNED tag (tagger
+# `github-actions[bot]`), violating the signed-tag policy and burning a
+# v-tag in the wild. Removing the bump job makes that class of bug
+# impossible.
+
 on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch:
-    inputs:
-      bump:
-        description: 'Version bump type'
-        required: true
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
   workflow_call:
     inputs:
+      # DEPRECATED — kept declared so existing callers' `with: bump: …` does
+      # not error syntactically. The bump job has been removed; passing this
+      # input now has no effect. Callers should drop it; releases happen
+      # exclusively via signed-tag push.
       bump:
-        description: 'Version bump type (patch/minor/major)'
+        description: 'DEPRECATED — ignored. Releases happen via signed tag-push only.'
         type: string
         required: false
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
-  # --- Job 1: Bump version via PR (workflow_dispatch only) ---
-  bump:
-    name: Bump Version
-    if: inputs.bump != '' && inputs.bump != null
-    runs-on: ubuntu-latest
-    outputs:
-      new_version: ${{ steps.calc.outputs.new_version }}
-      pr_number: ${{ steps.pr.outputs.pr_number }}
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Calculate new version
-        id: calc
-        env:
-          BUMP: ${{ inputs.bump }}
-        run: |
-          set -euo pipefail
-          PLUGIN_FILE=".claude-plugin/plugin.json"
-          CURRENT=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
-          IFS='.' read -r major minor patch <<< "$CURRENT"
-
-          case "$BUMP" in
-            major) NEW="$((major+1)).0.0" ;;
-            minor) NEW="${major}.$((minor+1)).0" ;;
-            patch) NEW="${major}.${minor}.$((patch+1))" ;;
-            *) echo "::error::Invalid bump type: $BUMP"; exit 1 ;;
-          esac
-
-          echo "Bumping $CURRENT → $NEW"
-          echo "new_version=$NEW" >> "$GITHUB_OUTPUT"
-
-      - name: Bump plugin.json and SKILL.md
-        env:
-          NEW: ${{ steps.calc.outputs.new_version }}
-        run: |
-          set -euo pipefail
-          PLUGIN_FILE=".claude-plugin/plugin.json"
-
-          # Update plugin.json
-          python3 -c "
-          import json, pathlib
-          p = pathlib.Path('$PLUGIN_FILE')
-          data = json.loads(p.read_text())
-          data['version'] = '$NEW'
-          p.write_text(json.dumps(data, indent=2) + '\n')
-          "
-
-          # Update SKILL.md frontmatter version(s)
-          SKILL_PATHS=$(python3 -c "
-          import json
-          data = json.load(open('$PLUGIN_FILE'))
-          skills = data.get('skills', [])
-          if isinstance(skills, str): skills = [skills]
-          for s in skills: print(s.strip('/').rstrip('/'))
-          ")
-          while IFS= read -r sp; do
-            [[ -z "$sp" ]] && continue
-            SM="${sp#./}/SKILL.md"
-            [[ -f "$SM" ]] && sed -i "s/^  version: \".*\"/  version: \"$NEW\"/" "$SM"
-          done <<< "$SKILL_PATHS"
-
-      - name: Create release PR
-        id: pr
-        env:
-          NEW: ${{ steps.calc.outputs.new_version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          BRANCH="release/v$NEW"
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
-          git add -A
-          git commit -m "chore: release v$NEW"
-          git push -u origin "$BRANCH"
-
-          PR_URL=$(gh pr create \
-            --title "chore: release v$NEW" \
-            --body "Automated version bump to v$NEW. Merge to release." \
-            --head "$BRANCH" \
-            --base main)
-          PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
-          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "Created $PR_URL"
-
-      - name: Merge release PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
-        run: |
-          # Wait for any required checks
-          sleep 10
-          gh pr merge "$PR_NUMBER" --merge --admin --delete-branch
-
-      - name: Create signed tag via API
-        env:
-          NEW: ${{ steps.calc.outputs.new_version }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          COMMIT_SHA=$(gh api "repos/${{ github.repository }}/commits/main" --jq '.sha')
-
-          # Create annotated tag object (GitHub signs it with its web-flow key)
-          TAG_SHA=$(gh api "repos/${{ github.repository }}/git/tags" \
-            -f tag="v$NEW" \
-            -f message="Release v$NEW" \
-            -f object="$COMMIT_SHA" \
-            -f type="commit" \
-            --jq '.sha')
-
-          # Point the tag ref at the annotated tag object, not at the commit.
-          # Pointing at the commit would create a lightweight (unsigned) tag
-          # and orphan the tag object we just created.
-          gh api "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/tags/v$NEW" \
-            -f sha="$TAG_SHA"
-
-          echo "Created signed tag v$NEW ($TAG_SHA) at commit $COMMIT_SHA"
-
-  # --- Job 2: Build and release (runs on tag push OR after bump) ---
   release:
     name: Create Release
-    needs: [bump]
-    if: always() && (needs.bump.result == 'success' || needs.bump.result == 'skipped')
     runs-on: ubuntu-latest
 
     steps:
@@ -164,15 +49,41 @@ jobs:
         uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
         with:
           egress-policy: audit
+
+      - name: Verify tag is annotated and signed
+        env:
+          TAG_REF: ${{ github.ref }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ "$TAG_REF" != refs/tags/v* ]]; then
+            echo "::error::This workflow must be triggered by a tag push (refs/tags/v*). Got: $TAG_REF"
+            exit 1
+          fi
+          TAG_NAME="${TAG_REF#refs/tags/}"
+
+          REF_INFO=$(gh api "repos/${GITHUB_REPOSITORY}/git/refs/tags/${TAG_NAME}")
+          TAG_TYPE=$(echo "$REF_INFO" | jq -r '.object.type')
+          if [[ "$TAG_TYPE" != "tag" ]]; then
+            echo "::error::Tag ${TAG_NAME} is lightweight (object.type=${TAG_TYPE}). Releases require annotated, signed tags."
+            echo "::error::Recreate locally:  git tag -s -m \"${TAG_NAME}\" ${TAG_NAME} && git push origin ${TAG_NAME}"
+            exit 1
+          fi
+
+          TAG_OBJ_SHA=$(echo "$REF_INFO" | jq -r '.object.sha')
+          VERIFY=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TAG_OBJ_SHA}" --jq '.verification')
+          VERIFIED=$(echo "$VERIFY" | jq -r '.verified')
+          REASON=$(echo "$VERIFY" | jq -r '.reason')
+          if [[ "$VERIFIED" != "true" ]]; then
+            echo "::error::Tag ${TAG_NAME} is not signed (reason: ${REASON}). Releases require locally-signed tags."
+            echo "::error::Recreate locally:  git tag -s -m \"${TAG_NAME}\" ${TAG_NAME} && git push origin ${TAG_NAME}"
+            exit 1
+          fi
+          echo "Tag ${TAG_NAME} verified as signed (reason: ${REASON})."
 
       - name: Determine tag version
         id: version
-        run: |
-          if [[ -n "${{ needs.bump.outputs.new_version }}" ]]; then
-            echo "tag=v${{ needs.bump.outputs.new_version }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-          fi
+        run: echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout at tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
