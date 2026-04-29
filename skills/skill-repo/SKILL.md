@@ -120,6 +120,10 @@ scripts/validate-skill.sh
 - `references/composer-setup.md`
 - `references/release-discipline.md` — version-parity check, cache safety, multi-repo dry-run
 
+## See Also
+
+[`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill), [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill).
+
 ---
 
 > **Contributing:** https://github.com/netresearch/skill-repo-skill
