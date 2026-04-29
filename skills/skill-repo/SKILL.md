@@ -122,7 +122,7 @@ scripts/validate-skill.sh
 
 ## See Also
 
-`agent-rules-skill`, `agent-harness-skill`.
+[`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill), [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill).
 
 ---
 
