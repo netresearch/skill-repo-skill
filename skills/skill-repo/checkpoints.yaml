@@ -229,9 +229,11 @@ mechanical:
 
   - id: SR-31
     type: command
-    pattern: "! grep -qE '(^|[^_])workflow_dispatch:|--admin' .github/workflows/release.yml"
+    # Strip full-line comments before scanning so the docstring describing
+    # the historical anti-pattern doesn't trip the check.
+    pattern: "! awk 'NF && $0 !~ /^[[:space:]]*#/' .github/workflows/release.yml | grep -qE '^[[:space:]]*workflow_dispatch:|--admin'"
     severity: warning
-    desc: "Release workflow should not use workflow_dispatch or --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only."
+    desc: "Release workflow should not declare workflow_dispatch or use --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only."
 
 llm_reviews:
   - id: SR-32
