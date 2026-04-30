@@ -149,21 +149,30 @@ If any of those scopes is missing the job fails fast with `Resource not accessib
 
 ### Verify a downloaded release archive
 
+Both commands below pin verification to the **specific repository** that's expected to have produced the release. `--owner netresearch` and `https://github.com/netresearch/.*` are tempting shortcuts but match every workflow run in the org — meaning a compromised or unrelated netresearch repo could mint a valid-looking attestation against an artefact that was never released from this repo. Always pin to the named repo.
+
 ```bash
 # SLSA build provenance (GitHub-native attestation API)
-gh attestation verify <skill-name>-skill-vX.Y.Z.zip --owner netresearch
+# Substitute <repo-name> with the actual skill repo, e.g. matrix-skill.
+# Archive name patterns: <skill>-skill-vX.Y.Z.zip and <plugin>-plugin-vX.Y.Z.zip.
+gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-name>
 
 # Cosign sign-blob signature on the checksums (no GitHub API needed)
 cosign verify-blob \
   --certificate SHA256SUMS.txt.pem \
   --signature   SHA256SUMS.txt.sig \
-  --certificate-identity-regexp "https://github.com/netresearch/.*" \
+  --certificate-identity-regexp "^https://github\.com/netresearch/<repo-name>/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS.txt
 
 # Then verify the archive matches the (now-signed) checksum
 sha256sum --check SHA256SUMS.txt
 ```
+
+If verification fails:
+
+- `gh attestation verify` returns `error: no attestations found` when `--repo` is wrong (or when the release predates this workflow).
+- `cosign verify-blob` returns `error: certificate identity does not match` when the regex is wrong, or `bundle verification failed` when `.sig` / `.pem` don't correspond to the file.
 
 ### Why one atomic job
 

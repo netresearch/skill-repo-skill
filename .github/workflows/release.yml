@@ -35,12 +35,14 @@ name: Release Skill
 # Callers must grant `id-token: write` and `attestations: write` on the calling
 # job (in addition to `contents: write`). All netresearch skill-repo callers do;
 # fork this workflow only after granting those scopes.
-# Verify a downloaded archive with:
-#   gh attestation verify <archive>.zip --owner <org>
+# Verify a downloaded archive with (pin to the SPECIFIC repo, not just the org —
+# `--owner` and an org-wide identity regex would accept attestations from any
+# other repo in the org):
+#   gh attestation verify <archive>.zip --repo <org>/<repo-name>
 # Verify the checksums signature with:
 #   cosign verify-blob \
 #     --certificate SHA256SUMS.txt.pem --signature SHA256SUMS.txt.sig \
-#     --certificate-identity-regexp "https://github.com/<org>/.*" \
+#     --certificate-identity-regexp "^https://github\.com/<org>/<repo-name>/" \
 #     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
 #     SHA256SUMS.txt
 
@@ -245,10 +247,12 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          # Anchor the regex to the start so a trailing-substring match against
+          # an arbitrary URL can't pass verification.
           cosign verify-blob \
             --certificate SHA256SUMS.txt.pem \
             --signature SHA256SUMS.txt.sig \
-            --certificate-identity-regexp "https://github.com/${REPO}/.*" \
+            --certificate-identity-regexp "^https://github\.com/${REPO}/" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             SHA256SUMS.txt
 
