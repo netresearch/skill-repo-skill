@@ -160,14 +160,16 @@ Both commands below pin verification to the **specific repository** that's expec
 gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-name>
 
 # Cosign sign-blob signature on the checksums (no GitHub API needed).
-# Pin the identity to: this exact repo + the release.yml workflow file + a
-# refs/tags/ ref. The org-wide form `https://github.com/netresearch/.*` would
-# accept signatures from any repo, branch, or workflow in the org — too loose
-# for supply-chain verification.
+# The cert SAN reflects the SIGNER, which is the shared reusable release
+# workflow (`netresearch/skill-repo-skill`), NOT the consuming repo. Pin the
+# regex to skill-repo-skill, not the consumer. (`gh attestation verify` above
+# walks the chain automatically; cosign's verifier doesn't.) The org-wide form
+# `https://github.com/netresearch/.*` would accept signatures from any repo,
+# branch, or workflow in the org — too loose for supply-chain verification.
 cosign verify-blob \
   --certificate SHA256SUMS.txt.pem \
   --signature   SHA256SUMS.txt.sig \
-  --certificate-identity-regexp "^https://github\.com/netresearch/<repo-name>/\.github/workflows/release\.yml@refs/tags/" \
+  --certificate-identity-regexp "^https://github\.com/netresearch/skill-repo-skill/\.github/workflows/release\.yml@" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS.txt
 
