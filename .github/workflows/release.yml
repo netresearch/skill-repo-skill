@@ -21,14 +21,36 @@ name: Release Skill
 # v-tag in the wild. Removing the bump job makes that class of bug
 # impossible.
 #
-# SLSA build provenance: every release archive (zip + tar.gz) is attested via
-# actions/attest-build-provenance in a separate `attest` job that runs after
-# the `release` job. Callers must grant `id-token: write` and
-# `attestations: write` on the calling job (in addition to `contents: write`).
-# All netresearch skill-repo callers do; if you fork this workflow elsewhere,
-# add those two scopes to your caller before the next release tag is pushed.
-# Verify a downloaded archive with:
-#   gh attestation verify <archive>.zip --owner <org>
+# Supply-chain attestation: every release ships with provenance-attested
+# archives and a Cosign-signed checksum file that binds the archives by their
+# SHA-256 digest. Only `SHA256SUMS.txt` is Cosign-signed; the `.zip`/`.tar.gz`
+# files themselves are integrity-protected via that signed checksum (verifying
+# the signature on `SHA256SUMS.txt` and then `sha256sum --check` against it
+# proves any individual archive was produced by this workflow). All of this
+# happens in the SAME job that publishes the GitHub Release, BEFORE the assets
+# are made public — no race window where unattested artefacts are downloadable.
+# The flow is, in order:
+#   1. Build the archives (zip + tar.gz).
+#   2. Generate SHA256SUMS.txt over them.
+#   3. Cosign sign-blob (keyless / Sigstore) the SHA256SUMS.txt
+#      → SHA256SUMS.txt.sig + SHA256SUMS.txt.pem.
+#   4. SLSA build-provenance attest the archives + SHA256SUMS.txt via
+#      actions/attest-build-provenance → published to GitHub's attestation API.
+#   5. softprops/action-gh-release creates the Release with all assets at once.
+# Callers must grant `id-token: write` and `attestations: write` on the calling
+# job (in addition to `contents: write`). All netresearch skill-repo callers do;
+# fork this workflow only after granting those scopes.
+# Verify a downloaded archive with (pin to the SPECIFIC repo + workflow file +
+# tag ref — `--owner` and an org-wide identity regex would accept attestations
+# from any other repo or branch in the org):
+#   gh attestation verify <archive>.zip --repo <org>/<repo-name>
+#   sha256sum --check SHA256SUMS.txt   # after verifying the signature below
+# Verify the checksums signature with:
+#   cosign verify-blob \
+#     --certificate SHA256SUMS.txt.pem --signature SHA256SUMS.txt.sig \
+#     --certificate-identity-regexp "^https://github\.com/<org>/<repo-name>/\.github/workflows/release\.yml@refs/tags/" \
+#     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+#     SHA256SUMS.txt
 
 on:
   push:
@@ -62,6 +84,10 @@ jobs:
   release:
     name: Create Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write          # OIDC for sigstore (cosign + attest)
+      attestations: write      # GitHub native attestation API
 
     steps:
       - name: Harden Runner
@@ -209,6 +235,45 @@ jobs:
           echo "=== Release packages ==="
           ls -lh dist/releases/
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+
+      - name: Sign SHA256SUMS with Cosign (keyless)
+        working-directory: dist/releases
+        run: |
+          set -euo pipefail
+          cosign sign-blob --yes \
+            --output-certificate SHA256SUMS.txt.pem \
+            --output-signature SHA256SUMS.txt.sig \
+            SHA256SUMS.txt
+
+      - name: Verify Cosign signature
+        working-directory: dist/releases
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Pin the cert identity to: this exact repo, the release.yml workflow
+          # file, on a tag ref (refs/tags/). `^` anchors the start so a
+          # substring match can't sneak through. `\.` escapes the dot so it
+          # matches a literal period instead of any character. Caller's
+          # release.yml triggers on `push: tags: 'v*'`, so refs/tags/ is the
+          # only legitimate ref a release-time signature could carry.
+          cosign verify-blob \
+            --certificate SHA256SUMS.txt.pem \
+            --signature SHA256SUMS.txt.sig \
+            --certificate-identity-regexp "^https://github\.com/${REPO}/\.github/workflows/release\.yml@refs/tags/" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            SHA256SUMS.txt
+
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            dist/releases/*.zip
+            dist/releases/*.tar.gz
+            dist/releases/SHA256SUMS.txt
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
@@ -217,42 +282,3 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # SLSA build provenance — always runs in a separate job after `release` so a
-  # transient sigstore / GitHub-attestation outage cannot roll back a published
-  # release. Callers must grant `id-token: write` and `attestations: write` on
-  # the calling job (every netresearch skill-repo caller does as of the
-  # org-wide permissions rollout); otherwise this step fails with
-  # "insufficient permissions".
-  attest:
-    name: Attest Build Provenance
-    needs: release
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
-        with:
-          egress-policy: audit
-
-      - name: Download release archives
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-          REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          gh release download "$TAG" --repo "$REPO" \
-            --pattern '*.zip' --pattern '*.tar.gz' --dir dist
-          ls -lh dist/
-
-      - name: Generate SLSA build provenance
-        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
-        with:
-          subject-path: |
-            dist/*.zip
-            dist/*.tar.gz
