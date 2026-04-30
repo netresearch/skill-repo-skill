@@ -20,6 +20,12 @@ name: Release Skill
 # `github-actions[bot]`), violating the signed-tag policy and burning a
 # v-tag in the wild. Removing the bump job makes that class of bug
 # impossible.
+#
+# SLSA build provenance (opt-in): pass `with: attest: true` in the caller and
+# grant `id-token: write` + `attestations: write` on the calling job to have
+# this workflow generate a build-provenance attestation for the release
+# archives via actions/attest-build-provenance. Default off — callers that
+# don't opt in are unaffected and don't need the extra permissions.
 
 on:
   push:
@@ -35,6 +41,17 @@ on:
         description: 'DEPRECATED — ignored. Releases happen via signed tag-push only.'
         type: string
         required: false
+      attest:
+        description: >-
+          Generate SLSA build provenance attestations for the release archives
+          (zip + tar.gz). Default false; opt-in because callers passing true
+          MUST grant `id-token: write` and `attestations: write` on the calling
+          job, otherwise the attestation step will fail. The attestation lands
+          on GitHub's native attestation API and is verifiable via
+          `gh attestation verify <file> --owner <org>`.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -198,3 +215,45 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # SLSA build provenance — opt-in via `with: attest: true`. Runs as a separate
+  # job so callers that don't opt in are unaffected: the `if:` gate is keyed on
+  # event_name == 'workflow_call' so the `inputs` context is only consulted when
+  # this workflow is being called (not on direct tag-push triggers, where
+  # `inputs` is unavailable). The job's own permissions only matter when the
+  # job actually runs. Callers that DO opt in MUST grant id-token: write and
+  # attestations: write on the calling job, otherwise the attest step will fail
+  # at runtime with an "insufficient permissions" error.
+  attest:
+    name: Attest Build Provenance
+    needs: release
+    if: ${{ github.event_name == 'workflow_call' && inputs.attest }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@8d3c67de8e2fe68ef647c8db1e6a09f647780f40 # v2.19.0
+        with:
+          egress-policy: audit
+
+      - name: Download release archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download "$TAG" --repo "$REPO" \
+            --pattern '*.zip' --pattern '*.tar.gz' --dir dist
+          ls -lh dist/
+
+      - name: Generate SLSA build provenance
+        uses: actions/attest-build-provenance@a2bbfa25375fe432b6a289bc6b6cd05ecd0c4c32 # v4.1.0
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/*.tar.gz
