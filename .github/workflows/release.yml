@@ -40,15 +40,15 @@ name: Release Skill
 # Callers must grant `id-token: write` and `attestations: write` on the calling
 # job (in addition to `contents: write`). All netresearch skill-repo callers do;
 # fork this workflow only after granting those scopes.
-# Verify a downloaded archive with (pin to the SPECIFIC repo + workflow file +
-# tag ref — `--owner` and an org-wide identity regex would accept attestations
-# from any other repo or branch in the org):
+# Verify a downloaded archive:
 #   gh attestation verify <archive>.zip --repo <org>/<repo-name>
 #   sha256sum --check SHA256SUMS.txt   # after verifying the signature below
-# Verify the checksums signature with:
+# Verify the checksums signature with cosign. The cert SAN reflects the SIGNER
+# (this reusable workflow), NOT the caller; pin the regex to skill-repo-skill,
+# not the consuming repo:
 #   cosign verify-blob \
 #     --certificate SHA256SUMS.txt.pem --signature SHA256SUMS.txt.sig \
-#     --certificate-identity-regexp "^https://github\.com/<org>/<repo-name>/\.github/workflows/release\.yml@refs/tags/" \
+#     --certificate-identity-regexp "^https://github\.com/netresearch/skill-repo-skill/\.github/workflows/release\.yml@" \
 #     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
 #     SHA256SUMS.txt
 
@@ -250,19 +250,25 @@ jobs:
       - name: Verify Cosign signature
         working-directory: dist/releases
         env:
-          REPO: ${{ github.repository }}
+          # The cosign keyless cert's Subject Alternative Name is the path of
+          # the workflow that ran `cosign sign-blob` — that's THIS reusable
+          # workflow, not the caller. For a reusable workflow invoked via
+          # `uses: …@main`, the SAN looks like
+          #   https://github.com/netresearch/skill-repo-skill/.github/workflows/release.yml@refs/heads/main
+          # (the ref reflects how the reusable was referenced, NOT the tag that
+          # triggered the caller). Pin against the reusable's own path,
+          # NOT ${{ github.repository }} (which is the caller's repo).
+          SIGNER_REPO: netresearch/skill-repo-skill
         run: |
           set -euo pipefail
-          # Pin the cert identity to: this exact repo, the release.yml workflow
-          # file, on a tag ref (refs/tags/). `^` anchors the start so a
-          # substring match can't sneak through. `\.` escapes the dot so it
-          # matches a literal period instead of any character. Caller's
-          # release.yml triggers on `push: tags: 'v*'`, so refs/tags/ is the
-          # only legitimate ref a release-time signature could carry.
+          # Anchored regex: must START with the reusable's full URL plus an `@`.
+          # `\.` escapes the dot so it matches a literal period instead of any
+          # character. We don't pin a specific ref because the reusable may be
+          # referenced via `@main`, a SHA, or a future tag of skill-repo-skill.
           cosign verify-blob \
             --certificate SHA256SUMS.txt.pem \
             --signature SHA256SUMS.txt.sig \
-            --certificate-identity-regexp "^https://github\.com/${REPO}/\.github/workflows/release\.yml@refs/tags/" \
+            --certificate-identity-regexp "^https://github\.com/${SIGNER_REPO}/\.github/workflows/release\.yml@" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             SHA256SUMS.txt
 
