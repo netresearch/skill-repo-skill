@@ -143,6 +143,6 @@ Verify on a downloaded release archive with:
 gh attestation verify <skill-name>-skill-vX.Y.Z.zip --owner netresearch
 ```
 
-The attestation runs as a separate job (`needs: release`) so a failure in attestation does not roll back the GitHub release — the release succeeds, the attestation step is the one that surfaces an "insufficient permissions" error if a caller hasn't granted the two write scopes.
+The attestation runs as a separate job (`needs: release`) so a failure in attestation does not roll back the GitHub release — the release succeeds, and the attestation job is the one that surfaces a `Resource not accessible by integration` error if a caller hasn't granted both `id-token: write` and `attestations: write` (the `contents: write` scope alone is not enough).
 
-The previously-documented `with: attest: true` opt-in is gone: the input is still declared (so existing `with: attest: true` doesn't error syntactically) but it's deprecated and ignored — every release gets provenance unconditionally. Drop the line on your next release-touching PR.
+The previously-documented `with: attest: true` opt-in is gone: the input is still declared (so existing `with: attest: true` doesn't error syntactically) but it's deprecated and ignored — every release gets provenance unconditionally. On your next release-touching PR, drop the `with: attest: true` line — and the entire `with:` block if `attest` was its only entry, since `bump` is also deprecated.
