@@ -122,21 +122,19 @@ gh release create v1.5.12 --latest=false --title "v1.5.12" --notes-file CHANGELO
 
 GitHub marks releases "Latest" by creation timestamp, not semver. A v1.5.12 created after v2.0.0 will become "Latest" without this flag — wrong, misleading, and often noticed only by downstream consumers.
 
-## SLSA Build Provenance (Opt-In)
+## SLSA Build Provenance
 
-The reusable release workflow can attach SLSA build-provenance attestations to each release archive via `actions/attest-build-provenance`. Pass `with: attest: true` in the caller's `release.yml` and grant `id-token: write` + `attestations: write` on the calling job:
+The reusable release workflow attaches SLSA build-provenance attestations to every release archive via `actions/attest-build-provenance`. Callers must grant `id-token: write` + `attestations: write` on the calling job (in addition to `contents: write` for the release upload):
 
 ```yaml
 # .github/workflows/release.yml in the consuming repo
 jobs:
   release:
     uses: netresearch/skill-repo-skill/.github/workflows/release.yml@main
-    with:
-      attest: true
     permissions:
       contents: write          # release upload
-      id-token: write          # required for attest=true (OIDC token for sigstore)
-      attestations: write      # required for attest=true (GitHub native attestation API)
+      id-token: write          # OIDC for sigstore (required by the attest job)
+      attestations: write      # GitHub native attestation API (required by the attest job)
 ```
 
 Verify on a downloaded release archive with:
@@ -145,6 +143,6 @@ Verify on a downloaded release archive with:
 gh attestation verify <skill-name>-skill-vX.Y.Z.zip --owner netresearch
 ```
 
-Why opt-in: granting `id-token: write` and `attestations: write` to repos that don't need provenance widens the attack surface for no benefit. Default off keeps the principle of least privilege; repos can flip the input on individually as they're reviewed.
+The attestation runs as a separate job (`needs: release`) so a failure in attestation does not roll back the GitHub release — the release succeeds, the attestation step is the one that surfaces an "insufficient permissions" error if a caller hasn't granted the two write scopes.
 
-The attestation runs as a separate job (`needs: release`) so a failure in attestation does not roll back the GitHub release — the release succeeds, the attestation step is the one that surfaces an "insufficient permissions" error if a caller passed `attest: true` without granting the new scopes.
+The previously-documented `with: attest: true` opt-in is gone: the input is still declared (so existing `with: attest: true` doesn't error syntactically) but it's deprecated and ignored — every release gets provenance unconditionally. Drop the line on your next release-touching PR.

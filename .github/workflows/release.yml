@@ -21,11 +21,14 @@ name: Release Skill
 # v-tag in the wild. Removing the bump job makes that class of bug
 # impossible.
 #
-# SLSA build provenance (opt-in): pass `with: attest: true` in the caller and
-# grant `id-token: write` + `attestations: write` on the calling job to have
-# this workflow generate a build-provenance attestation for the release
-# archives via actions/attest-build-provenance. Default off — callers that
-# don't opt in are unaffected and don't need the extra permissions.
+# SLSA build provenance: every release archive (zip + tar.gz) is attested via
+# actions/attest-build-provenance in a separate `attest` job that runs after
+# the `release` job. Callers must grant `id-token: write` and
+# `attestations: write` on the calling job (in addition to `contents: write`).
+# All netresearch skill-repo callers do; if you fork this workflow elsewhere,
+# add those two scopes to your caller before the next release tag is pushed.
+# Verify a downloaded archive with:
+#   gh attestation verify <archive>.zip --owner <org>
 
 on:
   push:
@@ -41,17 +44,16 @@ on:
         description: 'DEPRECATED — ignored. Releases happen via signed tag-push only.'
         type: string
         required: false
+      # DEPRECATED — kept declared so existing callers' `with: attest: …`
+      # doesn't error syntactically. SLSA build provenance is now always
+      # generated for release archives; every caller's job grants the required
+      # `id-token: write` and `attestations: write` since the org-wide rollout
+      # of those permissions completed. Callers should drop `with: attest: …`.
       attest:
-        description: >-
-          Generate SLSA build provenance attestations for the release archives
-          (zip + tar.gz). Default false; opt-in because callers passing true
-          MUST grant `id-token: write` and `attestations: write` on the calling
-          job, otherwise the attestation step will fail. The attestation lands
-          on GitHub's native attestation API and is verifiable via
-          `gh attestation verify <file> --owner <org>`.
+        description: 'DEPRECATED — ignored. SLSA build provenance is always generated.'
         type: boolean
         required: false
-        default: false
+        default: true
 
 permissions:
   contents: write
@@ -216,18 +218,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # SLSA build provenance — opt-in via `with: attest: true`. Runs as a separate
-  # job so callers that don't opt in are unaffected: the `if:` gate is keyed on
-  # event_name == 'workflow_call' so the `inputs` context is only consulted when
-  # this workflow is being called (not on direct tag-push triggers, where
-  # `inputs` is unavailable). The job's own permissions only matter when the
-  # job actually runs. Callers that DO opt in MUST grant id-token: write and
-  # attestations: write on the calling job, otherwise the attest step will fail
-  # at runtime with an "insufficient permissions" error.
+  # SLSA build provenance — always runs in a separate job after `release` so a
+  # transient sigstore / GitHub-attestation outage cannot roll back a published
+  # release. Callers must grant `id-token: write` and `attestations: write` on
+  # the calling job (every netresearch skill-repo caller does as of the
+  # org-wide permissions rollout); otherwise this step fails with
+  # "insufficient permissions".
   attest:
     name: Attest Build Provenance
     needs: release
-    if: ${{ github.event_name == 'workflow_call' && inputs.attest }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
