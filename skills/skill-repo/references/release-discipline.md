@@ -124,7 +124,9 @@ GitHub marks releases "Latest" by creation timestamp, not semver. A v1.5.12 crea
 
 ## Supply-Chain Attestation
 
-Every release archive is signed and provenance-attested in the SAME job that publishes the GitHub Release, BEFORE the assets are made public — there is no window where unsigned or unattested artifacts are downloadable. The flow, in order:
+Every release ships with provenance-attested archives and a Cosign-signed `SHA256SUMS.txt` that binds those archives by digest. Only the checksum file is Cosign-signed; the `.zip`/`.tar.gz` archives are integrity-protected through it — verifying the signature on `SHA256SUMS.txt` and then running `sha256sum --check` against the downloaded archive proves the archive was produced by this workflow.
+
+All of this happens in the SAME job that publishes the GitHub Release, BEFORE the assets are made public — there is no window where unsigned or unattested artifacts are downloadable. The flow, in order:
 
 1. Build `*.zip` and `*.tar.gz` archives.
 2. Generate `SHA256SUMS.txt` over them.
@@ -157,11 +159,15 @@ Both commands below pin verification to the **specific repository** that's expec
 # Archive name patterns: <skill>-skill-vX.Y.Z.zip and <plugin>-plugin-vX.Y.Z.zip.
 gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-name>
 
-# Cosign sign-blob signature on the checksums (no GitHub API needed)
+# Cosign sign-blob signature on the checksums (no GitHub API needed).
+# Pin the identity to: this exact repo + the release.yml workflow file + a
+# refs/tags/ ref. The org-wide form `https://github.com/netresearch/.*` would
+# accept signatures from any repo, branch, or workflow in the org — too loose
+# for supply-chain verification.
 cosign verify-blob \
   --certificate SHA256SUMS.txt.pem \
   --signature   SHA256SUMS.txt.sig \
-  --certificate-identity-regexp "^https://github\.com/netresearch/<repo-name>/" \
+  --certificate-identity-regexp "^https://github\.com/netresearch/<repo-name>/\.github/workflows/release\.yml@refs/tags/" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS.txt
 

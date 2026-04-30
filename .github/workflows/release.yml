@@ -21,10 +21,15 @@ name: Release Skill
 # v-tag in the wild. Removing the bump job makes that class of bug
 # impossible.
 #
-# Supply-chain attestation: every release archive (zip + tar.gz) is signed
-# and provenance-attested in the SAME job that publishes the GitHub Release,
-# BEFORE the assets are made public — no race window where unsigned artifacts
-# are downloadable. The flow is, in order:
+# Supply-chain attestation: every release ships with provenance-attested
+# archives and a Cosign-signed checksum file that binds the archives by their
+# SHA-256 digest. Only `SHA256SUMS.txt` is Cosign-signed; the `.zip`/`.tar.gz`
+# files themselves are integrity-protected via that signed checksum (verifying
+# the signature on `SHA256SUMS.txt` and then `sha256sum --check` against it
+# proves any individual archive was produced by this workflow). All of this
+# happens in the SAME job that publishes the GitHub Release, BEFORE the assets
+# are made public — no race window where unattested artefacts are downloadable.
+# The flow is, in order:
 #   1. Build the archives (zip + tar.gz).
 #   2. Generate SHA256SUMS.txt over them.
 #   3. Cosign sign-blob (keyless / Sigstore) the SHA256SUMS.txt
@@ -35,14 +40,15 @@ name: Release Skill
 # Callers must grant `id-token: write` and `attestations: write` on the calling
 # job (in addition to `contents: write`). All netresearch skill-repo callers do;
 # fork this workflow only after granting those scopes.
-# Verify a downloaded archive with (pin to the SPECIFIC repo, not just the org —
-# `--owner` and an org-wide identity regex would accept attestations from any
-# other repo in the org):
+# Verify a downloaded archive with (pin to the SPECIFIC repo + workflow file +
+# tag ref — `--owner` and an org-wide identity regex would accept attestations
+# from any other repo or branch in the org):
 #   gh attestation verify <archive>.zip --repo <org>/<repo-name>
+#   sha256sum --check SHA256SUMS.txt   # after verifying the signature below
 # Verify the checksums signature with:
 #   cosign verify-blob \
 #     --certificate SHA256SUMS.txt.pem --signature SHA256SUMS.txt.sig \
-#     --certificate-identity-regexp "^https://github\.com/<org>/<repo-name>/" \
+#     --certificate-identity-regexp "^https://github\.com/<org>/<repo-name>/\.github/workflows/release\.yml@refs/tags/" \
 #     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
 #     SHA256SUMS.txt
 
@@ -247,12 +253,16 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # Anchor the regex to the start so a trailing-substring match against
-          # an arbitrary URL can't pass verification.
+          # Pin the cert identity to: this exact repo, the release.yml workflow
+          # file, on a tag ref (refs/tags/). `^` anchors the start so a
+          # substring match can't sneak through. `\.` escapes the dot so it
+          # matches a literal period instead of any character. Caller's
+          # release.yml triggers on `push: tags: 'v*'`, so refs/tags/ is the
+          # only legitimate ref a release-time signature could carry.
           cosign verify-blob \
             --certificate SHA256SUMS.txt.pem \
             --signature SHA256SUMS.txt.sig \
-            --certificate-identity-regexp "^https://github\.com/${REPO}/" \
+            --certificate-identity-regexp "^https://github\.com/${REPO}/\.github/workflows/release\.yml@refs/tags/" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             SHA256SUMS.txt
 
