@@ -217,15 +217,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # SLSA build provenance — opt-in via `with: attest: true`. Runs as a separate
-  # job so callers that don't opt in are unaffected: the `if: ${{ inputs.attest }}`
-  # gate skips this job entirely, and its job-level permissions are only
-  # required when the job actually runs. Callers that DO opt in MUST grant
-  # id-token: write and attestations: write on the calling job, otherwise the
-  # attest step will fail at runtime with an "insufficient permissions" error.
+  # job so callers that don't opt in are unaffected: the `if:` gate is keyed on
+  # event_name == 'workflow_call' so the `inputs` context is only consulted when
+  # this workflow is being called (not on direct tag-push triggers, where
+  # `inputs` is unavailable). The job's own permissions only matter when the
+  # job actually runs. Callers that DO opt in MUST grant id-token: write and
+  # attestations: write on the calling job, otherwise the attest step will fail
+  # at runtime with an "insufficient permissions" error.
   attest:
     name: Attest Build Provenance
     needs: release
-    if: ${{ inputs.attest }}
+    if: ${{ github.event_name == 'workflow_call' && inputs.attest }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

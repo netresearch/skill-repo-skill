@@ -134,8 +134,7 @@ jobs:
     with:
       attest: true
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write          # release upload
       id-token: write          # required for attest=true (OIDC token for sigstore)
       attestations: write      # required for attest=true (GitHub native attestation API)
 ```
