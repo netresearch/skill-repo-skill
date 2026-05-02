@@ -1,6 +1,6 @@
 # Installation Methods
 
-Three methods for installing Netresearch skills.
+Four methods for installing Netresearch skills.
 
 ## Method 1: Netresearch Marketplace (Recommended)
 
@@ -91,6 +91,77 @@ composer require netresearch/{repo-name}
 - Project-specific skill sets
 - Easy updates with `composer update`
 
+## Method 4: npm (Node Projects)
+
+For Node.js / TypeScript projects, install skills as npm packages discovered by `@netresearch/agent-skill-coordinator`.
+
+### Prerequisites
+
+1. Node.js 18+ and npm 9+ (or pnpm/yarn equivalent)
+2. [`@netresearch/agent-skill-coordinator`](https://github.com/netresearch/node-agent-skill-coordinator) — peer dependency that scans `node_modules` and registers skills in `AGENTS.md`
+
+### Installation
+
+```bash
+npm install --save-dev \
+  @netresearch/agent-skill-coordinator \
+  github:netresearch/{repo-name}
+```
+
+For pnpm, allowlist the coordinator's `postinstall` so it can write `AGENTS.md`:
+
+```json
+{
+  "pnpm": {
+    "onlyBuiltDependencies": ["@netresearch/agent-skill-coordinator"]
+  }
+}
+```
+
+### How It Works
+
+1. Coordinator's `postinstall` walks `node_modules` for packages declaring `aiAgentSkill: skills/<name>/SKILL.md`
+2. Validates frontmatter, then writes a `<skills_system>` block into the project's `AGENTS.md`
+3. Skill content is then visible to any agent reading `AGENTS.md`
+
+### What ships in the npm tarball
+
+The `files` allowlist in `package.json` controls what npm packs. **Always include** anything the SKILL.md content references at repo root, plus `.claude-plugin/` (so consumers who later switch to the marketplace install see the same files):
+
+```json
+{
+  "files": [
+    "skills/{skill-name}/",
+    ".claude-plugin/",
+    "hooks/",
+    "scripts/",
+    "commands/",
+    "outputStyles/",
+    "assets/",
+    "AGENTS.md",
+    "LICENSE-MIT",
+    "LICENSE-CC-BY-SA-4.0",
+    "README.md"
+  ]
+}
+```
+
+Drop entries whose dir/file does not exist in your repo. Reviewers (Copilot/Gemini) flag missing entries that are referenced from SKILL.md or `.claude-plugin/plugin.json`.
+
+### `"private": true` on `0.0.0-source`
+
+Skill repos use the placeholder version `0.0.0-source` and **must** set `"private": true` to guard against accidental `npm publish` of the placeholder. Real publishes (when/if added later) flip `private` to `false` (or remove it) at release time and set a real semver.
+
+### Limitation: SKILL.md content only
+
+The npm path registers only `SKILL.md` content into `AGENTS.md`. **Slash commands** (defined under `commands/`) and **PreToolUse / PostToolUse hooks** (defined under `.claude-plugin/`) are loaded by Claude Code's plugin mechanism — not by the coordinator scanning `node_modules`. Repos that ship those features should document this explicitly in their README (a `> **Limitation:**` callout immediately after the npm install snippet) so consumers know they need the marketplace install for the full skill.
+
+### Benefits
+
+- Lock-file pinning via `package-lock.json` / `pnpm-lock.yaml`
+- Renovate / Dependabot can bump skill versions like any other dep
+- No PHP / Composer required for Node-only projects
+
 ## Choosing a Method
 
 | Scenario | Recommended Method |
@@ -98,7 +169,8 @@ composer require netresearch/{repo-name}
 | General Claude Code use | Marketplace |
 | Offline/air-gapped | Release download |
 | PHP project | Composer |
-| CI/CD automation | Composer |
+| Node / TypeScript project | npm |
+| CI/CD automation | Composer or npm |
 | Quick trial | Marketplace |
 
 ## Directory Locations
@@ -108,3 +180,4 @@ composer require netresearch/{repo-name}
 | Marketplace | Managed by Claude Code |
 | Release | `~/.claude/skills/{skill-name}/` |
 | Composer | `vendor/netresearch/{repo-name}/` |
+| npm | `node_modules/@netresearch/{repo-name}/` |

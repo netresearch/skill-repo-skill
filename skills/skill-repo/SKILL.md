@@ -90,17 +90,18 @@ uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 
 Required callers: `validate.yml`, `release.yml`, `auto-merge-deps.yml`, `harness-verify.yml`, `eval-validate.yml`, `pr-quality.yml`.
 
-Auto-merge and pr-quality callers must use `pull_request_target` trigger (not `pull_request`). Never define actions directly in skill repos — always call reusable workflows so action version bumps happen in one place.
+Auto-merge and pr-quality callers must use `pull_request_target` trigger. Never define actions directly — always call reusable workflows.
 
 ## Releasing
 
-Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged** (tag-before-bump runs Release against the wrong version). Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require a dry-run manifest + approval. See `references/release-discipline.md`.
+Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged**. Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require dry-run + approval. See `references/release-discipline.md`.
 
 ## Installation
 
 1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
 2. **Release**: Download to `~/.claude/skills/{name}/`
 3. **Composer**: `composer require netresearch/{repo-name}`
+4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (bakes in `private: true` + `files` allowlist with `.claude-plugin/`, `hooks/`, `commands/`, `outputStyles/`, `assets/`, `AGENTS.md`). See `references/installation-methods.md`.
 
 ## Validation
 
@@ -110,9 +111,9 @@ scripts/validate-skill.sh
 
 ## Cross-platform Compatibility
 
-- Use `grep -E` not `grep -P` (macOS BSD grep lacks `-P`)
-- Use `bash` in shebangs (macOS default is zsh)
-- Use `[[ ]]` for conditionals
+- `grep -E` not `grep -P` (macOS BSD grep)
+- `bash` in shebangs (macOS default is zsh)
+- `[[ ]]` for conditionals
 
 ## References
 

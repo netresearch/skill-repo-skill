@@ -45,6 +45,31 @@ composer require netresearch/{repo-name}
 
 Requires [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin).
 
+### npm (Node Projects)
+
+```bash
+npm install --save-dev \
+  @netresearch/agent-skill-coordinator \
+  github:netresearch/{repo-name}
+```
+
+Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/node-agent-skill-coordinator), which discovers the skill in `node_modules` and registers it in `AGENTS.md` via a `postinstall` hook. For pnpm, also allowlist the coordinator's postinstall:
+
+```json
+{
+  "pnpm": {
+    "onlyBuiltDependencies": ["@netresearch/agent-skill-coordinator"]
+  }
+}
+```
+
+<!-- Include the Limitation callout below ONLY if this skill ships slash commands
+     (commands/) or PreToolUse/PostToolUse hooks via .claude-plugin/.
+     The npm-coordinator path only registers SKILL.md content into AGENTS.md;
+     plugin-mechanism features (slash commands, hooks) require the marketplace install. -->
+
+> **Limitation:** The npm install path registers only `SKILL.md` content via the coordinator's `postinstall` (it writes a `<skills_system>` block into `AGENTS.md`). Slash commands defined in `commands/` and PreToolUse hooks defined in `.claude-plugin/` are loaded by Claude Code's plugin mechanism, **not** by the coordinator scanning `node_modules`. For the full skill (commands + hooks), install via the [Marketplace](#marketplace-recommended) or download the release directly.
+
 ## Usage
 
 The skill triggers on keywords like:
