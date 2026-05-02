@@ -63,12 +63,18 @@ Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/n
 }
 ```
 
-<!-- Include the Limitation callout below ONLY if this skill ships slash commands
-     (commands/) or PreToolUse/PostToolUse hooks via .claude-plugin/.
-     The npm-coordinator path only registers SKILL.md content into AGENTS.md;
-     plugin-mechanism features (slash commands, hooks) require the marketplace install. -->
+<!-- If this skill ships slash commands (commands/) or PreToolUse/PostToolUse hooks
+     via .claude-plugin/, uncomment the callout below by removing the surrounding
+     LIMITATION-CALLOUT-START / LIMITATION-CALLOUT-END markers so npm consumers
+     know they need the marketplace install for full functionality. The
+     npm-coordinator path only registers SKILL.md content into AGENTS.md;
+     plugin-mechanism features (slash commands, hooks) require Claude Code's
+     plugin loader, not the coordinator's node_modules scanner. -->
 
+<!-- LIMITATION-CALLOUT-START
 > **Limitation:** The npm install path registers only `SKILL.md` content via the coordinator's `postinstall` (it writes a `<skills_system>` block into `AGENTS.md`). Slash commands defined in `commands/` and PreToolUse hooks defined in `.claude-plugin/` are loaded by Claude Code's plugin mechanism, **not** by the coordinator scanning `node_modules`. For the full skill (commands + hooks), install via the [Marketplace](#marketplace-recommended) or download the release directly.
+LIMITATION-CALLOUT-END -->
+
 
 ## Usage
 
