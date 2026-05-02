@@ -116,11 +116,14 @@ The skill triggers on keywords like:
 └── .github/workflows/    # CI/CD
 ```
 
-### Three Installation Methods
+### Installation Methods
 
 1. **Marketplace** - `/plugin marketplace add netresearch/claude-code-marketplace`
-2. **Release Download** - GitHub Releases (skill files only)
-3. **Composer** - `composer require netresearch/agent-{skill-name}`
+2. **npx (skills.sh)** - `npx skills add <repo-url> --skill <name>`
+3. **Release Download** - GitHub Releases (skill files only)
+4. **Git Clone** - Direct repository clone
+5. **Composer** - `composer require netresearch/agent-{skill-name}` (PHP projects)
+6. **npm** - `npm install --save-dev @netresearch/agent-skill-coordinator github:<org>/<repo>` (Node projects)
 
 ### Composer Package Requirements
 
