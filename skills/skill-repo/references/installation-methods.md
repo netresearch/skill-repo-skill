@@ -126,18 +126,13 @@ For pnpm, allowlist the coordinator's `postinstall` so it can write `AGENTS.md`:
 
 ### What ships in the npm tarball
 
-The `files` allowlist in `package.json` controls what npm packs. **Always include** anything the SKILL.md content references at repo root, plus `.claude-plugin/` (so consumers who later switch to the marketplace install see the same files):
+The `files` allowlist in `package.json` controls what npm packs. The default in `templates/package.json.template` is intentionally **minimal** — the skill payload (`skills/<name>/`), plugin metadata (`.claude-plugin/`), the canonical agent rules entry-point (`AGENTS.md`), licenses, and `README.md`:
 
 ```json
 {
   "files": [
     "skills/{skill-name}/",
     ".claude-plugin/",
-    "hooks/",
-    "scripts/",
-    "commands/",
-    "outputStyles/",
-    "assets/",
     "AGENTS.md",
     "LICENSE-MIT",
     "LICENSE-CC-BY-SA-4.0",
@@ -146,7 +141,42 @@ The `files` allowlist in `package.json` controls what npm packs. **Always includ
 }
 ```
 
-Drop entries whose dir/file does not exist in your repo. Reviewers (Copilot/Gemini) flag missing entries that are referenced from SKILL.md or `.claude-plugin/plugin.json`.
+#### When to add a top-level data dir
+
+Add a top-level dir to `files` **only if your installed skill code reads from it at runtime** (e.g. via `$ROOT/<dir>/...` or `../<dir>/...` from a script under `skills/<name>/scripts/`). Common runtime data dirs:
+
+- `catalog/` — `cli-tools-skill` ships this because its installer scripts read `$ROOT/catalog/*.json`.
+- `hooks/` — Claude Code's plugin loader reads `hooks/hooks.json`. Ship it if your skill ships PreToolUse/PostToolUse hooks.
+- `commands/` — slash command definitions. Ship if present.
+- `outputStyles/` — output style definitions. Ship if present.
+- `assets/` — referenced assets (images, configs). Ship if your skill content references them at install paths.
+
+#### When NOT to add a top-level dir
+
+- **Top-level `scripts/`** is typically **repo-maintenance only** (e.g. `verify-harness.sh`, `generate-dashboard.sh`). Keep it out unless your installed skill scripts read from `$ROOT/scripts/` at runtime. Runtime scripts belong under `skills/<name>/scripts/` (already covered by `skills/<name>/`).
+  - Example: `context7-skill` does NOT ship top-level `scripts/` because its only file is `verify-harness.sh` (repo-maintenance).
+  - Example: `cli-tools-skill` DOES ship `catalog/` because its installer scripts read `$ROOT/catalog/*.json`.
+- `Build/` — dev-only build artifacts. Never ship.
+- `evals/`, `docs/` — repo-internal. Never ship.
+- `.github/`, lint configs (`.markdownlint*`, `.yamllint*`), `.envrc` — repo-internal. Never ship.
+
+Heuristic when looking at a top-level dir:
+
+```text
+package-root/
+  catalog/   # consumed at runtime  -> MUST be in files
+  Build/     # dev-only build artifacts -> DO NOT include
+  scripts/   # inspect: runtime or repo-maintenance? include only if runtime
+```
+
+#### CI safeguard
+
+`templates/.github/workflows/npm-pack-smoke.yml.template` is a ready-to-copy GitHub Actions workflow that runs `npm pack --dry-run` on every PR and asserts:
+
+1. **No internal leakage** — fails if the tarball contains `.github/`, `evals/`, `docs/`, `Build/`, `verify-harness.sh`, lint configs, etc.
+2. **Runtime-referenced dirs are present** — greps `skills/*/scripts/` for `$ROOT/<dir>` and `../<dir>/` references; if a script reads `$ROOT/catalog` but `catalog/` is missing from the tarball, the job fails.
+
+Copy it into `.github/workflows/npm-pack-smoke.yml` in your skill repo. It catches both kinds of `files`-allowlist mistakes (over-inclusion and under-inclusion) before they ship.
 
 ### `"private": true` on `0.0.0-source`
 

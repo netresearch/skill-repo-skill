@@ -25,7 +25,6 @@
   "files": [
     "skills/skill-repo/",
     ".claude-plugin/",
-    "scripts/",
     "AGENTS.md",
     "LICENSE-MIT",
     "LICENSE-CC-BY-SA-4.0",

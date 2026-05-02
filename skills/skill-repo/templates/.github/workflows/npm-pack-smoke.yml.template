@@ -1,0 +1,29 @@
+# Copy to .github/workflows/npm-pack-smoke.yml in your skill repo (drop the
+# .template suffix). This is a thin caller for the org-level reusable
+# workflow at netresearch/skill-repo-skill — per SKILL.md, skill repos must
+# delegate CI to reusable workflows rather than defining steps inline.
+#
+# What the reusable workflow asserts:
+#   1. No internal leakage — repo-maintenance files (.github/, evals/,
+#      docs/, Build/, harness scripts like verify-harness/generate-dashboard/
+#      run-ab-evals, lint configs, .envrc) must NOT ship in the tarball.
+#   2. Runtime-referenced dirs are present — every top-level dir referenced
+#      by skills/*/scripts/* via $ROOT/<dir> or ../<dir> MUST be in the
+#      tarball, otherwise installed scripts break at runtime.
+#
+# See skills/skill-repo/references/installation-methods.md for the
+# files-allowlist rationale, and references/review-replies.md for canonical
+# replies to reviewer comments about scripts/, AGENTS.md, and similar.
+name: npm Pack Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    uses: netresearch/skill-repo-skill/.github/workflows/npm-pack-smoke.yml@main

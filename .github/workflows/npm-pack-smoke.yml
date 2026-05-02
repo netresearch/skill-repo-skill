@@ -1,0 +1,124 @@
+# Reusable workflow: asserts `npm pack` produces a clean, complete tarball.
+#
+# Two checks:
+#   1. No internal leakage — repo-maintenance files (CI configs, harness
+#      scripts, lint configs, build/eval/docs dirs) must NOT ship.
+#   2. Runtime-referenced dirs are present — every top-level dir referenced
+#      by skills/*/scripts/* via $ROOT/<dir> or ../<dir> MUST be in the
+#      tarball, otherwise installed scripts break.
+#
+# Called from skill repos via .github/workflows/npm-pack-smoke.yml using
+# `uses: netresearch/skill-repo-skill/.github/workflows/npm-pack-smoke.yml@main`.
+# See skills/skill-repo/references/installation-methods.md for the rationale.
+#
+# Inputs: none. Reads only the caller repo's checked-out tree (no untrusted
+# GitHub event payload data is interpolated into shell commands).
+name: npm Pack Smoke
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    name: Verify tarball contents
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@a5ad31d6a139d249332a2605b85202e8c0b78450 # v2.19.1
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+
+      - name: npm pack --dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run --json > pack.json
+          jq -r '.[0].files[].path' pack.json | sort > tarball-files.txt
+          echo "Tarball contents:"
+          cat tarball-files.txt
+
+      - name: Assert no internal leakage
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Patterns that should NEVER ship in the tarball.
+          # Anchor against `path` (no leading slash, paths are repo-relative).
+          # Repo-maintenance script names: extend this list as new ones emerge.
+          # NOTE: top-level scripts/ may legitimately ship if the *installed*
+          # skill reads from $ROOT/scripts/ at runtime — see
+          # references/review-replies.md entry #4. We block by script *name*,
+          # not by directory, so runtime scripts living elsewhere are unaffected.
+          maintenance_scripts='verify-harness|generate-dashboard|run-ab-evals'
+          leak_pattern="^\\.github/|^evals/|^docs/|^Build/|(^|/)(${maintenance_scripts})\\.(sh|py|js|ts)$|^\\.markdownlint|^\\.yamllint|^\\.envrc$"
+          # `grep` returns 1 when no match — we WANT no match, so invert with `if`.
+          if leaks=$(grep -E "$leak_pattern" tarball-files.txt); then
+            echo "::error::Repo-internal files leaked into npm tarball:"
+            sed 's/^/  /' <<< "$leaks"
+            echo "Tighten the \`files\` allowlist in package.json. See skills/skill-repo/references/installation-methods.md."
+            exit 1
+          fi
+          echo "OK: no internal leakage."
+
+      - name: Assert runtime-referenced dirs are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Extract relative-path references from skill scripts, e.g. $ROOT/catalog,
+          # ../references, $(realpath ../foo). If the scripts dir does not exist
+          # (skill ships no scripts), skip.
+          if ! compgen -G 'skills/*/scripts/' > /dev/null; then
+            echo "OK: no skill scripts to scan."
+            exit 0
+          fi
+
+          # Collect candidate dir names. `|| true` because grep returns non-zero
+          # when there are no matches — that's a valid empty-result case.
+          # Pattern matches both `../dir/` (with slash) and `../dir` (no slash);
+          # we strip the optional trailing slash below.
+          refs=$(grep -rhoE '\$\{?ROOT\}?/[a-zA-Z0-9_-]+|\.\./[a-zA-Z0-9_-]+' skills/*/scripts/ 2>/dev/null || true)
+
+          # Normalize: strip ${ROOT}/, $ROOT/, ../, and trailing slash to get bare dir name.
+          # We exclude only `skills` (already enumerated separately in package.json
+          # `files` as `skills/<name>/`). `scripts` and `references` are NOT
+          # excluded — those are exactly the dirs we want to assert are shipped
+          # when the runtime references them.
+          dirs=$(printf '%s\n' "$refs" \
+            | sed -E 's#^\$\{?ROOT\}?/##; s#^\.\./##; s#/$##' \
+            | grep -vE '^skills$' \
+            | sort -u)
+
+          if [[ -z "$dirs" ]]; then
+            echo "OK: no top-level runtime references found in skill scripts."
+            exit 0
+          fi
+
+          missing=()
+          while IFS= read -r dir; do
+            [[ -z "$dir" ]] && continue
+            # Only assert dirs that actually exist in the repo (i.e. ones the
+            # script truly relies on). A reference to a non-existent dir is a
+            # script bug, not a packaging bug — let other CI catch that.
+            if [[ ! -d "$dir" ]]; then
+              continue
+            fi
+            if ! grep -qE "^${dir}/" tarball-files.txt; then
+              missing+=("$dir")
+            fi
+          done <<< "$dirs"
+
+          if (( ${#missing[@]} > 0 )); then
+            echo "::error::Runtime-referenced dirs missing from npm tarball:"
+            printf '  %s/\n' "${missing[@]}"
+            echo "Add them to the \`files\` allowlist in package.json — installed scripts read them at runtime."
+            exit 1
+          fi
+          echo "OK: all runtime-referenced dirs are in the tarball."

@@ -21,14 +21,10 @@
     "claude-code"
   ],
   "aiAgentSkill": "skills/{skill-name}/SKILL.md",
+  "_filesNote": "REMOVE this _filesNote field before committing. The default `files` allowlist below is intentionally minimal: the skill payload (skills/<name>/), plugin metadata (.claude-plugin/), the canonical agent rules entry-point (AGENTS.md), licenses, and README. Add a top-level dir to `files` ONLY if your skill ships runtime data the installed code reads from there — e.g. catalog/ (cli-tools-skill reads $ROOT/catalog/*.json), hooks/ (Claude Code's plugin loader reads hooks/hooks.json), commands/, outputStyles/, assets/. DO NOT add top-level scripts/ unless your installed skill code actually executes from $ROOT/scripts/ at runtime; one-off repo-maintenance scripts (e.g. verify-harness.sh, generate-dashboard.sh) belong in the repo but MUST stay out of the npm tarball. The npm-pack-smoke CI workflow (templates/.github/workflows/npm-pack-smoke.yml.template) asserts both directions: no internal leakage, and runtime-referenced dirs are present.",
   "files": [
     "skills/{skill-name}/",
     ".claude-plugin/",
-    "hooks/",
-    "scripts/",
-    "commands/",
-    "outputStyles/",
-    "assets/",
     "AGENTS.md",
     "LICENSE-MIT",
     "LICENSE-CC-BY-SA-4.0",
