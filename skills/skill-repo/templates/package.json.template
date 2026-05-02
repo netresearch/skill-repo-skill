@@ -1,31 +1,34 @@
 {
-  "name": "@netresearch/skill-repo-skill",
+  "name": "@netresearch/{repo-name}",
   "version": "0.0.0-source",
   "private": true,
-  "description": "Guide for structuring Netresearch skill repositories with multi-channel distribution.",
+  "description": "{Skill description}",
   "license": "(MIT AND CC-BY-SA-4.0)",
   "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
-  "homepage": "https://github.com/netresearch/skill-repo-skill",
+  "homepage": "https://github.com/netresearch/{repo-name}",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/netresearch/skill-repo-skill.git"
+    "url": "git+https://github.com/netresearch/{repo-name}.git"
   },
   "bugs": {
-    "url": "https://github.com/netresearch/skill-repo-skill/issues"
+    "url": "https://github.com/netresearch/{repo-name}/issues"
   },
   "keywords": [
     "ai-agent-skill",
-    "skill-repo",
-    "skill-creator",
-    "release-workflow",
+    "{topical-tag-1}",
+    "{topical-tag-2}",
     "anthropic",
     "claude-code"
   ],
-  "aiAgentSkill": "skills/skill-repo/SKILL.md",
+  "aiAgentSkill": "skills/{skill-name}/SKILL.md",
   "files": [
-    "skills/skill-repo/",
+    "skills/{skill-name}/",
     ".claude-plugin/",
+    "hooks/",
     "scripts/",
+    "commands/",
+    "outputStyles/",
+    "assets/",
     "AGENTS.md",
     "LICENSE-MIT",
     "LICENSE-CC-BY-SA-4.0",
