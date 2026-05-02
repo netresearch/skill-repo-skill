@@ -1,0 +1,34 @@
+{
+  "name": "@netresearch/skill-repo-skill",
+  "version": "0.0.0-source",
+  "description": "Guide for structuring Netresearch skill repositories with multi-channel distribution.",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": "Netresearch DTT GmbH (https://www.netresearch.de/)",
+  "homepage": "https://github.com/netresearch/skill-repo-skill",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/netresearch/skill-repo-skill.git"
+  },
+  "bugs": {
+    "url": "https://github.com/netresearch/skill-repo-skill/issues"
+  },
+  "keywords": [
+    "ai-agent-skill",
+    "skill-repo",
+    "skill-creator",
+    "release-workflow",
+    "anthropic",
+    "claude-code"
+  ],
+  "aiAgentSkill": "skills/skill-repo/SKILL.md",
+  "files": [
+    "skills/skill-repo/",
+    "scripts/",
+    "LICENSE-MIT",
+    "LICENSE-CC-BY-SA-4.0",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@netresearch/agent-skill-coordinator": "^0.1"
+  }
+}
