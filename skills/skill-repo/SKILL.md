@@ -101,7 +101,7 @@ Open bump PR → merge → pull main → verify version parity → signed tag �
 1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
 2. **Release**: Download to `~/.claude/skills/{name}/`
 3. **Composer**: `composer require netresearch/{repo-name}`
-4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (bakes in `private: true` + `files` allowlist with `.claude-plugin/`, `hooks/`, `commands/`, `outputStyles/`, `assets/`, `AGENTS.md`). See `references/installation-methods.md`.
+4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (minimal `files` default; see `references/installation-methods.md`).
 
 ## Validation
 
@@ -120,6 +120,7 @@ scripts/validate-skill.sh
 - `references/installation-methods.md`
 - `references/composer-setup.md`
 - `references/release-discipline.md` — version-parity check, cache safety, multi-repo dry-run
+- `references/review-replies.md` — canonical replies for recurring reviewer comments
 
 ## See Also
 
