@@ -11,7 +11,7 @@ These were extracted from review patterns across 14+ skill PRs. Use them to keep
 **Criteria:** Skill packages distributed via `github:org/repo` (not the npm registry) **must** set `"private": true` to guard against accidental `npm publish` of the placeholder `0.0.0-source` version. The current `package.json.template` bakes this in. If a reviewer flags it on a fresh PR, the package was scaffolded from an outdated template — accept the suggestion and add it.
 
 ```markdown
-Accepted. Adding `"private": true` — current scaffolding template (`skill-repo-skill/templates/package.json.template`) bakes this in to guard against accidental publish of the `0.0.0-source` placeholder. This PR was scaffolded before the template was updated.
+Accepted. Adding `"private": true` — current scaffolding template (`skills/skill-repo/templates/package.json.template` in `netresearch/skill-repo-skill`) bakes this in to guard against accidental publish of the `0.0.0-source` placeholder. This PR was scaffolded before the template was updated.
 ```
 
 ## 2. "Pin `github:org/repo#vX.Y.Z` in install instructions"
