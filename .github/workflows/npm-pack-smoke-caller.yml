@@ -1,0 +1,19 @@
+# Dogfood caller: runs the org-reusable npm-pack-smoke workflow against
+# this repo's own tarball on every PR and main push. If this repo's
+# package.json `files` allowlist drifts (leaks repo-maintenance, or omits
+# a runtime-referenced dir), this job fails before merge.
+#
+# No untrusted github.event.* data is interpolated into shell commands.
+name: npm Pack Smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  pack:
+    uses: ./.github/workflows/npm-pack-smoke.yml
