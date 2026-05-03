@@ -143,7 +143,8 @@ The standard layout for a Netresearch skill repository (one or more skills per r
 
 - `"type": "ai-agent-skill"`
 - `"require": {"netresearch/composer-agent-skill-plugin": "*"}`
-- `"extra": {"ai-agent-skill": "SKILL.md"}`
+- `"extra": {"ai-agent-skill": "skills/{skill-name}/SKILL.md"}` (path to the
+  nested `SKILL.md`; for single-skill repos this is `skills/{repo-slug}/SKILL.md`)
 
 ## This Repository
 
@@ -151,29 +152,43 @@ The standard layout for a Netresearch skill repository (one or more skills per r
 
 ```
 skill-repo-skill/
+├── AGENTS.md
+├── README.md
+├── LICENSE-MIT
+├── LICENSE-CC-BY-SA-4.0
+├── SECURITY-AUDIT.md
+├── composer.json
+├── package.json
+├── renovate.json
 ├── .claude-plugin/plugin.json
-├── .github/workflows/             # Reusable workflows (validate, release,
-│                                  #   auto-merge-deps, npm-pack-smoke, ...)
+├── .github/workflows/             # Reusable workflows hosted here:
+│                                  #   validate, release, pr-quality,
+│                                  #   harness-verify, eval-validate,
+│                                  #   validate-agents, dependency-audit,
+│                                  #   npm-pack-smoke, ci-python
+│                                  # (auto-merge runs via a thin caller that
+│                                  #  delegates to netresearch/.github)
 ├── Build/
 │   ├── Scripts/check-plugin-version.sh
 │   └── hooks/                     # pre-commit, pre-push
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── dashboard/                 # Cross-skill metrics dashboard
-├── scripts/                       # Repo-level: generate-dashboard, run-ab-evals,
-│                                  #   verify-harness
+├── scripts/                       # Repo-level: generate-dashboard,
+│                                  #   run-ab-evals, verify-harness
 ├── tests/                         # Eval fixtures
 └── skills/skill-repo/
     ├── SKILL.md
     ├── checkpoints.yaml
     ├── evals/evals.json
     ├── references/                # composer-setup, installation-methods,
-    │                              #   marketplace-integration, release-discipline,
-    │                              #   review-replies
+    │                              #   marketplace-integration,
+    │                              #   release-discipline, review-replies
     ├── scripts/                   # validate-skill, validate-evals,
     │                              #   migrate-licensing, check-version-parity
     └── templates/                 # README, composer.json, package.json,
-                                   #   release.yml, pr-quality.yml, licenses, hooks
+                                   #   release.yml, pr-quality.yml,
+                                   #   licenses, hooks
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for component responsibilities.
