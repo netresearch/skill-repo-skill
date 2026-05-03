@@ -103,17 +103,31 @@ The skill triggers on keywords like:
 
 ### Repository Layout
 
+The standard layout for a Netresearch skill repository (one or more skills per repo):
+
 ```
-{skill-name}/
-├── SKILL.md              # AI instructions
-├── README.md             # Human documentation
-├── LICENSE-MIT           # Code license (MIT)
-├── LICENSE-CC-BY-SA-4.0  # Content license (CC-BY-SA-4.0)
-├── composer.json         # PHP distribution
-├── references/           # Extended docs
-├── scripts/              # Automation
-├── assets/               # Templates
-└── .github/workflows/    # CI/CD
+{name}-skill/
+├── AGENTS.md                        # Agent rules / harness index
+├── README.md                        # Human documentation
+├── LICENSE-MIT                      # Code license (MIT)
+├── LICENSE-CC-BY-SA-4.0             # Content license (CC-BY-SA-4.0)
+├── composer.json                    # PHP distribution
+├── package.json                     # Node distribution (optional)
+├── renovate.json                    # Dependency automation
+├── .claude-plugin/
+│   └── plugin.json                  # Marketplace metadata
+├── .github/workflows/               # CI (typically calls reusable workflows)
+├── Build/                           # Build scripts and git hooks
+├── docs/                            # Architecture, ADRs, dashboards
+├── scripts/                         # Repo-level automation
+└── skills/
+    └── {skill-name}/
+        ├── SKILL.md                 # AI instructions
+        ├── checkpoints.yaml         # Assessment checkpoints (optional)
+        ├── evals/                   # Skill evaluations
+        ├── references/              # Extended docs
+        ├── scripts/                 # Skill automation
+        └── templates/               # Bootstrap templates
 ```
 
 ### Installation Methods
@@ -129,28 +143,55 @@ The skill triggers on keywords like:
 
 - `"type": "ai-agent-skill"`
 - `"require": {"netresearch/composer-agent-skill-plugin": "*"}`
-- `"extra": {"ai-agent-skill": "SKILL.md"}`
+- `"extra": {"ai-agent-skill": "skills/{skill-name}/SKILL.md"}` (path to the
+  nested `SKILL.md`; for single-skill repos this is `skills/{repo-slug}/SKILL.md`)
 
-## Structure
+## This Repository
+
+`skill-repo-skill` dogfoods the layout above and additionally hosts reusable CI workflows consumed by other Netresearch skill repos:
 
 ```
 skill-repo-skill/
-├── SKILL.md                      # AI instructions
-├── README.md                     # This file
-├── LICENSE-MIT                   # Code license (MIT)
-├── LICENSE-CC-BY-SA-4.0          # Content license (CC-BY-SA-4.0)
-├── composer.json                 # PHP distribution
-├── templates/
-│   ├── README.md.template        # README template for skills
-│   ├── composer.json.template    # Composer template
-│   └── release.yml.template      # Release workflow template
-├── references/
-│   ├── installation-methods.md   # Detailed install guides
-│   ├── composer-setup.md         # Composer integration
-│   └── marketplace-integration.md
-└── scripts/
-    └── validate-skill.sh         # Validation script
+├── AGENTS.md
+├── README.md
+├── LICENSE-MIT
+├── LICENSE-CC-BY-SA-4.0
+├── SECURITY-AUDIT.md
+├── composer.json
+├── package.json
+├── renovate.json
+├── .claude-plugin/plugin.json
+├── .github/workflows/             # Reusable workflows hosted here:
+│                                  #   validate, release, pr-quality,
+│                                  #   harness-verify, eval-validate,
+│                                  #   validate-agents, dependency-audit,
+│                                  #   npm-pack-smoke, ci-python
+│                                  # (auto-merge runs via a thin caller that
+│                                  #  delegates to netresearch/.github)
+├── Build/
+│   ├── Scripts/check-plugin-version.sh
+│   └── hooks/                     # pre-commit, pre-push
+├── docs/
+│   ├── ARCHITECTURE.md
+│   └── dashboard/                 # Cross-skill metrics dashboard
+├── scripts/                       # Repo-level: generate-dashboard,
+│                                  #   run-ab-evals, verify-harness
+├── tests/                         # Eval fixtures
+└── skills/skill-repo/
+    ├── SKILL.md
+    ├── checkpoints.yaml
+    ├── evals/evals.json
+    ├── references/                # composer-setup, installation-methods,
+    │                              #   marketplace-integration,
+    │                              #   release-discipline, review-replies
+    ├── scripts/                   # validate-skill, validate-evals,
+    │                              #   migrate-licensing, check-version-parity
+    └── templates/                 # README, composer.json, package.json,
+                                   #   release.yml, pr-quality.yml,
+                                   #   licenses, hooks
 ```
+
+See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for component responsibilities.
 
 ## Extends Anthropic's Skill Creator
 

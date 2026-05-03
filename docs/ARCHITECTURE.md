@@ -15,8 +15,16 @@ skill-repo-skill defines the standard structure for all Netresearch skill reposi
 Located in `.github/workflows/`, these are called by other skill repos via `uses: netresearch/skill-repo-skill/.github/workflows/<name>.yml@main`:
 
 - **`validate.yml`** -- Main validation pipeline. Runs structure checks, frontmatter validation, licensing, metadata consistency, markdown/YAML lint, ShellCheck, Python lint, and checkpoint schema validation.
-- **`auto-merge-deps.yml`** -- Auto-merges Dependabot/Renovate PRs after CI passes.
 - **`release.yml`** -- Triggered on `v*` tags. Validates tag matches `plugin.json` version, packages each skill standalone and full plugin with checksums.
+- **`pr-quality.yml`** -- PR quality gates (auto-approve coordination, etc.).
+- **`harness-verify.yml`** -- Verifies AGENTS.md / harness consistency.
+- **`eval-validate.yml`** -- Validates skill evaluation files.
+- **`validate-agents.yml`** -- Validates `AGENTS.md` content.
+- **`dependency-audit.yml`** -- Composer audit, SAST, dependency review.
+- **`npm-pack-smoke.yml`** -- Verifies the npm tarball ships the right files.
+- **`ci-python.yml`** -- Reusable Python lint/test pipeline.
+
+Auto-merge for Dependabot/Renovate PRs is delegated to `netresearch/.github/.github/workflows/auto-merge-deps.yml@main` via the local caller `auto-merge-deps-caller.yml`; it is **not** hosted in this repo.
 
 ### Validation Scripts
 
