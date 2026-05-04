@@ -156,7 +156,9 @@ mechanical:
   # SKILL.md checks
   - id: SR-21
     type: command
-    pattern: "word_count=$(wc -w < $(find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' | head -1)); [ $word_count -le 500 ]"
+    # Rewritten to satisfy the runner's command allowlist (no `;`, no `$()`):
+    # pipe `find` → `head` → `xargs wc -w` → `awk` for the threshold check.
+    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' | head -1 | xargs -r wc -w | awk '$1<=500 {exit 0} {exit 1}'"
     severity: error
     desc: "SKILL.md must be under 500 words"
 
