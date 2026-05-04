@@ -225,7 +225,11 @@ mechanical:
   - id: SR-30
     type: regex
     target: .github/workflows/release.yml
-    pattern: "^\\s*tags:"
+    # Use POSIX bracket class instead of `\s`. The runner's YAML parser
+    # captures the raw text between double quotes, so `\\s` reaches grep
+    # as literal backslash-s and never matches. `[[:space:]]` works under
+    # both grep -E and grep -P regardless of YAML escape semantics.
+    pattern: "^[[:space:]]*tags:"
     severity: error
     desc: "Release workflow must trigger on tag push (releases require a signed annotated tag pushed locally)"
 
