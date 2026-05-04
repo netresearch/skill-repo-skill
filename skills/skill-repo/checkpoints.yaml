@@ -158,7 +158,12 @@ mechanical:
     type: command
     # Rewritten to satisfy the runner's command allowlist (no `;`, no `$()`):
     # pipe `find` → `head` → `xargs wc -w` → `awk` for the threshold check.
-    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' | head -1 | xargs -r wc -w | awk '$1<=500 {exit 0} {exit 1}'"
+    # awk uses {if ($1<=500) ok=1} END {exit !ok} so empty input (no SKILL.md
+    # found, or one filtered out by `-not -path`) exits non-zero — preventing
+    # the previous vacuous-pass when no SKILL.md existed.
+    # `-not -path './node_modules/*'` matches the precondition filter so SKILL.md
+    # files inside dependencies don't trigger false positives.
+    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' -not -path './node_modules/*' | head -1 | xargs -r wc -w | awk '{if ($1<=500) ok=1} END {exit !ok}'"
     severity: error
     desc: "SKILL.md must be under 500 words"
 
