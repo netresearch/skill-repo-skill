@@ -156,7 +156,14 @@ mechanical:
   # SKILL.md checks
   - id: SR-21
     type: command
-    pattern: "word_count=$(wc -w < $(find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' | head -1)); [ $word_count -le 500 ]"
+    # Rewritten to satisfy the runner's command allowlist (no `;`, no `$()`):
+    # pipe `find` → `head` → `xargs wc -w` → `awk` for the threshold check.
+    # awk uses {if ($1<=500) ok=1} END {exit !ok} so empty input (no SKILL.md
+    # found, or one filtered out by `-not -path`) exits non-zero — preventing
+    # the previous vacuous-pass when no SKILL.md existed.
+    # `-not -path './node_modules/*'` matches the precondition filter so SKILL.md
+    # files inside dependencies don't trigger false positives.
+    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' -not -path './node_modules/*' | head -1 | xargs -r wc -w | awk '{if ($1<=500) ok=1} END {exit !ok}'"
     severity: error
     desc: "SKILL.md must be under 500 words"
 
@@ -223,17 +230,28 @@ mechanical:
   - id: SR-30
     type: regex
     target: .github/workflows/release.yml
-    pattern: "^\\s*tags:"
+    # Use POSIX bracket class instead of `\s`. The runner's YAML parser
+    # captures the raw text between double quotes, so `\\s` reaches grep
+    # as literal backslash-s and never matches. `[[:space:]]` works under
+    # both grep -E and grep -P regardless of YAML escape semantics.
+    pattern: "^[[:space:]]*tags:"
     severity: error
     desc: "Release workflow must trigger on tag push (releases require a signed annotated tag pushed locally)"
 
   - id: SR-31
     type: command
     # Strip full-line comments before scanning so the docstring describing
-    # the historical anti-pattern doesn't trip the check.
-    pattern: "! awk 'NF && $0 !~ /^[[:space:]]*#/' .github/workflows/release.yml | grep -qE '^[[:space:]]*workflow_dispatch:|--admin'"
+    # the historical anti-pattern doesn't trip the check. The previous
+    # `awk 'NF && $0 !~ /…/'` form contained `&&`, which the runner's
+    # allowlist rejects as a command-chaining metacharacter — replaced
+    # with a `grep -v` comment-strip pipeline that uses only `|`.
+    # Policy enforced (per skill-repo-skill PR #15, which removed the
+    # bump-job): no `workflow_dispatch:` trigger and no `--admin` merge
+    # in the caller release workflow. Manual dispatch on the wrapper
+    # would re-introduce the unsigned-tag bug the bump-job removal fixed.
+    pattern: "! grep -v '^[[:space:]]*#' .github/workflows/release.yml | grep -qE '^[[:space:]]*workflow_dispatch:|--admin'"
     severity: warning
-    desc: "Release workflow should not declare workflow_dispatch or use --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only."
+    desc: "Release workflow should not declare workflow_dispatch or use --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only (see skill-repo-skill PR #15)."
 
 llm_reviews:
   - id: SR-32
@@ -282,9 +300,18 @@ llm_reviews:
     desc: "Caller release workflow permissions must satisfy all shared workflow job requirements"
     prompt: |
       Review .github/workflows/release.yml as a caller of a reusable workflow.
-      The shared workflow requires: contents: write and pull-requests: write.
+      After the bump-job removal in skill-repo-skill PR #15, the shared workflow
+      no longer creates release PRs, so `pull-requests: write` is NOT required.
+      The release job needs:
+        - contents: write       (for publishing the GitHub Release)
+        - id-token: write       (OIDC for sigstore: cosign sign-blob + attest)
+        - attestations: write   (GitHub native attestation API for SLSA build provenance)
       GitHub validates ALL job-level permissions at startup, even for skipped jobs.
-      Check: Does the caller grant both? Flag missing permissions as error (causes startup_failure).
+      Check: Does the caller grant all three? Flag missing permissions as error
+      (missing id-token: write or attestations: write causes the cosign / attest
+      steps to fail; missing contents: write blocks release creation).
+      Note: An older revision of this checkpoint required `pull-requests: write`
+      for the now-removed auto-bump path. Do not flag its absence.
 
   - id: SR-36
     domain: release
