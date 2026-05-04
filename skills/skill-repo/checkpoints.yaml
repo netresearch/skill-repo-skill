@@ -295,9 +295,18 @@ llm_reviews:
     desc: "Caller release workflow permissions must satisfy all shared workflow job requirements"
     prompt: |
       Review .github/workflows/release.yml as a caller of a reusable workflow.
-      The shared workflow requires: contents: write and pull-requests: write.
+      After the bump-job removal in skill-repo-skill PR #15, the shared workflow
+      no longer creates release PRs, so `pull-requests: write` is NOT required.
+      The release job needs:
+        - contents: write       (for publishing the GitHub Release)
+        - id-token: write       (OIDC for sigstore: cosign sign-blob + attest)
+        - attestations: write   (GitHub native attestation API for SLSA build provenance)
       GitHub validates ALL job-level permissions at startup, even for skipped jobs.
-      Check: Does the caller grant both? Flag missing permissions as error (causes startup_failure).
+      Check: Does the caller grant all three? Flag missing permissions as error
+      (missing id-token: write or attestations: write causes the cosign / attest
+      steps to fail; missing contents: write blocks release creation).
+      Note: An older revision of this checkpoint required `pull-requests: write`
+      for the now-removed auto-bump path. Do not flag its absence.
 
   - id: SR-36
     domain: release
