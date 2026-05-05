@@ -282,17 +282,18 @@ llm_reviews:
     prompt: |
       Check if the skill repo uses reusable workflows from skill-repo-skill:
       1. Verify .github/workflows/ contains callers that delegate to
-         netresearch/skill-repo-skill/.github/workflows/<name>.yml@main
-      2. Reusable workflows hosted in skill-repo-skill (workflow_call):
-         validate.yml, release.yml, pr-quality.yml, harness-verify.yml,
-         eval-validate.yml, validate-agents.yml, dependency-audit.yml,
-         npm-pack-smoke.yml, ci-python.yml.
-         A consuming repo should at minimum delegate to validate.yml and
-         release.yml; the rest are domain-specific.
+         netresearch/skill-repo-skill/.github/workflows/<name>.yml@main.
+      2. Baseline expectation: at minimum a caller for validate.yml and
+         release.yml. For the canonical list of all reusable workflows
+         hosted in skill-repo-skill, fetch
+         https://raw.githubusercontent.com/netresearch/skill-repo-skill/main/docs/ARCHITECTURE.md
+         and read the "Reusable CI Workflows" section — do NOT rely on
+         a list embedded in this prompt, since enumerating it here has
+         caused drift before.
       3. Auto-merge for Dependabot/Renovate PRs is NOT hosted in
          skill-repo-skill. The reusable workflow lives at
-         netresearch/.github/.github/workflows/auto-merge-deps.yml@main and is
-         called via a thin local caller (commonly named
+         netresearch/.github/.github/workflows/auto-merge-deps.yml@main
+         and is called via a thin local caller (commonly named
          .github/workflows/auto-merge-deps.yml in consuming repos).
          Flag any caller that points at netresearch/skill-repo-skill for
          auto-merge — that path is wrong.
@@ -302,8 +303,8 @@ llm_reviews:
          in agent-rules-skill) that test repo-specific logic may use
          reusable workflows from skill-repo-skill but also contain inline
          steps.
-      Report missing reusable workflow usage, inline reimplementations, and
-      any caller that targets the wrong source repo.
+      Report missing reusable workflow usage, inline reimplementations,
+      and any caller that targets the wrong source repo.
     severity: warning
     desc: "Skill repos should use reusable workflows from skill-repo-skill for CI standardization"
 
