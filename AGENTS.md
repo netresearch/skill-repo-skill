@@ -16,11 +16,7 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `skills/skill-repo/SKILL.md` | AI skill instructions -- the skill definition |
 | `.claude-plugin/plugin.json` | Plugin metadata (name, version, skills array) |
 | `composer.json` | PHP/Composer distribution as `ai-agent-skill` type |
-| `.github/workflows/validate.yml` | Reusable validation workflow (called by all skill repos) |
-| `.github/workflows/auto-merge-deps.yml` | Reusable auto-merge workflow for Dependabot/Renovate PRs |
-| `.github/workflows/release.yml` | Release packaging (zip/tar.gz per skill + full plugin) |
-| `.github/workflows/lint.yml` | This repo's own CI (markdown lint, ShellCheck, skill validation) |
-| `.github/workflows/auto-merge-deps-caller.yml` | This repo's own caller for auto-merge |
+| `.github/workflows/` | Reusable workflows consumed by other skill repos plus this repo's own CI. Canonical inventory in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#reusable-ci-workflows). Auto-merge for Dependabot/Renovate is delegated to `netresearch/.github` via a thin local caller — NOT hosted here. |
 | `skills/skill-repo/scripts/validate-skill.sh` | Validates skill repo structure, licensing, metadata consistency |
 | `skills/skill-repo/scripts/migrate-licensing.sh` | Migrates repos from single LICENSE to split licensing |
 | `skills/skill-repo/templates/` | Templates for new skill repos (README, licenses, workflows, composer.json) |
