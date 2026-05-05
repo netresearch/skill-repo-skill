@@ -88,10 +88,7 @@ Skill repos MUST delegate CI to skill-repo-skill reusable workflows:
 uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 ```
 
-Required callers (source repos in parentheses):
-
-- `validate.yml`, `release.yml`, `harness-verify.yml`, `eval-validate.yml`, `pr-quality.yml` → call from `netresearch/skill-repo-skill/.github/workflows/<name>.yml@main`
-- `auto-merge-deps.yml` → calls `netresearch/.github/.github/workflows/auto-merge-deps.yml@main` (NOT hosted in skill-repo-skill)
+Required callers: `validate.yml`, `release.yml`, `harness-verify.yml`, `eval-validate.yml`, `pr-quality.yml` from `netresearch/skill-repo-skill`; `auto-merge-deps.yml` from `netresearch/.github` (NOT skill-repo-skill).
 
 Auto-merge and pr-quality callers must use `pull_request_target` trigger. Never define actions directly — always call reusable workflows.
 
