@@ -17,10 +17,10 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `.claude-plugin/plugin.json` | Plugin metadata (name, version, skills array) |
 | `composer.json` | PHP/Composer distribution as `ai-agent-skill` type |
 | `.github/workflows/validate.yml` | Reusable validation workflow (called by all skill repos) |
-| `.github/workflows/auto-merge-deps.yml` | Reusable auto-merge workflow for Dependabot/Renovate PRs |
-| `.github/workflows/release.yml` | Release packaging (zip/tar.gz per skill + full plugin) |
-| `.github/workflows/lint.yml` | This repo's own CI (markdown lint, ShellCheck, skill validation) |
-| `.github/workflows/auto-merge-deps-caller.yml` | This repo's own caller for auto-merge |
+| `.github/workflows/release.yml` | Reusable release packaging workflow (zip/tar.gz per skill + full plugin) |
+| `.github/workflows/pr-quality.yml`, `harness-verify.yml`, `eval-validate.yml`, `validate-agents.yml`, `dependency-audit.yml`, `npm-pack-smoke.yml`, `ci-python.yml` | Other reusable workflows hosted here |
+| `.github/workflows/lint.yml`, `security.yml` | This repo's own (non-reusable) CI |
+| `.github/workflows/auto-merge-deps-caller.yml`, `npm-pack-smoke-caller.yml` | This repo's own callers; auto-merge delegates to `netresearch/.github/.github/workflows/auto-merge-deps.yml@main` (NOT hosted here) |
 | `skills/skill-repo/scripts/validate-skill.sh` | Validates skill repo structure, licensing, metadata consistency |
 | `skills/skill-repo/scripts/migrate-licensing.sh` | Migrates repos from single LICENSE to split licensing |
 | `skills/skill-repo/templates/` | Templates for new skill repos (README, licenses, workflows, composer.json) |
