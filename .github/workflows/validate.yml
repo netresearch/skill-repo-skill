@@ -30,6 +30,18 @@ jobs:
 
       - name: Set up uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          # Skill repos are documentation/markdown packages and never ship Python
+          # dependency files (requirements*.txt, pyproject.toml, uv.lock). Setting
+          # the glob to empty skips dependency-file discovery entirely, which:
+          #   1. Silences the "No file matched to [...]" warning that otherwise
+          #      surfaces as an annotation on every consumer PR.
+          #   2. Preserves the cache key suffix (-no-dependency-glob) the action
+          #      already falls back to today, so cache hit/miss behavior is
+          #      unchanged for repos without lockfiles.
+          # uv is used here for ad-hoc `uvx ruff` / `uv run --with pyyaml`
+          # invocations that don't depend on a project lockfile.
+          cache-dependency-glob: ""
 
       - name: Run skill validation
         run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
