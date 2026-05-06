@@ -237,6 +237,15 @@ jobs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003 # v4.1.1
+        with:
+          # Pin to cosign v2.x. Cosign v3.x switched `sign-blob` to
+          # `--new-bundle-format` by default, which deprecates
+          # `--output-certificate` / `--output-signature` and instead
+          # requires `--bundle <path>`. Until this workflow is migrated
+          # to emit a single bundle file (and the verify step + caller
+          # release artifacts updated to match), stay on v2.x where
+          # the legacy two-file output is still the default.
+          cosign-release: v2.6.0
 
       - name: Sign SHA256SUMS with Cosign (keyless)
         working-directory: dist/releases
