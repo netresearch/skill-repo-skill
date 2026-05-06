@@ -223,7 +223,7 @@ audit_one() {
     body=$(get_body "$skill_md")
     local body_words body_lines
     body_words=$(printf '%s' "$body" | wc -w | tr -d ' ')
-    body_lines=$(printf '%s\n' "$body" | wc -l | tr -d ' ')
+    body_lines=$(printf '%s' "$body" | grep -c '^' || echo 0)
     local body_status="PASS"
     if (( body_words > 2000 )); then
         body_status="FAIL"
