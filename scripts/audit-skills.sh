@@ -3,9 +3,9 @@
 # Usage: ./audit-skills.sh [--help] [--json] [DIR ...]
 #
 # Scans SKILL.md files and reports:
-#   - DESCRIPTION length (PASS/WARN/FAIL)
-#   - BODY word count (PASS/WARN) and line metrics
-#   - CODE FENCE longest block (PASS/INFO at >30 lines)
+#   - DESCRIPTION length (PASS/WARN >500 chars/FAIL >1536 chars)
+#   - BODY word count (PASS/INFO >500/WARN >1000/FAIL >2000) and line metrics
+#   - CODE FENCE longest block (PASS/INFO at >25 lines)
 #   - REFERENCES reachability (P1 direct cite, P2 catalog convention,
 #                              P3 list-and-pick, ORPHAN otherwise)
 # Exit: 0 if no FAILs, 1 otherwise.
@@ -194,11 +194,15 @@ audit_one() {
     # --- Frontmatter & description ---
     local fm desc desc_status="PASS" desc_len=0 desc_warn_msg=""
     if ! fm=$(extract_frontmatter "$skill_md"); then
-        # Broken frontmatter - WARN, skip rest of frontmatter checks
+        # Broken frontmatter - WARN, skip rest of frontmatter checks.
+        # Pass all 17 args expected by emit_skill, with valid status strings
+        # for body/fence so $16/$17 are never unset under set -u.
         TOTAL_WARN=$((TOTAL_WARN + 1))
         emit_skill "$skill_name" "$display_path" \
             "WARN" "0" "broken or missing frontmatter" \
-            "0" "0" "0" "0" "0" "0" "0" "0" "" ""
+            "PASS" "0" "0" \
+            "PASS" "0" "0" \
+            "0" "0" "0" "0" "0" ""
         return
     fi
 

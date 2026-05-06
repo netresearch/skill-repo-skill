@@ -52,11 +52,13 @@ description: "A comprehensive solution for managing your repository state with a
 
 Body loads on invocation and persists for the rest of the session. The threshold goal is **per-invocation token cost** — every additional word in the body is paid every time the skill is invoked. Move what isn't strictly needed at decision time into `references/` (lazy-loaded when SKILL.md instructs).
 
-Word count translates to tokens at roughly 1.4× (English prose; code fences run higher). Three tiers:
+Word count translates to tokens at roughly 1.4× (English prose; code fences run higher). `audit-skills.sh` reports three tiers:
 
 - **INFO above 500 words** (~700 tokens) — modest cost; skim for split candidates.
 - **WARN above 1,000 words** (~1,400 tokens) — almost any body at this size has lookup content that could move to references.
 - **FAIL above 2,000 words** (~2,800 tokens) — body is acting as a manual; split required.
+
+These tiers are advisory across the wider skill ecosystem. **This repo enforces a stricter 500-word hard cap on its own SKILL.md** (via `scripts/validate-skill.sh`) — that is the per-skill house rule, not a universal claim. Treat the audit tiers as triage levels for any skill repo; treat the 500-word cap as policy for the canonical skill-repo template.
 
 Empirical anchor: the Netresearch skill corpus (n=52) has p95 ≈ 994 words. WARN at 1,000 catches the actual outliers in our own work. Anthropic's longer skills (e.g., `writing-skills` at 3,193 words) FAIL under this rule — that's the honest signal: even shipped skills can have content moved out. We can't fix theirs; we hold ourselves to the rule.
 
@@ -147,7 +149,7 @@ Run `scripts/audit-skills.sh` from the repo root. It scans SKILL.md files for:
 - Long code fences (info >25 lines — primary lazy-load candidate)
 - Orphan refs (files in `references/` not reachable by any pattern)
 
-Pattern 2 detection is heuristic — uncertain cases mark as "likely-reachable" rather than ORPHAN.
+Pattern 2 detection is heuristic: a reference file counts as P2 when its stem matches a convention stated in SKILL.md (filename suffix or topic-list pattern). Files outside any P1/P2/P3 path are reported as ORPHAN.
 
 ## Sources
 
