@@ -386,10 +386,8 @@ emit_skill() {
         # Build orphan JSON array
         local orphans_json="[]"
         if [[ -n "$olist" ]]; then
-            local IFS_BAK="$IFS"
-            IFS='|'
-            local arr=($olist)
-            IFS="$IFS_BAK"
+            local arr=()
+            IFS='|' read -r -a arr <<<"$olist"
             local items=""
             local item
             for item in "${arr[@]}"; do
@@ -432,10 +430,8 @@ emit_skill() {
     if (( rt > 0 )); then
         echo "REFERENCES: $rt total -> ${rp1}/P1 + ${rp2}/P2 + ${rp3}/P3 = ${reachable} reachable, ${rorph} ORPHAN"
         if [[ -n "$olist" ]]; then
-            local IFS_BAK="$IFS"
-            IFS='|'
-            local arr=($olist)
-            IFS="$IFS_BAK"
+            local arr=()
+            IFS='|' read -r -a arr <<<"$olist"
             local item
             for item in "${arr[@]}"; do
                 [[ -z "$item" ]] && continue

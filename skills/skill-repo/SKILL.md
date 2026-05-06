@@ -40,7 +40,7 @@ Standards for Netresearch skill repository layout and distribution.
 | `scripts/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
 | `composer.json`, `plugin.json`, config files | MIT |
 
-SPDX expression: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` file — use split files only.
+SPDX: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` — split files only.
 
 ## SKILL.md Frontmatter
 
@@ -51,35 +51,7 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-Body: max 500 words. Use `references/` for extended content. Full quality rules: [`references/skill-quality.md`](references/skill-quality.md).
-
-## SKILL.md Quality Rules
-
-Three categories. Detail and examples in [`references/skill-quality.md`](references/skill-quality.md). Audit with `scripts/audit-skills.sh`.
-
-### Description
-
-- Hard cap **1,536 chars** (`skillListingMaxDescChars`); target 100–300 chars; primary trigger first.
-- No marketing language ("comprehensive", "powerful"), vagueness, or restating the skill name.
-
-### Body
-
-Body loads on invocation and persists for the session. Thresholds set by per-invocation token cost (≈ 1.4× word count):
-
-- **INFO above 500 words** (~700 tokens) — review for split candidates.
-- **WARN above 1000 words** (~1400 tokens) — almost any skill at this size has content that could move to `references/`.
-- **FAIL above 2000 words** (~2800 tokens) — body is acting as a manual; split required.
-- **Bloat signals**: code fences >25 lines (long examples are the prime lazy-load target).
-
-### References (model-discoverable)
-
-Every `.md` in `references/` must be reachable from SKILL.md via:
-
-1. **Direct cite** — `references/foo.md` mentioned by path. Best for ≤10 refs.
-2. **Catalog-with-convention** — short names under topic headings, with the directory + filename pattern stated once. Best for 10+ topic-grouped refs (see `security-audit` skill).
-3. **List-and-pick** — explicit instruction to enumerate the directory.
-
-Anti-patterns: **hub-and-spoke** (SKILL.md → hub → leaves; multi-hop traversal isn't reliable) and **orphan refs** (files in `references/` with no discovery path — model never reads them).
+Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (direct cite, catalog-with-convention, or list-and-pick — no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md).
 
 ## plugin.json (`.claude-plugin/plugin.json`)
 
@@ -95,7 +67,7 @@ Anti-patterns: **hub-and-spoke** (SKILL.md → hub → leaves; multi-hop travers
 
 ## composer.json
 
-Name **must match GitHub repo name**. Type must be `ai-agent-skill`. No `version` field (derived from git tags). No `composer.lock`.
+Name **must match GitHub repo**. Type `ai-agent-skill`. No `version` field (from git tags). No `composer.lock`.
 
 ```json
 {
@@ -116,13 +88,11 @@ Skill repos MUST delegate CI to skill-repo-skill reusable workflows:
 uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 ```
 
-Callers: `validate.yml`, `release.yml` from `netresearch/skill-repo-skill`; `auto-merge-deps.yml` from `netresearch/.github`. Domain-specific reusables: see `docs/ARCHITECTURE.md`.
-
-Auto-merge and pr-quality callers must use `pull_request_target` trigger. Never define actions directly — always call reusable workflows.
+Callers: `validate.yml`, `release.yml` (from `skill-repo-skill`); `auto-merge-deps.yml` (from `netresearch/.github`). Auto-merge and pr-quality callers must use `pull_request_target`. Never define actions directly. Domain-specific reusables: `docs/ARCHITECTURE.md`.
 
 ## Releasing
 
-Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged**. Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require dry-run + approval. See `references/release-discipline.md`.
+Bump PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Never edit installed paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo (>3) needs dry-run + approval. See `references/release-discipline.md`.
 
 ## Installation
 
@@ -139,18 +109,16 @@ scripts/validate-skill.sh
 
 ## Cross-platform Compatibility
 
-- `grep -E` not `grep -P` (macOS BSD grep)
-- `bash` in shebangs (macOS default is zsh)
-- `[[ ]]` for conditionals
+`grep -E` (not `-P`); `bash` shebangs (zsh on macOS); `[[ ]]` for conditionals.
 
 ## References
 
 - `references/installation-methods.md`
 - `references/composer-setup.md`
-- `references/release-discipline.md` — version-parity check, cache safety, multi-repo dry-run
-- `references/review-replies.md` — canonical replies for recurring reviewer comments
-- `references/skill-quality.md` — description, body, and reference patterns; rationale for `scripts/audit-skills.sh`
-- `references/marketplace-integration.md` — sync architecture between skill repos and marketplace
+- `references/release-discipline.md` — version parity, cache safety, multi-repo dry-run
+- `references/review-replies.md` — canonical replies for reviewer comments
+- `references/skill-quality.md` — description/body/reference rules; audit-skills.sh rationale
+- `references/marketplace-integration.md` — marketplace sync architecture
 
 ## See Also
 
