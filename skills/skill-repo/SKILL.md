@@ -2,12 +2,12 @@
 name: skill-repo
 description: "Use when creating new skill repositories from scratch, standardizing or validating existing skill repo structure, setting up composer/release workflows for skills, configuring split licensing (MIT + CC-BY-SA-4.0), or fixing plugin.json / SKILL.md validation errors."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires bash 4.3+, python3, jq."
+compatibility: "Requires bash 4.3+, python3."
 metadata:
   author: Netresearch DTT GmbH
   version: "1.19.1"
   repository: https://github.com/netresearch/skill-repo-skill
-allowed-tools: Bash(bash:*) Bash(python3:*) Bash(jq:*) Read Write Glob Grep
+allowed-tools: Bash(bash:*) Bash(python3:*) Read Write Glob Grep
 ---
 
 # Skill Repository Structure Guide
