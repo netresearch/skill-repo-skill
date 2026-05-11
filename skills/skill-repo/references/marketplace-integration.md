@@ -2,6 +2,14 @@
 
 How skills are synced to the Netresearch Claude Code Marketplace.
 
+## Separation from skill-repo rules
+
+- **This document** explains sync mechanics and source-vs-synced files.
+- **Discovery, SEO, catalog completeness, and orphan rules for the marketplace Hub** live only in the marketplace repository: **[`AGENTS.md` in `netresearch/claude-code-marketplace`](https://github.com/netresearch/claude-code-marketplace/blob/main/AGENTS.md)**.
+- **Single skill repository quality** (README sections, `agents/openai.yaml`, GitHub Description/Topics, discovery YAML) lives here in **skill-repo-skill** — see [`repository-quality-rules.md`](repository-quality-rules.md), [`readme-template.md`](readme-template.md), [`skill-discovery-metadata.md`](skill-discovery-metadata.md).
+
+Do **not** duplicate marketplace governance prose in skill-repo references; link instead.
+
 ## Overview
 
 The [claude-code-marketplace](https://github.com/netresearch/claude-code-marketplace) aggregates skills from individual repositories via automated sync workflows.

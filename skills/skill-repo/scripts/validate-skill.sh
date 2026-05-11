@@ -321,17 +321,33 @@ else
 fi
 
 # --- README.md quality checks (warnings only) ---
+# Required level-2 headings per skills/skill-repo/references/readme-template.md
+README_REQUIRED_HEADINGS=(
+    "What this skill solves"
+    "Use when"
+    "Expected outputs"
+    "Context requirements"
+    "Example prompts"
+    "Related skills"
+    "Installation"
+    "Contributing"
+    "License"
+)
+
 if [[ -f "$REPO_DIR/README.md" ]]; then
     if grep -q "Netresearch" "$REPO_DIR/README.md"; then
         success "README.md contains Netresearch reference"
     else
         warning "README.md should contain Netresearch credits"
     fi
-    if grep -qi "## Installation" "$REPO_DIR/README.md"; then
-        success "README.md has Installation section"
-    else
-        warning "README.md should have Installation section"
-    fi
+
+    for heading in "${README_REQUIRED_HEADINGS[@]}"; do
+        if grep -Fq "## ${heading}" "$REPO_DIR/README.md"; then
+            success "README.md has ## ${heading}"
+        else
+            warning "README.md missing recommended section: ## ${heading} (canonical: skill-repo-skill skills/skill-repo/references/readme-template.md)"
+        fi
+    done
 fi
 
 # --- Summary ---

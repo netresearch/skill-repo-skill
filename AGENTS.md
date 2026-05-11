@@ -14,6 +14,10 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | Path | Purpose |
 |---|---|
 | `skills/skill-repo/SKILL.md` | AI skill instructions -- the skill definition |
+| `skills/skill-repo/references/repository-quality-rules.md` | Checked rules for individual skill repos (vs marketplace `AGENTS.md`) |
+| `skills/skill-repo/references/readme-template.md` | Required README headings and first-screen contract |
+| `skills/skill-repo/references/skill-discovery-metadata.md` | Discovery YAML, action/risk classification |
+| `skills/skill-repo/references/validation-checklist.md` | Pre-completion checklist for agents |
 | `.claude-plugin/plugin.json` | Plugin metadata (name, version, skills array) |
 | `composer.json` | PHP/Composer distribution as `ai-agent-skill` type |
 | `.github/workflows/` | Reusable workflows consumed by other skill repos plus this repo's own CI. Canonical inventory in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#reusable-ci-workflows). Auto-merge for Dependabot/Renovate is delegated to `netresearch/.github` via a thin local caller — NOT hosted here. |
@@ -51,7 +55,8 @@ Copyright entity: `Netresearch DTT GmbH`
 
 ### SKILL.md Format
 
-- Frontmatter with **only** `name` and `description` fields
+- Frontmatter **must** include `name` and `description`; **do not** add discovery/catalog-only keys (`slug`, `tags`, `category`, …) — see `skills/skill-repo/references/skill-discovery-metadata.md`
+- Optional fields allowed by `validate-skill.sh` when needed: `license`, `compatibility`, `metadata`, `allowed-tools` (Agent Skills–compatible)
 - `name`: lowercase, hyphens only, max 64 characters
 - `description`: must start with `"Use when"`
 - Body: max 500 words (use `references/` for extended content)
@@ -141,4 +146,4 @@ jobs:
 - No `composer.lock` committed
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
-- `README.md`: Netresearch reference, Installation section
+- `README.md`: Netresearch reference; **warnings** if recommended level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`)

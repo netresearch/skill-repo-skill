@@ -40,7 +40,7 @@ Standards for Netresearch skill repository layout and distribution.
 | `scripts/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
 | `composer.json`, `plugin.json`, config files | MIT |
 
-SPDX expression: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` file — use split files only.
+SPDX: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` — split files only.
 
 ## SKILL.md Frontmatter
 
@@ -51,7 +51,7 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-Body: max 500 words. Use `references/` for extended content.
+Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (catalog conventions — no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md). Put discovery/catalog fields in README or optional YAML, not frontmatter — [`references/skill-discovery-metadata.md`](references/skill-discovery-metadata.md).
 
 ## plugin.json (`.claude-plugin/plugin.json`)
 
@@ -67,7 +67,7 @@ Body: max 500 words. Use `references/` for extended content.
 
 ## composer.json
 
-Name **must match GitHub repo name**. Type must be `ai-agent-skill`. No `version` field (derived from git tags). No `composer.lock`.
+Name **must match GitHub repo**. Type `ai-agent-skill`. No `version` field (from git tags). No `composer.lock`.
 
 ```json
 {
@@ -88,13 +88,11 @@ Skill repos MUST delegate CI to skill-repo-skill reusable workflows:
 uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 ```
 
-Callers: `validate.yml`, `release.yml` from `netresearch/skill-repo-skill`; `auto-merge-deps.yml` from `netresearch/.github`. Domain-specific reusables: see `docs/ARCHITECTURE.md`.
-
-Auto-merge and pr-quality callers must use `pull_request_target` trigger. Never define actions directly — always call reusable workflows.
+Callers: `validate.yml`, `release.yml` (here); `auto-merge-deps.yml` (`netresearch/.github`). Auto-merge/pr-quality use `pull_request_target`. No inline Actions. Domain reusables: `docs/ARCHITECTURE.md`.
 
 ## Releasing
 
-Open bump PR → merge → pull main → verify version parity → signed tag → push tag → monitor Release workflow. **Tag only after the bump PR is merged**. Never edit installed skill paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo releases (>3) require dry-run + approval. See `references/release-discipline.md`.
+Bump PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Never edit installed paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo (>3) needs dry-run + approval. See `references/release-discipline.md`.
 
 ## Installation
 
@@ -111,16 +109,11 @@ scripts/validate-skill.sh
 
 ## Cross-platform Compatibility
 
-- `grep -E` not `grep -P` (macOS BSD grep)
-- `bash` in shebangs (macOS default is zsh)
-- `[[ ]]` for conditionals
+`grep -E` (not `-P`); `bash` shebangs (zsh on macOS); `[[ ]]` for conditionals.
 
-## References
+## References (`references/`)
 
-- `references/installation-methods.md`
-- `references/composer-setup.md`
-- `references/release-discipline.md` — version-parity check, cache safety, multi-repo dry-run
-- `references/review-replies.md` — canonical replies for recurring reviewer comments
+**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README/GitHub SEO:** repository-quality-rules, readme-template · **Discovery YAML:** skill-discovery-metadata · **Done checklist:** validation-checklist · **Sync:** marketplace-integration (hub rules → marketplace `AGENTS.md`)
 
 ## See Also
 
