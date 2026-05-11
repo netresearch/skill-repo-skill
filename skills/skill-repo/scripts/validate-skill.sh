@@ -321,7 +321,7 @@ else
 fi
 
 # --- README.md quality checks (warnings only) ---
-# Required level-2 headings per skills/skill-repo/references/readme-template.md
+# Recommended level-2 headings (whole-line match) per skills/skill-repo/references/readme-template.md
 README_REQUIRED_HEADINGS=(
     "What this skill solves"
     "Use when"
@@ -342,10 +342,11 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
     fi
 
     for heading in "${README_REQUIRED_HEADINGS[@]}"; do
-        if grep -Fq "## ${heading}" "$REPO_DIR/README.md"; then
+        # Whole-line match only (avoids substring hits inside ### headings or prose)
+        if grep -Fxq "## ${heading}" "$REPO_DIR/README.md"; then
             success "README.md has ## ${heading}"
         else
-            warning "README.md missing recommended section: ## ${heading} (canonical: skill-repo-skill skills/skill-repo/references/readme-template.md)"
+            warning "README.md missing recommended section (exact line ## ${heading}) — see skill-repo-skill skills/skill-repo/references/readme-template.md"
         fi
     done
 fi

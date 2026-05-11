@@ -14,7 +14,7 @@ Prüfbare Regeln für **einzelne Skill-Repositories** (`netresearch/*-skill`).
 
 ## Mindestbestandteile eines Skill-Repos
 
-Jedes Repo **muss** die folgenden Elemente enthalten **oder** eine **explizite Begründung** in `README.md` unter z. B. `## Repository extras` (warum ein Pflichtobjekt fehelt).
+Jedes Repo **muss** die folgenden Elemente enthalten **oder** eine **explizite Begründung** in `README.md` unter z. B. `## Repository extras` (warum ein Pflichtobjekt fehlt).
 
 | Element | Prüfregel |
 | --- | --- |
