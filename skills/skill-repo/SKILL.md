@@ -2,12 +2,12 @@
 name: skill-repo
 description: "Use when creating new skill repositories from scratch, standardizing or validating existing skill repo structure, setting up composer/release workflows for skills, configuring split licensing (MIT + CC-BY-SA-4.0), or fixing plugin.json / SKILL.md validation errors."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires bash 4.3+, python3, jq."
+compatibility: "Requires bash 4.3+, python3."
 metadata:
   author: Netresearch DTT GmbH
   version: "1.19.1"
   repository: https://github.com/netresearch/skill-repo-skill
-allowed-tools: Bash(bash:*) Bash(python3:*) Bash(jq:*) Read Write Glob Grep
+allowed-tools: Bash(bash:*) Bash(python3:*) Read Write Glob Grep
 ---
 
 # Skill Repository Structure Guide
@@ -51,7 +51,7 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (direct cite, catalog-with-convention, or list-and-pick — no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md).
+Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (catalog conventions — no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md). Put discovery/catalog fields in README or optional YAML, not frontmatter — [`references/skill-discovery-metadata.md`](references/skill-discovery-metadata.md).
 
 ## plugin.json (`.claude-plugin/plugin.json`)
 
@@ -88,7 +88,7 @@ Skill repos MUST delegate CI to skill-repo-skill reusable workflows:
 uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
 ```
 
-Callers: `validate.yml`, `release.yml` (from `skill-repo-skill`); `auto-merge-deps.yml` (from `netresearch/.github`). Auto-merge and pr-quality callers must use `pull_request_target`. Never define actions directly. Domain-specific reusables: `docs/ARCHITECTURE.md`.
+Callers: `validate.yml`, `release.yml` (here); `auto-merge-deps.yml` (`netresearch/.github`). Auto-merge/pr-quality use `pull_request_target`. No inline Actions. Domain reusables: `docs/ARCHITECTURE.md`.
 
 ## Releasing
 
@@ -111,14 +111,9 @@ scripts/validate-skill.sh
 
 `grep -E` (not `-P`); `bash` shebangs (zsh on macOS); `[[ ]]` for conditionals.
 
-## References
+## References (`references/`)
 
-- `references/installation-methods.md`
-- `references/composer-setup.md`
-- `references/release-discipline.md` — version parity, cache safety, multi-repo dry-run
-- `references/review-replies.md` — canonical replies for reviewer comments
-- `references/skill-quality.md` — description/body/reference rules; audit-skills.sh rationale
-- `references/marketplace-integration.md` — marketplace sync architecture
+**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README/GitHub SEO:** repository-quality-rules, readme-template · **Discovery YAML:** skill-discovery-metadata · **Done checklist:** validation-checklist · **Sync:** marketplace-integration (hub rules → marketplace `AGENTS.md`)
 
 ## See Also
 

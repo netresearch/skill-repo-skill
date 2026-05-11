@@ -1,37 +1,69 @@
 # Skill Repository Structure Guide
 
-A Claude Code skill for standardizing Netresearch skill repository layout, distribution channels, and packaging.
+A Claude Code skill for standardizing Netresearch skill repository layout, distribution channels, packaging, and validation.
 
-## 🔌 Compatibility
+## What this skill solves
+
+Netresearch maintains many agent skills; without a shared layout, packaging and CI drift across repositories. This skill defines **one standard repo shape**, reusable workflows, split licensing, and validation scripts so new and existing skills stay consistent and shippable via marketplace, Composer, npm, and releases.
+
+It extends Anthropic-style single-file skills with **repository-level** conventions (not a replacement for Anthropic’s skill-creator — see comparison below).
+
+## Compatibility
 
 This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
 
-**Supported Platforms:**
-- ✅ Claude Code (Anthropic)
-- ✅ Cursor
-- ✅ GitHub Copilot
-- ✅ Other skills-compatible AI agents
+**Supported platforms:**
+
+- Claude Code (Anthropic)
+- Cursor
+- GitHub Copilot
+- Other skills-compatible AI agents
 
 > Skills are portable packages of procedural knowledge that work across any AI agent supporting the Agent Skills specification.
 
+## Use when
 
-## Features
+- Creating or bootstrapping a **Netresearch-style skill repository**
+- Standardizing layout, `composer.json`, `.claude-plugin/plugin.json`, or release workflows
+- Wiring **reusable CI** from `netresearch/skill-repo-skill`
+- Fixing **validation errors** from `validate-skill.sh` or marketplace packaging
+- Migrating to **split licensing** (`LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`)
 
-- **Repository Structure Standards** - Consistent layout across all Netresearch skills
-- **Multi-Channel Distribution** - Marketplace, GitHub releases, Composer
-- **README.md Template** - Standardized human documentation
-- **Composer Integration** - PHP ecosystem distribution via composer-agent-skill-plugin
-- **Release Workflow** - Automated packaging excluding dev files
-- **Validation Script** - Verify skill repo compliance
+## Expected outputs
+
+- A documented **directory layout** and templates for new repos
+- **Validation**: structural checks for `SKILL.md`, licenses, `composer.json`, `plugin.json`
+- **Release discipline**: tag-driven packaging aligned with plugin version
+- **References** for installation paths, marketplace sync, and release safety
+
+## Context requirements
+
+- **Validation script**: `bash` 4.3+ and `python3` on PATH when running `validate-skill.sh` (JSON checks use Python, not `jq`)
+- **Target repos**: GitHub-hosted Netresearch skill repos using split licensing and Composer type `ai-agent-skill`
+- **CI**: consuming repos call reusable workflows from this repository (`validate.yml`, `release.yml`, …)
+
+## Example prompts
+
+```
+"Scaffold a new Netresearch skill repository from the templates in skill-repo-skill."
+"Why does validate-skill.sh fail on my SKILL.md frontmatter?"
+"Add composer.json and plugin.json for our new skill repo matching netresearch conventions."
+"Wire our repo to use netresearch/skill-repo-skill validate.yml on every PR."
+"Migrate this repo from a single LICENSE file to LICENSE-MIT and LICENSE-CC-BY-SA-4.0."
+```
+
+## Related skills
+
+- [`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill) — AGENTS.md and agent onboarding patterns
+- [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill) — harness verification and docs layout
 
 ## Installation
 
-### Marketplace (Recommended)
+### Marketplace (recommended)
 
 Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
 
 ```bash
-# Claude Code
 /plugin marketplace add netresearch/claude-code-marketplace
 ```
 
@@ -43,17 +75,17 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 npx skills add https://github.com/netresearch/skill-repo-skill --skill skill-repo
 ```
 
-### Download Release
+### Download release
 
-Download the [latest release](https://github.com/netresearch/skill-repo-skill/releases/latest) and extract to your agent's skills directory.
+Download the [latest release](https://github.com/netresearch/skill-repo-skill/releases/latest) and extract to your agent’s skills directory.
 
-### Git Clone
+### Git clone
 
 ```bash
 git clone https://github.com/netresearch/skill-repo-skill.git
 ```
 
-### Composer (PHP Projects)
+### Composer (PHP projects)
 
 ```bash
 composer require netresearch/skill-repo-skill
@@ -61,7 +93,7 @@ composer require netresearch/skill-repo-skill
 
 Requires [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin).
 
-### npm (Node Projects)
+### npm (Node projects)
 
 ```bash
 npm install --save-dev \
@@ -69,7 +101,7 @@ npm install --save-dev \
   github:netresearch/skill-repo-skill
 ```
 
-Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/node-agent-skill-coordinator), which discovers the skill in `node_modules` and registers it in `AGENTS.md` via a `postinstall` hook. For pnpm, also allowlist the coordinator's postinstall:
+Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/node-agent-skill-coordinator), which discovers the skill in `node_modules` and registers it in `AGENTS.md` via a `postinstall` hook. For pnpm, allowlist the coordinator’s postinstall:
 
 ```json
 {
@@ -79,31 +111,11 @@ Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/n
 }
 ```
 
-## Usage
+## Repository layout
 
-The skill triggers on keywords like:
-- "create skill"
-- "skill repository"
-- "skill structure"
-- "standardize skill"
-- "composer.json for skill"
-- "release workflow"
+### Standard skill repository (concept)
 
-### Example Prompts
-
-```
-"Help me create a new skill repository"
-"Standardize this skill repo structure"
-"Add composer.json to this skill"
-"Set up release workflow for this skill"
-"Validate this skill repository"
-```
-
-## What This Skill Provides
-
-### Repository Layout
-
-The standard layout for a Netresearch skill repository (one or more skills per repo):
+The layout for a Netresearch skill repository (one or more skills per repo):
 
 ```
 {name}-skill/
@@ -130,25 +142,24 @@ The standard layout for a Netresearch skill repository (one or more skills per r
         └── templates/               # Bootstrap templates
 ```
 
-### Installation Methods
+### Installation methods (summary)
 
-1. **Marketplace** - `/plugin marketplace add netresearch/claude-code-marketplace`
-2. **npx (skills.sh)** - `npx skills add <repo-url> --skill <name>`
-3. **Release Download** - GitHub Releases (skill files only)
-4. **Git Clone** - Direct repository clone
-5. **Composer** - `composer require netresearch/agent-{skill-name}` (PHP projects)
-6. **npm** - `npm install --save-dev @netresearch/agent-skill-coordinator github:<org>/<repo>` (Node projects)
+1. **Marketplace** — `/plugin marketplace add netresearch/claude-code-marketplace`
+2. **npx (skills.sh)** — `npx skills add <repo-url> --skill <name>`
+3. **Release download** — GitHub Releases (skill files only)
+4. **Git clone** — direct clone
+5. **Composer** — `composer require netresearch/<repo-name>` (PHP projects)
+6. **npm** — coordinator + `github:<org>/<repo>` (Node projects)
 
-### Composer Package Requirements
+### Composer package requirements
 
 - `"type": "ai-agent-skill"`
 - `"require": {"netresearch/composer-agent-skill-plugin": "*"}`
-- `"extra": {"ai-agent-skill": "skills/{skill-name}/SKILL.md"}` (path to the
-  nested `SKILL.md`; for single-skill repos this is `skills/{repo-slug}/SKILL.md`)
+- `"extra": {"ai-agent-skill": "skills/{skill-name}/SKILL.md"}`
 
-## This Repository
+### This repository (`skill-repo-skill`)
 
-`skill-repo-skill` dogfoods the layout above and additionally hosts reusable CI workflows consumed by other Netresearch skill repos:
+This repo **dogfoods** the layout and hosts reusable CI workflows for other Netresearch skill repos:
 
 ```
 skill-repo-skill/
@@ -161,44 +172,36 @@ skill-repo-skill/
 ├── package.json
 ├── renovate.json
 ├── .claude-plugin/plugin.json
-├── .github/workflows/             # Reusable workflows hosted here:
-│                                  #   validate, release, pr-quality,
-│                                  #   harness-verify, eval-validate,
-│                                  #   validate-agents, dependency-audit,
-│                                  #   npm-pack-smoke, ci-python
-│                                  # (auto-merge runs via a thin caller that
-│                                  #  delegates to netresearch/.github)
+├── .github/workflows/             # validate, release, pr-quality,
+│                                  # harness-verify, eval-validate,
+│                                  # validate-agents, dependency-audit,
+│                                  # npm-pack-smoke, ci-python
+│                                  # (auto-merge delegates to netresearch/.github)
 ├── Build/
 │   ├── Scripts/check-plugin-version.sh
-│   └── hooks/                     # pre-commit, pre-push
+│   └── hooks/
 ├── docs/
 │   ├── ARCHITECTURE.md
-│   └── dashboard/                 # Cross-skill metrics dashboard
-├── scripts/                       # Repo-level: generate-dashboard,
-│                                  #   run-ab-evals, verify-harness
-├── tests/                         # Eval fixtures
+│   └── dashboard/
+├── scripts/
+├── tests/
 └── skills/skill-repo/
     ├── SKILL.md
     ├── checkpoints.yaml
     ├── evals/evals.json
-    ├── references/                # composer-setup, installation-methods,
-    │                              #   marketplace-integration,
-    │                              #   release-discipline, review-replies
-    ├── scripts/                   # validate-skill, validate-evals,
-    │                              #   migrate-licensing, check-version-parity
-    └── templates/                 # README, composer.json, package.json,
-                                   #   release.yml, pr-quality.yml,
-                                   #   licenses, hooks
+    ├── references/
+    ├── scripts/
+    └── templates/
 ```
 
 See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for component responsibilities.
 
 ## Extends Anthropic's Skill Creator
 
-This skill **extends** (not replaces) Anthropic's skill-creator:
+This skill **extends** (not replaces) Anthropic’s skill-creator:
 
 | Aspect | Anthropic's skill-creator | This skill adds |
-|--------|---------------------------|-----------------|
+| --- | --- | --- |
 | Focus | SKILL.md content | Repository structure |
 | Scope | Single file | Full repo layout |
 | Distribution | Claude Code native | + Marketplace, Composer |
@@ -206,7 +209,8 @@ This skill **extends** (not replaces) Anthropic's skill-creator:
 
 ## Contributing
 
-Contributions welcome! Please submit PRs for:
+Contributions welcome. Please open PRs for:
+
 - Template improvements
 - Additional validation checks
 - Documentation updates

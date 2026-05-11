@@ -1,21 +1,51 @@
 # {Skill Name}
 
-{One-line description of what this skill does.}
+## What this skill solves
 
-## Features
+{First sentence: name the concrete problem this skill fixes — avoid generic “AI assistant” wording.}
 
-- **Feature 1** - Description
-- **Feature 2** - Description
-- **Feature 3** - Description
+- {Capability or outcome 1}
+- {Capability or outcome 2}
+- {Capability or outcome 3}
+
+## Use when
+
+- {Trigger phrase, stack, ticket prefix, or user intent 1}
+- {Trigger 2}
+- {Trigger 3}
+
+## Expected outputs
+
+- {Concrete artifact 1 — e.g. config file, checklist, migration plan}
+- {Concrete artifact 2}
+- {Concrete artifact 3}
+
+## Context requirements
+
+- {Repo/tooling precondition 1 — e.g. TYPO3 version, PHP version, DDEV}
+- {Precondition 2}
+- {External access note if any — or “none”}
+
+## Example prompts
+
+```
+"{Realistic prompt — distinct scenario 1}"
+"{Realistic prompt — distinct scenario 2}"
+"{Realistic prompt — distinct scenario 3}"
+```
+
+## Related skills
+
+- {`related-skill-slug` or full GitHub URL}
+- {Add more rows or replace with: **none (justified: …)**}
 
 ## Installation
 
-### Marketplace (Recommended)
+### Marketplace (recommended)
 
 Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
 
 ```bash
-# Claude Code
 /plugin marketplace add netresearch/claude-code-marketplace
 ```
 
@@ -27,17 +57,17 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 npx skills add https://github.com/netresearch/{repo-name} --skill {skill-name}
 ```
 
-### Download Release
+### Download release
 
-Download the [latest release](https://github.com/netresearch/{repo-name}/releases/latest) and extract to your agent's skills directory.
+Download the [latest release](https://github.com/netresearch/{repo-name}/releases/latest) and extract to your agent’s skills directory.
 
-### Git Clone
+### Git clone
 
 ```bash
 git clone https://github.com/netresearch/{repo-name}.git
 ```
 
-### Composer (PHP Projects)
+### Composer (PHP projects)
 
 ```bash
 composer require netresearch/{repo-name}
@@ -45,7 +75,7 @@ composer require netresearch/{repo-name}
 
 Requires [netresearch/composer-agent-skill-plugin](https://github.com/netresearch/composer-agent-skill-plugin).
 
-### npm (Node Projects)
+### npm (Node projects)
 
 ```bash
 npm install --save-dev \
@@ -53,7 +83,7 @@ npm install --save-dev \
   github:netresearch/{repo-name}
 ```
 
-Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/node-agent-skill-coordinator), which discovers the skill in `node_modules` and registers it in `AGENTS.md` via a `postinstall` hook. For pnpm, also allowlist the coordinator's postinstall:
+Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/node-agent-skill-coordinator), which discovers the skill in `node_modules` and registers it in `AGENTS.md` via a `postinstall` hook. For pnpm, allowlist the coordinator’s postinstall:
 
 ```json
 {
@@ -63,35 +93,38 @@ Requires [@netresearch/agent-skill-coordinator](https://github.com/netresearch/n
 }
 ```
 
-<!-- If this skill ships slash commands (commands/) or PreToolUse/PostToolUse hooks
-     via .claude-plugin/, uncomment the callout below by removing the surrounding
-     LIMITATION-CALLOUT-START / LIMITATION-CALLOUT-END markers so npm consumers
-     know they need the marketplace install for full functionality. The
-     npm-coordinator path only registers SKILL.md content into AGENTS.md;
-     plugin-mechanism features (slash commands, hooks) require Claude Code's
-     plugin loader, not the coordinator's node_modules scanner. -->
+<!-- If this skill ships slash commands (`commands/`) or PreToolUse/PostToolUse hooks via `.claude-plugin/`, uncomment the callout below (remove LIMITATION markers). Marketplace install loads plugin features; npm path registers SKILL.md only. -->
 
 <!-- LIMITATION-CALLOUT-START
-> **Limitation:** The npm install path registers only `SKILL.md` content via the coordinator's `postinstall` (it writes a `<skills_system>` block into `AGENTS.md`). Slash commands defined in `commands/` and PreToolUse hooks defined in `.claude-plugin/` are loaded by Claude Code's plugin mechanism, **not** by the coordinator scanning `node_modules`. For the full skill (commands + hooks), install via the [Marketplace](#marketplace-recommended) or download the release directly.
+> **Limitation:** The npm install path registers only `SKILL.md` via the coordinator’s `postinstall`. Slash commands and hooks require Claude Code’s plugin loader. Use [Marketplace](#marketplace-recommended) or a release download for the full skill.
 LIMITATION-CALLOUT-END -->
 
+## Contributing
 
-## Usage
+Contributions welcome. Open PRs for:
 
-The skill triggers on keywords like:
-- "keyword 1"
-- "keyword 2"
-- "keyword 3"
+- Feature improvements
+- Bug fixes
+- Documentation updates
 
-### Example Prompts
+See `CONTRIBUTING.md` when present.
 
-```
-"Example prompt 1"
-"Example prompt 2"
-"Example prompt 3"
-```
+## License
 
-## Structure
+Split licensing:
+
+- **Code** (scripts, workflows, configs): [MIT](LICENSE-MIT)
+- **Content** (skill definitions, documentation, references): [CC-BY-SA-4.0](LICENSE-CC-BY-SA-4.0)
+
+<!-- Optional — uncomment for DACH / TYPO3 / Oro / German-speaking audiences (see readme-template.md):
+
+## German summary
+
+{Kurze deutschsprachige Zusammenfassung desselben Problems und Nutzens. Technische Details können auf Englisch bleiben.}
+
+-->
+
+## Repository layout
 
 ```
 {repo-name}/
@@ -102,11 +135,11 @@ The skill triggers on keywords like:
 ├── composer.json                   # PHP distribution
 ├── package.json                    # Node distribution (optional)
 ├── renovate.json                   # Dependency automation
-├── .claude-plugin/plugin.json      # Marketplace metadata
-├── .github/workflows/              # CI (typically calls reusable workflows)
+├── .claude-plugin/plugin.json      # Plugin metadata
+├── .github/workflows/              # CI (typically reusable workflows)
 └── skills/
     └── {skill-name}/
-        ├── SKILL.md                # AI instructions
+        ├── SKILL.md                # Agent runtime instructions
         ├── references/             # Extended documentation
         ├── scripts/                # Automation scripts
         └── templates/              # Bootstrap templates
@@ -114,28 +147,10 @@ The skill triggers on keywords like:
 
 ## References
 
-- `skills/{skill-name}/references/example.md` - Description
-
-## Contributing
-
-Contributions welcome! Please submit PRs for:
-- Feature improvements
-- Bug fixes
-- Documentation updates
-
-## License
-
-This project uses split licensing:
-
-- **Code** (scripts, workflows, configs): [MIT](LICENSE-MIT)
-- **Content** (skill definitions, documentation, references): [CC-BY-SA-4.0](LICENSE-CC-BY-SA-4.0)
-
-See the individual license files for full terms.
-
-## Credits
-
-Developed and maintained by [Netresearch DTT GmbH](https://www.netresearch.de/).
+- `skills/{skill-name}/references/example.md` — {short description}
 
 ---
+
+Developed and maintained by [Netresearch DTT GmbH](https://www.netresearch.de/).
 
 **Made with ❤️ for Open Source by [Netresearch](https://www.netresearch.de/)**
