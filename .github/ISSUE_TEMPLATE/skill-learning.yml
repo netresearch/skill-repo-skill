@@ -1,0 +1,66 @@
+name: Skill learning
+description: Capture a reusable learning from an agent session (typically routed here by /retro)
+title: "[learning] "
+labels:
+  - skill-learning
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when capturing a reusable learning from a Claude Code session.
+        The learning should be applicable beyond a single project — if it's project-specific,
+        consider materializing as a `project-rule` instead (see retro-skill destination taxonomy).
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed friction
+      description: What went wrong, what was repeated, or what required correction
+      placeholder: "The assistant kept suggesting npm in a bun project despite the package.json clearly indicating bun"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Desired future behavior
+      description: How should the assistant behave next time
+      placeholder: "Detect bun-lock.json or bun-related scripts in package.json and prefer bun commands"
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-change
+    attributes:
+      label: Proposed skill change
+      description: Specific edit/addition to make
+      placeholder: "Add 'bun' as a trigger keyword in SKILL.md description; add bun-detection guidance in references/package-managers.md"
+    validations:
+      required: true
+  - type: dropdown
+    id: target
+    attributes:
+      label: Target area
+      description: Which part of the skill needs to change
+      multiple: false
+      options:
+        - SKILL.md (trigger description or workflow)
+        - references/ (detailed knowledge)
+        - scripts/ (mechanical operations)
+        - templates/ (output formats)
+        - checkpoints.yaml (quality gates)
+        - evals/ (behavioral tests)
+    validations:
+      required: true
+  - type: input
+    id: origin-session
+    attributes:
+      label: Origin session ID
+      description: "Session ID where the friction was observed (from /retro output). Optional."
+      placeholder: "d25945f7-3f3b-46fb-aab1-b58d6ce24fc0"
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: This learning is reusable beyond one project
+          required: true
+        - label: The change stays within the skill's existing scope
+          required: true
