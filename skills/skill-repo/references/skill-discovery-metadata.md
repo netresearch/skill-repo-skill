@@ -62,10 +62,11 @@ Fields:
 
 - **`slug`**: stable id; usually matches plugin/skill name.
 - **`display_name`**: public title (may differ from `name` in `SKILL.md`).
-- **`summary.en` / `summary.de`**: one short paragraph each; `de` optional unless DACH/TYPO3/Oro focus.
-- **`category` / `tags` / `use_cases`**: for README tables and marketplace sync.
+- **`summary.en` / `summary.de`**: one short paragraph each; `de` optional unless DACH/TYPO3/Oro focus. **`summary.en` should be ≤ 300 chars** (snippet-friendly target; the marketplace enforces a hard cap of 500).
+- **`category`**: **one of** the canonical marketplace categories — `development`, `devops`, `security`, `design`, `workflow`, `productivity`. Keep this in sync with the marketplace `AGENTS.md` canonical list; do not invent ad-hoc values.
+- **`tags` / `use_cases`**: for README tables and marketplace sync.
 - **`expected_outputs` / `context_requirements`**: must mirror README sections (single source: generate README from this file or maintain parity explicitly).
-- **`related_skills`**: slugs or full GitHub URLs; see [`repository-quality-rules.md`](repository-quality-rules.md).
+- **`related_skills`**: slugs or full GitHub URLs; see [`repository-quality-rules.md`](repository-quality-rules.md). Entries that don't yet exist in the catalog can be tagged `(planned)` or `(external)` — never invent fake links for SEO.
 - **`example_prompts`**: align with README **Example prompts** (≥3 in README per checklist).
 - **`primary_keywords`**: align with GitHub Topics + first sentence of summaries.
 

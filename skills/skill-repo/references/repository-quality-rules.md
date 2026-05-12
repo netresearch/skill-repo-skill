@@ -80,3 +80,53 @@ Bei Änderungen an Discovery-Inhalten: siehe [`marketplace-integration.md`](mark
 - **PASS:** At least **one** stack tag (`typo3`, `php`, `docker`, …) or domain tag (`testing`, `security`, `frontend`, …) matching the skill.
 - **FAIL:** Irrelevant trending tags just for visibility (keyword stuffing).
 - Document proposed topics in README under `## Repository extras` if maintainers cannot edit Topics immediately.
+
+---
+
+## GitHub Pages policy
+
+The [marketplace](https://github.com/netresearch/claude-code-marketplace) is the canonical public discovery and storytelling layer for all Netresearch Agent Skills. Repository Pages are **secondary, skill-specific documentation surfaces**.
+
+### Default: Pages disabled
+
+Skill repositories **must not** enable GitHub Pages by default.
+
+- **PASS:** `gh api repos/netresearch/<repo>/pages` returns **HTTP 404** (Pages disabled).
+- **FAIL:** Pages is enabled without satisfying the criteria below.
+
+### When Pages is appropriate
+
+Enable GitHub Pages only when the repository contains standalone public material that is too large, too visual, too navigational, or too strategically important to live well in `README.md`. **At least one** of the following must be true:
+
+- the documentation requires multiple pages,
+- the skill has a gallery of examples, reports, dashboards, screenshots or demos,
+- the skill publishes generated reference documentation,
+- the skill provides versioned documentation,
+- the skill is a public reference implementation,
+- the skill explains a reusable methodology or assessment model,
+- the skill has a specific SEO target that the marketplace landing cannot cover without becoming too broad.
+
+### When Pages is NOT appropriate
+
+Do not enable Pages if the site would only duplicate:
+
+- the README,
+- the marketplace detail page (`https://github.com/netresearch/claude-code-marketplace#<slug>` or the future landing),
+- installation instructions,
+- `SKILL.md`,
+- the basic example prompts.
+
+### Mandatory artefacts when Pages is enabled
+
+If Pages is enabled, the repository **must** include:
+
+- a short justification block in `README.md` (which criterion above is satisfied),
+- a documented canonical URL pointing at the Pages site,
+- a clear source path (default: `docs/`),
+- documented build and deployment commands (`make docs`, `npm run docs`, or equivalent — referenced from the README),
+- link-checking or equivalent validation in CI,
+- a note explaining which content belongs on Pages vs. README vs. marketplace.
+
+### Mirroring rule
+
+Skill-specific metadata originates in the skill repository (`metadata/discovery.yaml`, README sections, `agents/openai.yaml`, GitHub settings). The marketplace consumes it. Do not duplicate the same metadata across README, Pages site and marketplace landing — pick one canonical surface per fact and link from the others.
