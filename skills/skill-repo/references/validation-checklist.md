@@ -32,6 +32,11 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 - [ ] Repository **Description** ≤ **160** characters, names concrete tech or use case — not generic “AI assistant”.
 - [ ] **Topics** include `agent-skill` plus relevant tech/domain tags; no irrelevant stuffing.
 
+## GitHub Pages
+
+- [ ] `gh api repos/netresearch/<repo>/pages` returns **HTTP 404** (Pages disabled — the default).
+- [ ] **If Pages is enabled:** the PR description names which `repository-quality-rules.md` Pages criterion is satisfied, and the README contains the mandatory artefacts (justification, canonical URL, source path, build/deploy commands, link-checking, content-split note).
+
 ## Related skills
 
 - [ ] Related skills list is **honest** (exists, planned, or external) — see [`repository-quality-rules.md`](repository-quality-rules.md).
