@@ -1,6 +1,5 @@
 name: Skill learning
 description: Capture a reusable learning from an agent session (typically routed here by /retro)
-title: "[learning] "
 labels:
   - skill-learning
 body:
@@ -38,15 +37,15 @@ body:
     id: target
     attributes:
       label: Target area
-      description: Which part of the skill needs to change
+      description: Which part of the skill needs to change (paths shown relative to skills/<skill-name>/)
       multiple: false
       options:
-        - SKILL.md (trigger description or workflow)
-        - references/ (detailed knowledge)
-        - scripts/ (mechanical operations)
-        - templates/ (output formats)
-        - checkpoints.yaml (quality gates)
-        - evals/ (behavioral tests)
+        - skills/<name>/SKILL.md (trigger description or workflow)
+        - skills/<name>/references/ (detailed knowledge)
+        - skills/<name>/scripts/ (mechanical operations)
+        - skills/<name>/templates/ (output formats)
+        - skills/<name>/checkpoints.yaml (quality gates)
+        - skills/<name>/evals/evals.json (behavioral tests)
     validations:
       required: true
   - type: input

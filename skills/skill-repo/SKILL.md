@@ -113,11 +113,11 @@ scripts/validate-skill.sh
 
 ## References (`references/`)
 
-**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README/GitHub SEO:** repository-quality-rules, readme-template · **Discovery YAML:** skill-discovery-metadata · **Done checklist:** validation-checklist · **Sync:** marketplace-integration (hub rules → marketplace `AGENTS.md`)
+**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README/GitHub SEO:** repository-quality-rules, readme-template · **Discovery YAML:** skill-discovery-metadata · **Done checklist:** validation-checklist · **Sync:** marketplace-integration (hub rules → marketplace `AGENTS.md`) · **Retro integration:** materialization-contract (how retro-skill submits PRs to skill repos)
 
 ## See Also
 
-[`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill), [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill).
+[`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill), [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill), [`retro-skill`](https://github.com/netresearch/retro-skill).
 
 ---
 
