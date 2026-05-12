@@ -113,7 +113,7 @@ scripts/validate-skill.sh
 
 ## References (`references/`)
 
-**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README/GitHub SEO:** repository-quality-rules, readme-template · **Discovery YAML:** skill-discovery-metadata · **Done checklist:** validation-checklist · **Sync:** marketplace-integration (hub rules → marketplace `AGENTS.md`) · **Retro integration:** materialization-contract (how retro-skill submits PRs to skill repos)
+**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README:** repository-quality-rules, readme-template · **Discovery:** skill-discovery-metadata · **Done:** validation-checklist · **Sync:** marketplace-integration · **Retro:** materialization-contract
 
 ## See Also
 
