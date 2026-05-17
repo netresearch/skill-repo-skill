@@ -33,8 +33,11 @@ name: Release Skill
 #   1. Build the archives (zip + tar.gz).
 #   2. Generate SHA256SUMS.txt over them.
 #   3. Cosign sign-blob (keyless / Sigstore) the SHA256SUMS.txt
-#      → SHA256SUMS.txt.bundle (Sigstore bundle format: cert + sig + Rekor
-#      inclusion proof in a single self-contained file; cosign v3+ default).
+#      → SHA256SUMS.txt.sigstore.json (Sigstore bundle format: cert + sig +
+#      Rekor inclusion proof in a single self-contained JSON; cosign v3+
+#      default). The `.sigstore.json` extension is chosen so OSSF Scorecard's
+#      signed-releases probe recognises it — content is identical to cosign's
+#      `--bundle` default output; only the file name differs.
 #   4. SLSA build-provenance attest the archives + SHA256SUMS.txt via
 #      actions/attest-build-provenance → published to GitHub's attestation API.
 #   5. softprops/action-gh-release creates the Release with all assets at once.
@@ -48,7 +51,7 @@ name: Release Skill
 # (this reusable workflow), NOT the caller; pin the regex to skill-repo-skill,
 # not the consuming repo:
 #   cosign verify-blob \
-#     --bundle SHA256SUMS.txt.bundle \
+#     --bundle SHA256SUMS.txt.sigstore.json \
 #     --certificate-identity-regexp "^https://github\.com/netresearch/skill-repo-skill/\.github/workflows/release\.yml@" \
 #     --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
 #     SHA256SUMS.txt
@@ -248,7 +251,7 @@ jobs:
           # output (--output-certificate / --output-signature) is deprecated and
           # silently ignored when --new-bundle-format is the default.
           cosign sign-blob --yes \
-            --bundle SHA256SUMS.txt.bundle \
+            --bundle SHA256SUMS.txt.sigstore.json \
             SHA256SUMS.txt
 
       - name: Verify Cosign signature
@@ -270,7 +273,7 @@ jobs:
           # character. We don't pin a specific ref because the reusable may be
           # referenced via `@main`, a SHA, or a future tag of skill-repo-skill.
           cosign verify-blob \
-            --bundle SHA256SUMS.txt.bundle \
+            --bundle SHA256SUMS.txt.sigstore.json \
             --certificate-identity-regexp "^https://github\.com/${SIGNER_REPO}/\.github/workflows/release\.yml@" \
             --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
             SHA256SUMS.txt

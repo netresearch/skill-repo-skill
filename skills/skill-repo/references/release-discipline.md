@@ -130,7 +130,7 @@ All of this happens in the SAME job that publishes the GitHub Release, BEFORE th
 
 1. Build `*.zip` and `*.tar.gz` archives.
 2. Generate `SHA256SUMS.txt` over them.
-3. **Cosign** keyless `sign-blob` the `SHA256SUMS.txt` → produces `SHA256SUMS.txt.bundle` (Sigstore bundle format: cert + signature + Rekor inclusion proof in a single self-contained file; cosign v3+ default).
+3. **Cosign** keyless `sign-blob` the `SHA256SUMS.txt` → produces `SHA256SUMS.txt.sigstore.json` (Sigstore bundle format: cert + signature + Rekor inclusion proof in a single self-contained JSON; cosign v3+ default). The `.sigstore.json` extension is chosen so OSSF Scorecard's `signed-releases` probe recognises the signature — the content is identical to cosign's `--bundle` default output.
 4. **`actions/attest-build-provenance`** generates a SLSA build-provenance attestation for the archives + checksums file → published to GitHub's attestation API.
 5. **`softprops/action-gh-release`** publishes the GitHub Release with all assets attached at once.
 
@@ -167,7 +167,7 @@ gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-nam
 # `https://github.com/netresearch/.*` would accept signatures from any repo,
 # branch, or workflow in the org — too loose for supply-chain verification.
 cosign verify-blob \
-  --bundle SHA256SUMS.txt.bundle \
+  --bundle SHA256SUMS.txt.sigstore.json \
   --certificate-identity-regexp "^https://github\.com/netresearch/skill-repo-skill/\.github/workflows/release\.yml@" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
   SHA256SUMS.txt
@@ -179,7 +179,7 @@ sha256sum --check SHA256SUMS.txt
 If verification fails:
 
 - `gh attestation verify` returns `error: no attestations found` when `--repo` is wrong (or when the release predates this workflow).
-- `cosign verify-blob` returns `error: certificate identity does not match` when the regex is wrong, or `bundle verification failed` when `.bundle` doesn't correspond to the file.
+- `cosign verify-blob` returns `error: certificate identity does not match` when the regex is wrong, or `bundle verification failed` when `.sigstore.json` doesn't correspond to the file.
 
 ### Why one atomic job
 
