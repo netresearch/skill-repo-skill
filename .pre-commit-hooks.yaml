@@ -1,0 +1,57 @@
+# Pre-commit hooks exposed by netresearch/skill-repo-skill.
+#
+# Consume from a skill repo's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/netresearch/skill-repo-skill
+#       rev: vX.Y.Z   # pin a tag; Renovate / Dependabot will bump
+#       hooks:
+#         - id: validate-skill
+#         - id: validate-evals
+#         - id: check-version-parity
+#
+# Each hook is a thin wrapper around the corresponding script in
+# skills/skill-repo/scripts/. The hooks intentionally do NOT receive the
+# staged-file list (pass_filenames: false) — the underlying scripts operate
+# on the whole repo state, not the diff. The `files:` filter only controls
+# WHEN the hook fires.
+
+- id: validate-skill
+  name: Validate skill repo structure
+  description: >-
+    Run validate-skill.sh against the repo when skill metadata changes
+    (SKILL.md, checkpoints.yaml, plugin.json, composer.json).
+  entry: bash skills/skill-repo/scripts/validate-skill.sh
+  language: script
+  pass_filenames: false
+  files: >-
+    (^skills/.+/SKILL\.md$|^SKILL\.md$|
+    ^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|
+    ^\.claude-plugin/plugin\.json$|
+    ^composer\.json$)
+  require_serial: true
+
+- id: validate-evals
+  name: Validate evals.json structure
+  description: >-
+    Run validate-evals.sh when any evals.json changes (schema, IDs, grading).
+  entry: bash skills/skill-repo/scripts/validate-evals.sh
+  language: script
+  pass_filenames: false
+  files: '(^skills/.+/evals/evals\.json$|^evals/evals\.json$)'
+  require_serial: true
+
+- id: check-version-parity
+  name: Plugin/SKILL/composer version parity
+  description: >-
+    Run check-version-parity.sh when a versioned artefact changes.
+    composer.json must NOT have a version field; plugin.json is the source
+    of truth and SKILL.md metadata.version must match.
+  entry: bash skills/skill-repo/scripts/check-version-parity.sh
+  language: script
+  pass_filenames: false
+  files: >-
+    (^\.claude-plugin/plugin\.json$|
+    ^skills/.+/SKILL\.md$|^SKILL\.md$|
+    ^composer\.json$)
+  require_serial: true
