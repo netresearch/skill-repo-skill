@@ -76,6 +76,12 @@ jobs:
       - name: YAML lint
         uses: ibiqlik/action-yamllint@2576378a8e339169678f9939646ee3ee325e845c # v3.1.1
 
+      - name: actionlint (GitHub Actions workflows)
+        id: actionlint
+        uses: raven-actions/actionlint@205b530c5d9fa8f44ae9ed59f341a0db994aa6f8 # v2.1.2
+        with:
+          fail_on_error: true
+
       - name: Validate plugin version format
         run: |
           PLUGIN_FILE=".claude-plugin/plugin.json"
