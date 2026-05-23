@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # validate-skill.sh - Validate Netresearch skill repository structure
 # Usage: ./validate-skill.sh [repo-root-path]
 #

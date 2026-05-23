@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # validate-evals.sh - Structural validation of evals.json files
 # Supports three formats:
 #   Unified (recommended): {"skill_name": "...", "evals": [{id, eval_name, prompt,

@@ -21,21 +21,17 @@
   description: >-
     Run validate-skill.sh against the repo when skill metadata changes
     (SKILL.md, checkpoints.yaml, plugin.json, composer.json).
-  entry: bash skills/skill-repo/scripts/validate-skill.sh
+  entry: skills/skill-repo/scripts/validate-skill.sh
   language: script
   pass_filenames: false
-  files: >-
-    (^skills/.+/SKILL\.md$|^SKILL\.md$|
-    ^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|
-    ^\.claude-plugin/plugin\.json$|
-    ^composer\.json$)
+  files: '(^skills/.+/SKILL\.md$|^SKILL\.md$|^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|^\.claude-plugin/plugin\.json$|^composer\.json$)'
   require_serial: true
 
 - id: validate-evals
   name: Validate evals.json structure
   description: >-
     Run validate-evals.sh when any evals.json changes (schema, IDs, grading).
-  entry: bash skills/skill-repo/scripts/validate-evals.sh
+  entry: skills/skill-repo/scripts/validate-evals.sh
   language: script
   pass_filenames: false
   files: '(^skills/.+/evals/evals\.json$|^evals/evals\.json$)'
@@ -47,11 +43,8 @@
     Run check-version-parity.sh when a versioned artefact changes.
     composer.json must NOT have a version field; plugin.json is the source
     of truth and SKILL.md metadata.version must match.
-  entry: bash skills/skill-repo/scripts/check-version-parity.sh
+  entry: skills/skill-repo/scripts/check-version-parity.sh
   language: script
   pass_filenames: false
-  files: >-
-    (^\.claude-plugin/plugin\.json$|
-    ^skills/.+/SKILL\.md$|^SKILL\.md$|
-    ^composer\.json$)
+  files: '(^\.claude-plugin/plugin\.json$|^skills/.+/SKILL\.md$|^SKILL\.md$|^composer\.json$)'
   require_serial: true
