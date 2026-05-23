@@ -1,0 +1,12 @@
+# Match the default config CI injects when no local file is present.
+# See netresearch/skill-repo-skill .github/workflows/validate.yml.
+extends: default
+rules:
+  comments:
+    min-spaces-from-content: 1
+  document-start: disable
+  indentation: disable
+  line-length:
+    max: 200
+  truthy:
+    allowed-values: ['true', 'false', 'on']
