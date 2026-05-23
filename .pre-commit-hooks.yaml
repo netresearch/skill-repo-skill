@@ -24,11 +24,7 @@
   entry: skills/skill-repo/scripts/validate-skill.sh
   language: script
   pass_filenames: false
-  files: >-
-    (^skills/.+/SKILL\.md$|^SKILL\.md$|
-    ^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|
-    ^\.claude-plugin/plugin\.json$|
-    ^composer\.json$)
+  files: '(^skills/.+/SKILL\.md$|^SKILL\.md$|^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|^\.claude-plugin/plugin\.json$|^composer\.json$)'
   require_serial: true
 
 - id: validate-evals
@@ -50,8 +46,5 @@
   entry: skills/skill-repo/scripts/check-version-parity.sh
   language: script
   pass_filenames: false
-  files: >-
-    (^\.claude-plugin/plugin\.json$|
-    ^skills/.+/SKILL\.md$|^SKILL\.md$|
-    ^composer\.json$)
+  files: '(^\.claude-plugin/plugin\.json$|^skills/.+/SKILL\.md$|^SKILL\.md$|^composer\.json$)'
   require_serial: true
