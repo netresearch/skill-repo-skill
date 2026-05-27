@@ -54,7 +54,11 @@ jobs:
           enable-cache: true
 
       - name: Run Bandit
-        run: uv run --with bandit bandit ${{ inputs.bandit-args }}
+        env:
+          BANDIT_ARGS: ${{ inputs.bandit-args }}
+        run: |
+          # shellcheck disable=SC2086  # intentional: BANDIT_ARGS is a list of flags
+          uv run --with bandit bandit $BANDIT_ARGS
 
   test:
     name: Test (Python ${{ matrix.python }})
@@ -81,6 +85,10 @@ jobs:
       - name: Run tests
         env:
           PYTHON_VERSION: ${{ matrix.python }}
+        # zizmor: ignore[template-injection] -- caller-supplied test command; this reusable
+        # workflow runs it verbatim by design. Input comes from the trusted calling repo, not
+        # external/untrusted context, and may be a compound command (a && b) so env indirection
+        # would change behaviour.
         run: ${{ inputs.test-command }}
 
       - name: Upload coverage

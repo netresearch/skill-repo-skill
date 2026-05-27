@@ -132,7 +132,9 @@ jobs:
 
       - name: Determine tag version
         id: version
-        run: echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: echo "tag=$REF_NAME" >> "$GITHUB_OUTPUT"
 
       - name: Checkout at tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -234,7 +236,7 @@ jobs:
           echo "Created ${PLUGIN_NAME}-plugin-${TAG_VERSION}.zip/.tar.gz"
 
           # --- Checksums ---
-          (cd dist/releases && sha256sum *.zip *.tar.gz > SHA256SUMS.txt)
+          (cd dist/releases && sha256sum ./*.zip ./*.tar.gz > SHA256SUMS.txt)
           echo ""
           echo "=== Release packages ==="
           ls -lh dist/releases/
