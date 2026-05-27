@@ -21,3 +21,9 @@ jobs:
 
   composer-audit:
     uses: netresearch/typo3-ci-workflows/.github/workflows/security.yml@main
+
+  zizmor:
+    permissions:
+      contents: read
+      security-events: write
+    uses: netresearch/.github/.github/workflows/zizmor.yml@main
