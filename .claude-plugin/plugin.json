@@ -1,6 +1,6 @@
 {
   "name": "skill-repo",
-  "version": "1.22.1",
+  "version": "1.23.0",
   "description": "Guide for structuring Netresearch skill repositories",
   "repository": "https://github.com/netresearch/skill-repo-skill",
   "license": "(MIT AND CC-BY-SA-4.0)",
