@@ -36,6 +36,17 @@ Use **exact** level-2 headings so agents can grep them:
 
 ---
 
+## Voice: present tense, never narrate change
+
+Reference docs (README, `SKILL.md`, reference files, module headers) describe **what the skill is and how to use it, in plain present tense — as if it had always been this way**. They must **not** describe the skill by what it is *not* or how it *changed*.
+
+- **Banned framing:** "no longer", "instead of", "reframed", "previously", "used to", "X derives from Y / downstream … not its source", "it is **not** a router/wrapper/…". This is the *curse of knowledge* as **negative / apophatic documentation** — it only parses for a reader who knew a prior design.
+- **Before the first release there is no audience for change.** Nobody ran a prior public version, so any before/after framing is noise and actively misleads (readers hunt for a "router" that never existed). The same holds for unreleased, in-between edits: the diff *is* the commit; the README must not know a change happened.
+- **History lives only in `CHANGELOG` / `UPGRADING` / release notes / ADRs / the commit log** — those have a reader (someone upgrading from a version they used) who needs the contrast. The README and `SKILL.md` never do.
+- A deprecation notice ("X is deprecated, use Y") is the one legitimate non-history contrast and belongs in the changelog/upgrade doc, not the "what this is" sections.
+
+---
+
 ## Cross-checks (machine-friendly)
 
 | Check | PASS criterion |
@@ -44,6 +55,7 @@ Use **exact** level-2 headings so agents can grep them:
 | `Example prompts` | ≥3 prompts. |
 | `Related skills` | ≥1 link/slug **or** justified none. |
 | `Installation` | Mentions marketplace **or** documents exclusive alternate with owner approval in README. |
+| Present-tense voice | `grep -rin -e 'no longer' -e 'reframed' -e 'previously' -e 'used to' -e 'derive' -e 'downstream' -e 'not its source' -e 'is not a router'` over README/`SKILL.md` returns nothing — change-narration belongs in `CHANGELOG`/`UPGRADING`. |
 
 ---
 
