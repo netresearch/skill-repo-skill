@@ -55,7 +55,7 @@ Reference docs (README, `SKILL.md`, reference files, module headers) describe **
 | `Example prompts` | ≥3 prompts. |
 | `Related skills` | ≥1 link/slug **or** justified none. |
 | `Installation` | Mentions marketplace **or** documents exclusive alternate with owner approval in README. |
-| Present-tense voice | `grep -niE 'no longer\|reframed\|previously\|used to\|derives? from\|downstream\|not its source\|is not a (router\|wrapper)'` over README/`SKILL.md` returns nothing — change-narration belongs in `CHANGELOG`/`UPGRADING`. |
+| Present-tense voice | `grep -rin -e 'no longer' -e 'reframed' -e 'previously' -e 'used to' -e 'derive' -e 'downstream' -e 'not its source' -e 'is not a router'` over README/`SKILL.md` returns nothing — change-narration belongs in `CHANGELOG`/`UPGRADING`. |
 
 ---
 
