@@ -32,6 +32,15 @@ Use **exact** level-2 headings so agents can grep them:
 - `## Contributing`
 - `## License`
 
+**Optional (skills that ship a `commands/` dir):** `## Commands` — a table or
+list enumerating **every** slash-command **and each of its modes / sub-commands
+/ flags**. When you add or rename a command *or a mode*, update this list in the
+**same change** — the implementation, its reference docs, and the README/AGENTS
+menus drift apart otherwise (a mode added everywhere except the README menu is a
+common, user-visible miss). `validate-skill.sh` warns when a command's `/<name>`
+(from `commands/<name>.md`) is not mentioned in the README, but it cannot see
+mode-level drift — that part is on the author.
+
 **Optional:** `## German summary` — short paragraph if DACH/TYPO3/Oro/agency audience; technical detail may remain English. The scaffold [`../templates/README.md.template`](../templates/README.md.template) ships this as a **commented block** after `## License` — uncomment when needed.
 
 ---
@@ -56,6 +65,7 @@ Reference docs (README, `SKILL.md`, reference files, module headers) describe **
 | `Related skills` | ≥1 link/slug **or** justified none. |
 | `Installation` | Mentions marketplace **or** documents exclusive alternate with owner approval in README. |
 | Present-tense voice | `grep -rin -e 'no longer' -e 'reframed' -e 'previously' -e 'used to' -e 'derive' -e 'downstream' -e 'not its source' -e 'is not a router'` over README/`SKILL.md` returns nothing — change-narration belongs in `CHANGELOG`/`UPGRADING`. |
+| `Commands` (if `commands/` exists) | Every `commands/<name>.md`, and each mode/flag it documents, is enumerated in the README. |
 
 ---
 

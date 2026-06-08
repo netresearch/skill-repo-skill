@@ -349,6 +349,25 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
             warning "README.md missing recommended section (exact line ## ${heading}) — see skill-repo-skill skills/skill-repo/references/readme-template.md"
         fi
     done
+
+    # Every documented slash-command should be enumerated in the README so the
+    # command (and mode) list does not silently drift when one is added. Warning
+    # only: the name match is heuristic and a skill may intentionally omit one.
+    if [[ -d "$REPO_DIR/commands" ]]; then
+        for cmd_file in "$REPO_DIR"/commands/*.md; do
+            [[ -e "$cmd_file" ]] || continue
+            cmd_name="$(basename "$cmd_file" .md)"
+            # -F: match the command name literally (a filename with regex
+            # metacharacters can't break or mis-match). -w: require word
+            # boundaries, so `/work-update` does not match inside
+            # `commands/work-update.md` or a URL like `netresearch/work-update`.
+            if grep -qFw -- "/${cmd_name}" "$REPO_DIR/README.md"; then
+                success "README.md references /${cmd_name}"
+            else
+                warning "README.md does not mention command /${cmd_name} (commands/${cmd_name}.md) — keep the README command/mode list in sync when adding commands or modes"
+            fi
+        done
+    fi
 fi
 
 # --- Summary ---
