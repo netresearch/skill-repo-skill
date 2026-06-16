@@ -41,19 +41,24 @@ ACCEPT_LINE="Description starts with 'Use when'"
 
 # fixture <name> <raw-content> -> echoes the created dir path
 fixture() {
-    local dir="$TMP/fx_$1"
+    local name="$1" content="$2" dir
+    dir="$TMP/fx_$name"
     rm -rf "$dir"
     mkdir -p "$dir"
-    printf '%b' "$2" > "$dir/SKILL.md"
+    printf '%b' "$content" > "$dir/SKILL.md"
     printf '%s' "$dir"
+    return 0
 }
 
 # run_validator <fallback|yaml> <dir>
 run_validator() {
-    case "$1" in
-        fallback) PYTHONPATH="$SHIM" bash "$VALIDATOR" "$2" 2>&1 ;;
-        yaml)     "${YAML_RUNNER[@]}" bash "$VALIDATOR" "$2" 2>&1 ;;
+    local path="$1" dir="$2"
+    case "$path" in
+        fallback) PYTHONPATH="$SHIM" bash "$VALIDATOR" "$dir" 2>&1 ;;
+        yaml)     "${YAML_RUNNER[@]}" bash "$VALIDATOR" "$dir" 2>&1 ;;
+        *)        echo "unknown path: $path" >&2; return 2 ;;
     esac
+    return 0
 }
 
 # assert <accept|reject> <path> <dir> <label>
@@ -67,7 +72,9 @@ assert() {
         reject)
             if grep -qF "$ACCEPT_LINE" <<<"$out"; then
                 echo "  FAIL [$path] $label: expected REJECT, was accepted"; ((FAIL++)); else ((PASS++)); fi ;;
+        *)  echo "  FAIL [$path] $label: unknown expectation '$want'"; ((FAIL++)) ;;
     esac
+    return 0
 }
 
 # Fixtures are keyed by name to avoid packing YAML (which contains '|', '>', ':')
@@ -75,7 +82,8 @@ assert() {
 # CASES lists "name want" pairs with the expected verdict (same on both paths).
 hdr='---\nname: t\n'
 content_for() {
-    case "$1" in
+    local name="$1"
+    case "$name" in
         plain)          printf '%s' "${hdr}description: Use when doing X\n---\n# T\n" ;;
         dquote)         printf '%s' "${hdr}description: \"Use when doing X\"\n---\n# T\n" ;;
         squote)         printf '%s' "${hdr}description: 'Use when doing X'\n---\n# T\n" ;;
@@ -86,7 +94,9 @@ content_for() {
         empty_block)    printf '%s' "${hdr}description: |\nlicense: Use when fake\n---\n# T\n" ;;
         wrong_prefix)   printf '%s' "${hdr}description: 'Helps with X'\n---\n# T\n" ;;
         invalid_yaml)   printf '%s' "${hdr}description: \"Use when unterminated\n---\n# T\n" ;;
+        *)              echo "unknown fixture: $name" >&2; return 2 ;;
     esac
+    return 0
 }
 declare -a CASES=(
     "plain accept"
