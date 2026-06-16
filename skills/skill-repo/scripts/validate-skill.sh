@@ -85,8 +85,73 @@ if [[ -n "$SKILL_FILE" ]]; then
 
         # Check description field and prefix
         if echo "$FRONTMATTER" | grep -q "^description:"; then
-            DESC=$(echo "$FRONTMATTER" | grep "^description:" | head -1 | sed 's/description: *//' | sed 's/^"//' | sed 's/"$//')
-            if [[ "$DESC" == Use\ when* ]]; then
+            # Parse the *YAML value* of description so every valid scalar style
+            # (plain, single/double-quoted, block) is accepted as long as the
+            # parsed value starts with "Use when". Uses PyYAML when available,
+            # otherwise a stdlib-only fallback covering the common scalar styles,
+            # so the script keeps running with just python3 (no yq/PyYAML needed).
+            # When PyYAML is present it is authoritative: invalid YAML is
+            # reported (sentinel __PARSE_ERROR__), not silently re-parsed by the
+            # fallback. The stdlib-only fallback runs solely when PyYAML is
+            # absent, so the script still works with just python3.
+            DESC=$(FRONTMATTER="$FRONTMATTER" python3 <<'PYEOF' 2>/dev/null || echo "__PARSE_ERROR__"
+import os, re, sys
+
+fm = os.environ["FRONTMATTER"]
+
+try:
+    import yaml
+except Exception:
+    yaml = None
+
+if yaml is not None:
+    # PyYAML available: trust it fully so semantics match CI exactly.
+    try:
+        data = yaml.safe_load(fm)
+    except Exception:
+        print("__PARSE_ERROR__")
+        sys.exit(0)
+    desc = data.get("description") if isinstance(data, dict) else None
+    print(desc if desc is not None else "")
+    sys.exit(0)
+
+# Fallback without PyYAML: best-effort for the common scalar styles
+# (plain, single/double-quoted, block). description: is a column-0 key.
+desc = None
+lines = fm.splitlines()
+for i, line in enumerate(lines):
+    m = re.match(r"description:[ \t]*(.*)$", line)
+    if not m:
+        continue
+    val = m.group(1).strip()
+    if val[:1] in ("|", ">"):
+        # Block scalar: first non-blank line that is indented into the block.
+        # A column-0 (non-indented) line is the next sibling key -> empty body.
+        for nxt in lines[i + 1:]:
+            if not nxt.strip():
+                continue
+            if not nxt[:1].isspace():
+                break
+            desc = nxt.strip()
+            break
+    else:
+        dq = re.match(r'"((?:[^"\\]|\\.)*)"[ \t]*(?:#.*)?$', val)
+        sq = re.match(r"'((?:[^']|'')*)'[ \t]*(?:#.*)?$", val)
+        if dq:
+            desc = dq.group(1)
+        elif sq:
+            desc = sq.group(1).replace("''", "'")
+        else:
+            # Plain scalar: strip a trailing ' #' comment (YAML needs the space).
+            desc = re.sub(r"[ \t]+#.*$", "", val)
+    break
+
+print(desc if desc is not None else "")
+PYEOF
+)
+            if [[ "$DESC" == "__PARSE_ERROR__" ]]; then
+                error "SKILL.md frontmatter is not valid YAML (could not parse 'description')"
+            elif [[ "$DESC" == Use\ when* ]]; then
                 success "Description starts with 'Use when'"
             else
                 error "Description must start with 'Use when': ${DESC:0:60}..."
