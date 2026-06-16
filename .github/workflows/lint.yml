@@ -38,4 +38,12 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           persist-credentials: false
+      - name: Set up uv
+        # Provides `uv run --with pyyaml` so the validator smoke test can cover
+        # the PyYAML-authoritative path in addition to the stdlib fallback.
+        uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        with:
+          cache-dependency-glob: ""
       - run: bash skills/skill-repo/scripts/validate-skill.sh .
+      - name: Validator smoke tests
+        run: bash tests/validate-skill.sh
