@@ -1,52 +1,18 @@
-name: Validate Evals
+name: Eval Validation
+
+# Runs the skill's eval suite via the skill-repo-skill reusable. The reusable
+# declares `permissions: contents: read` at top level (read-only validator);
+# the calling job mirrors it explicitly.
 
 on:
-  workflow_call:
+  push:
+    branches: [main]
+  pull_request:
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
-  validate-evals:
-    name: Eval Validation
-    runs-on: ubuntu-latest
-    steps:
-      - name: Harden Runner
-        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
-        with:
-          egress-policy: audit
-
-      - name: Checkout repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-
-      - name: Checkout validation tools
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
-        with:
-          repository: netresearch/skill-repo-skill
-          ref: main
-          path: .skill-repo-tools
-          sparse-checkout: skills/skill-repo/scripts/
-          sparse-checkout-cone-mode: false
-
-      - name: Find evals.json
-        id: find-evals
-        run: |
-          EVALS_FILE=""
-          for candidate in skills/*/evals/evals.json evals/evals.json; do
-            if [[ -f "$candidate" ]]; then
-              EVALS_FILE="$candidate"
-              break
-            fi
-          done
-          if [[ -z "$EVALS_FILE" ]]; then
-            echo "::warning::No evals.json found, skipping validation"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "Found: $EVALS_FILE"
-          echo "found=true" >> "$GITHUB_OUTPUT"
-          echo "path=$EVALS_FILE" >> "$GITHUB_OUTPUT"
-
-      - name: Validate evals structure
-        if: steps.find-evals.outputs.found == 'true'
-        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh "${{ steps.find-evals.outputs.path }}"
+  eval-validate:
+    uses: netresearch/skill-repo-skill/.github/workflows/eval-validate.yml@main
+    permissions:
+      contents: read
