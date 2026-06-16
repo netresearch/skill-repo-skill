@@ -253,6 +253,20 @@ mechanical:
     severity: warning
     desc: "Release workflow should not declare workflow_dispatch or use --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only (see skill-repo-skill PR #15)."
 
+  - id: SR-37
+    type: command
+    # Run the shipped parity script. It checks: plugin.json has .version;
+    # composer.json does NOT have .version (Composer derives from tag);
+    # every SKILL.md that declares metadata.version matches plugin.json.
+    # The script exits 1 and prints [ERROR] lines on any mismatch.
+    # `|| true` is intentional: we want PASS/FAIL from the advisory output,
+    # not a hard CI abort (the validate:skill job already aborts). This
+    # checkpoint surfaces the mismatch as a reviewable finding.
+    pattern: "! (bash skills/skill-repo/scripts/check-version-parity.sh 2>&1 | grep -q '\\[ERROR\\]')"
+    severity: error
+    desc: "plugin.json version must match every SKILL.md metadata.version (run skills/skill-repo/scripts/check-version-parity.sh to verify before tagging)"
+    tags: [release, versioning, parity]
+
 llm_reviews:
   - id: SR-32
     domain: repo-health
