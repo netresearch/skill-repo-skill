@@ -1,0 +1,19 @@
+name: Eval Validation
+
+# Caller for this repo's own eval suite. Calls the LOCAL reusable so the caller
+# tests the in-repo version of eval-validate.yml (matching the npm-pack-smoke-caller
+# convention). Consumer skill repos instead pin
+# netresearch/skill-repo-skill/.github/workflows/eval-validate.yml@main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  eval-validate:
+    uses: ./.github/workflows/eval-validate.yml
+    permissions:
+      contents: read
