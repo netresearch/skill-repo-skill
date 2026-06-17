@@ -17,4 +17,5 @@
 #   - .github/dependabot.yml  (when the repo has npm fixtures/devcontainers
 #     beyond the guaranteed github-actions + composer ecosystems)
 template: skill
-intentional-drift: []
+intentional-drift:
+  - .github/workflows/eval-validate.yml
