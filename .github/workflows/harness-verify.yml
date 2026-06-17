@@ -47,8 +47,12 @@ jobs:
 
       - name: Verify documented commands
         run: |
-          # shellcheck disable=SC2016  # backticks are literal regex matching markdown code spans in AGENTS.md, not command substitution
+          # The grep patterns below contain literal backticks matching markdown
+          # code spans in AGENTS.md (e.g. `make build`); they are not command
+          # substitution, so shellcheck SC2016 is a false positive — disabled
+          # per pipeline.
           if [ -f Makefile ]; then
+            # shellcheck disable=SC2016
             grep -oP '`make (\w[\w-]*)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
               TARGET="${cmd#make }"
               if ! grep -q "^${TARGET}:" Makefile; then
@@ -57,6 +61,7 @@ jobs:
             done
           fi
           if [ -f composer.json ]; then
+            # shellcheck disable=SC2016
             grep -oP '`composer ([\w:.-]+)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
               SCRIPT="${cmd#composer }"
               if ! python3 -c "import json,sys; d=json.load(open('composer.json')); sys.exit(0 if '$SCRIPT' in d.get('scripts',{}) else 1)" 2>/dev/null; then
@@ -65,6 +70,7 @@ jobs:
             done
           fi
           if [ -f package.json ]; then
+            # shellcheck disable=SC2016
             grep -oP '`npm run ([\w:.-]+)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
               SCRIPT="${cmd#npm run }"
               if ! python3 -c "import json,sys; d=json.load(open('package.json')); sys.exit(0 if '$SCRIPT' in d.get('scripts',{}) else 1)" 2>/dev/null; then
