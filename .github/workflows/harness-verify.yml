@@ -47,6 +47,7 @@ jobs:
 
       - name: Verify documented commands
         run: |
+          # shellcheck disable=SC2016  # backticks are literal regex matching markdown code spans in AGENTS.md, not command substitution
           if [ -f Makefile ]; then
             grep -oP '`make (\w[\w-]*)`' AGENTS.md 2>/dev/null | tr -d '`' | while read -r cmd; do
               TARGET="${cmd#make }"
