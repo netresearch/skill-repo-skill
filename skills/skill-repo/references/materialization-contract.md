@@ -142,6 +142,7 @@ For `new-skill` destination, use the templates in `skills/skill-repo/templates/`
 - `LICENSE-MIT.template`, `LICENSE-CC-BY-SA-4.0.template`
 - `README.md.template`
 - `release.yml.template` (GitHub Actions release workflow)
+- `validate.yml.template` (CI caller for the reusable skill-validation workflow — without it the SKILL.md word cap, plugin.json schema, and markdown/yaml/action lints run only in local pre-commit, never in CI)
 - `pr-quality.yml.template` (PR validation)
 - `auto-merge-deps.yml.template` (Dependabot/Renovate auto-merge)
 - `pre-commit.template`
@@ -159,6 +160,7 @@ Required files in the new repo:
 - One initial entry in `skills/<name>/evals/evals.json` covering the friction (TDD)
 - Optionally `skills/<name>/checkpoints.yaml` (start with structural checkpoints)
 - `.github/workflows/release.yml` (from template)
+- `.github/workflows/validate.yml` (from template — required so skill validation runs in CI, not just pre-commit)
 
 Run `bash skills/skill-repo/scripts/validate-skill.sh <new-repo-path>` to confirm the scaffold passes structural validation.
 
