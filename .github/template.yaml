@@ -20,3 +20,4 @@ template: skill
 intentional-drift:
   - .github/workflows/eval-validate.yml
   - .github/workflows/harness-verify.yml
+  - .github/workflows/release.yml
