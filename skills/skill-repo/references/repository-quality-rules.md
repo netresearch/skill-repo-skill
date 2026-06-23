@@ -64,6 +64,17 @@ Bei Änderungen an Discovery-Inhalten: siehe [`marketplace-integration.md`](mark
 
 ## GitHub Repository SEO
 
+### Repository / skill name
+
+- **PASS:** Leads with the **rankable proper noun** of the tool/domain (e.g. `jujutsu`, `oro`, `vite`) — not a generic short alias that is crowded in search (e.g. `jj`).
+- **FAIL:** Spends name tokens on **redundant words** — `agent`, `agentic`, or `ai` in the repository name, or `skill` in the skill slug. The repository's `-skill` suffix and the marketplace already imply "agent skill"; **every** skill is for agents, so these add no discriminating signal.
+- **PASS:** The remaining token names the **distinctive function** (`-workflow`, `-conformance`, `-upgrade`, …) so the slug isn't a bare proper noun colliding with a sibling skill's `name`.
+- **PASS:** Name candidates validated against GitHub search results — `gh search repos "<candidate phrase>"` — preferring an uncontested, descriptive phrase over a crowded generic one.
+- **PASS:** Short aliases or command names (e.g. `jj`) are kept in the **description and topics** rather than spent on the slug, so command-searchers still match.
+
+**Good:** repo `jujutsu-workflow-skill`, skill `jujutsu-workflow` (rankable noun + function; `jj` lives in description/topics).  
+**Bad:** `jj-agent-workflow-skill` (`jj` is generic/crowded; `agent` is redundant for a skill).
+
 ### Repository Description
 
 - **PASS:** String length **≤ 160** characters (count before save).
