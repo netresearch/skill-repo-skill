@@ -113,7 +113,7 @@ scripts/validate-skill.sh
 
 ## References (`references/`)
 
-**Distribution:** installation-methods, composer-setup, release-discipline, review-replies · **SKILL text:** skill-quality · **Repo/README:** repository-quality-rules, readme-template · **Discovery:** skill-discovery-metadata · **Done:** validation-checklist · **Sync:** marketplace-integration · **Retro:** materialization-contract · **Gotchas:** [authoring-ci-gotchas](references/authoring-ci-gotchas.md)
+**Distribution:** [installation-methods](references/installation-methods.md), [composer-setup](references/composer-setup.md), [release-discipline](references/release-discipline.md), [review-replies](references/review-replies.md) · **SKILL text:** [skill-quality](references/skill-quality.md) · **Repo/README:** [repository-quality-rules](references/repository-quality-rules.md), [readme-template](references/readme-template.md) · **Discovery:** [skill-discovery-metadata](references/skill-discovery-metadata.md) · **Done:** [validation-checklist](references/validation-checklist.md) · **Sync:** [marketplace-integration](references/marketplace-integration.md) · **Retro:** [materialization-contract](references/materialization-contract.md) · **Gotchas:** [authoring-ci-gotchas](references/authoring-ci-gotchas.md)
 
 ## See Also
 
