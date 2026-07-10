@@ -357,3 +357,42 @@ llm_reviews:
       2. Get latest git tag (strip 'v' prefix)
       3. If plugin.json version is BEHIND the latest tag, flag as warning (version drift)
       4. If AHEAD, flag as info (pending release)
+
+  # === SKILL CONTENT VALUE ===
+  # Advisory (severity: warning) for two release cycles while thresholds
+  # calibrate against the corpus; promotion to error is planned for NEW
+  # skills only (netresearch/skill-repo-skill issue #144).
+  - id: SR-38
+    domain: skill-value
+    severity: warning
+    desc: "SKILL.md and reference content must earn its token cost under the six-category content value rubric (advisory during calibration)"
+    prompt: |
+      Classify the content value of the SKILL.md body and every
+      references/*.md file in this skill repo:
+      1. Read the canonical rubric — do NOT rely on a summary embedded
+         in this prompt (an embedded copy would drift from the owning
+         doc). Fetch
+         https://raw.githubusercontent.com/netresearch/skill-repo-skill/main/skills/skill-repo/references/skill-quality.md
+         and read the "Content value rubric" section. It defines six
+         value categories: (1) org/project-specific knowledge,
+         (2) version/ecosystem facts models get wrong, (3) retro-born
+         failure patterns, (4) executable scripts/validators,
+         (5) inference suppression, (6) anti-rationalization guards.
+      2. Classify each section (heading-delimited block) of each file
+         against the six categories. A section earns its place when it
+         provides at least one category.
+      3. A section that provides none is generic bloat. Apply the
+         rubric's generate-it-with-a-prompt test: if a one-line prompt
+         would regenerate the passage, the skill does not need to
+         carry it.
+      4. PROTECTED — never classify as generic: category 3 (failure
+         patterns: symptom, cause, required behavior, verification,
+         encoded from a real incident) and category 5 (inference
+         suppression: "read file X, never guess Y" rules). Per the
+         rubric these are first-class value even when they read as
+         generic prose advice. Do not flag them.
+      5. Report per file: the share of sections classified as generic
+         bloat, quoting each flagged section so a human can verify the
+         classification.
+      This checkpoint is advisory while thresholds calibrate — report
+      findings, do not fail the repo on them.
