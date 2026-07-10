@@ -268,7 +268,7 @@ mechanical:
     # The runner parses checkpoints line-by-line (no yq), so the pattern
     # cannot be folded across lines — exempt it from the 200-char rule.
     # yamllint disable-line rule:line-length
-    pattern: "awk 'FNR==1{fm=0} /^---$/{fm=1-fm} FILENAME~/json$/{if ($0 ~ /\"version\"/) gsub(/[\",]/,\"\")} FILENAME~/json$/{if ($1 == \"version:\") pv=$2} fm{if ($1 == \"version:\") sv=$2} fm{if ($1 == \"version:\") gsub(/[\"\\047]/,\"\",sv)} fm{if ($1 == \"version:\") if (sv != pv) bad=1} END{if (pv == \"\") bad=1} END{exit bad}' .claude-plugin/plugin.json skills/*/SKILL.md"
+    pattern: awk 'FNR==1{fm=0} /^---$/{fm=1-fm} FILENAME~/json$/{if ($0 ~ /"version"/) gsub(/[",]/,"")} FILENAME~/json$/{if ($1 == "version:") pv=$2} fm{if ($1 == "version:") sv=$2} fm{if ($1 == "version:") gsub(/["\047]/,"",sv)} fm{if ($1 == "version:") if (sv != pv) bad=1} END{if (pv == "") bad=1} END{exit bad}' .claude-plugin/plugin.json skills/*/SKILL.md
     severity: error
     desc: "plugin.json version must match every SKILL.md metadata.version (run skills/skill-repo/scripts/check-version-parity.sh to verify before tagging)"
     tags: [release, versioning, parity]
