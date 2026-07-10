@@ -146,4 +146,4 @@ jobs:
 - No `composer.lock` committed
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
-- `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`)
+- `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`)
