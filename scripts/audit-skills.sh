@@ -323,9 +323,7 @@ audit_one() {
     #     calibrated — see issue #144 and the SR-38 checkpoint) ---
     local gs_stats gs_total gs_generic gs_protected gs_pct=0 gs_status="PASS"
     gs_stats=$(generic_share_stats <<<"$body")
-    gs_total=$(awk '{print $1}' <<<"$gs_stats")
-    gs_generic=$(awk '{print $2}' <<<"$gs_stats")
-    gs_protected=$(awk '{print $3}' <<<"$gs_stats")
+    read -r gs_total gs_generic gs_protected <<<"$gs_stats"
     [[ -z "$gs_total" ]] && gs_total=0
     [[ -z "$gs_generic" ]] && gs_generic=0
     [[ -z "$gs_protected" ]] && gs_protected=0
