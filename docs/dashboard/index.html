@@ -394,7 +394,7 @@ async function loadData() {
     // Result blocks are keyed by the model id recorded in provenance
     // (legacy entries: "opus"). Alias the single model key to `opus`
     // so the render code below has one canonical accessor.
-    DATA.skills.forEach(s => { if (!s.results.opus) s.results.opus = Object.values(s.results)[0]; });
+    DATA.skills.forEach(s => { if (s.results && !s.results.opus) s.results.opus = Object.values(s.results)[0]; });
   } catch (e) {
     document.body.innerHTML = '<p style="padding:2rem;color:red;">Failed to load data/results.json</p>';
     return;
