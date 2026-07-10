@@ -231,7 +231,7 @@ generic_share_stats() {
         in_fence { next }
         /^[[:space:]]*$/ { flush(); next }
         /^#/ { flush(); next }
-        /^[[:space:]]*\|/ { next }
+        /^[[:space:]]*\|/ { flush(); next }
         { buf = buf " " $0 }
         END { flush(); print total, generic, protected }
     '
