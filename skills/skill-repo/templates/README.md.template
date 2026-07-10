@@ -8,6 +8,12 @@
 - {Capability or outcome 2}
 - {Capability or outcome 3}
 
+## Why this is a skill (model delta)
+
+- **Value categories:** {Category/categories from the content value rubric in skill-quality.md — e.g. org-specific knowledge, retro-born failure patterns}
+- **Without the skill:** {One sentence: what the model does wrong without this skill.}
+- **Eval evidence:** {evals.json id or dashboard delta — or “none yet”}
+
 ## Use when
 
 - {Trigger phrase, stack, ticket prefix, or user intent 1}

@@ -23,6 +23,7 @@ Without long scrolling, the reader must see answers to:
 Use **exact** level-2 headings so agents can grep them:
 
 - `## What this skill solves`
+- `## Why this is a skill (model delta)` — the claimed value category/categories from the content value rubric ([`skill-quality.md`](skill-quality.md)), **one sentence** on what the model does wrong without the skill, and a pointer to eval evidence (`evals.json` id or dashboard delta) where it exists. Distinct from `## What this skill solves`: that section names the problem; this one justifies why a skill (not the base model) solves it.
 - `## Use when`
 - `## Expected outputs`
 - `## Context requirements`
@@ -60,6 +61,7 @@ Reference docs (README, `SKILL.md`, reference files, module headers) describe **
 
 | Check | PASS criterion |
 | --- | --- |
+| `Why this is a skill (model delta)` | Names ≥1 rubric value category, states one model-without-skill failure, links eval evidence where it exists. |
 | `Use when` | Section exists and contains trigger phrases (ticket prefixes, stacks, commands). |
 | `Example prompts` | ≥3 prompts. |
 | `Related skills` | ≥1 link/slug **or** justified none. |

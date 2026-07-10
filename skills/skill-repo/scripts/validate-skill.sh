@@ -4,6 +4,7 @@
 #
 # Checks: SKILL.md frontmatter, word count, composer.json, plugin.json,
 #          cross-file consistency, required files
+# Env:    STRICT_README=1 (also true/yes, case-insensitive) promotes README heading misses from warnings to errors
 # Exit: 0 = valid, 1 = errors found
 
 set -euo pipefail
@@ -385,10 +386,17 @@ else
     error ".claude-plugin/plugin.json not found"
 fi
 
-# --- README.md quality checks (warnings only) ---
-# Recommended level-2 headings (whole-line match) per skills/skill-repo/references/readme-template.md
+# --- README.md quality checks (warnings by default) ---
+# Heading misses are warnings unless STRICT_README=1 promotes them to errors.
+# The default must stay warnings-only: consumer repos run this script from
+# main via the reusable validate.yml, so flipping the default would break
+# their CI. Opt in per repo (or org-wide, later) by exporting STRICT_README=1.
+readme_heading_miss() { case "${STRICT_README:-0}" in 1|[Tt][Rr][Uu][Ee]|[Yy][Ee][Ss]) error "$1" ;; *) warning "$1" ;; esac; }
+
+# Required level-2 headings (whole-line match) per skills/skill-repo/references/readme-template.md
 README_REQUIRED_HEADINGS=(
     "What this skill solves"
+    "Why this is a skill (model delta)"
     "Use when"
     "Expected outputs"
     "Context requirements"
@@ -411,7 +419,7 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
         if grep -Fxq "## ${heading}" "$REPO_DIR/README.md"; then
             success "README.md has ## ${heading}"
         else
-            warning "README.md missing recommended section (exact line ## ${heading}) — see skill-repo-skill skills/skill-repo/references/readme-template.md"
+            readme_heading_miss "README.md missing section (exact line ## ${heading}) — see skill-repo-skill skills/skill-repo/references/readme-template.md"
         fi
     done
 
