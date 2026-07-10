@@ -18,7 +18,26 @@ Usage:
 import argparse
 import datetime
 import json
+import pathlib
 import sys
+
+
+def contained_json_path(raw: str, must_exist: bool) -> pathlib.Path:
+    """Resolve a CLI-supplied path; refuse escapes from the working tree.
+
+    Both callers pass workspace-relative paths; anything resolving outside
+    the current working tree (or without a .json suffix) is rejected before
+    any file access.
+    """
+    root = pathlib.Path.cwd().resolve()
+    resolved = pathlib.Path(raw).resolve()
+    if not resolved.is_relative_to(root):
+        sys.exit(f"refusing path outside {root}: {raw}")
+    if resolved.suffix != ".json":
+        sys.exit(f"refusing non-.json path: {raw}")
+    if must_exist and not resolved.is_file():
+        sys.exit(f"not a file: {raw}")
+    return resolved
 
 
 def main() -> int:
@@ -33,9 +52,11 @@ def main() -> int:
     parser.add_argument("--evals-path", default="")
     args = parser.parse_args()
 
-    with open(args.data_file) as f:
+    data_file = contained_json_path(args.data_file, must_exist=True)
+    ab_results = contained_json_path(args.ab_results, must_exist=True)
+    with open(data_file) as f:
         data = json.load(f)
-    with open(args.ab_results) as f:
+    with open(ab_results) as f:
         ab = json.load(f)
 
     provenance = ab["provenance"]
@@ -86,7 +107,7 @@ def main() -> int:
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
-    with open(args.data_file, "w") as f:
+    with open(data_file, "w") as f:
         json.dump(data, f, indent=2)
         f.write("\n")
 

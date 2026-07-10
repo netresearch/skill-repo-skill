@@ -75,7 +75,9 @@ jobs:
 
       - name: Install Claude Code CLI
         run: |
-          npm install -g @anthropic-ai/claude-code
+          # Pinned exact version (holds ANTHROPIC_API_KEY in env; latest
+          # verified 2026-07-10). Bump deliberately, not implicitly.
+          npm install -g @anthropic-ai/claude-code@2.1.206
           claude --version
 
       - name: Select catalog subset
@@ -173,9 +175,13 @@ jobs:
                 --name "$name" --repo "$repo" --category "$category" \
                 --version "$version" \
                 --skill-path "${skill#"$dir"/}" --evals-path "${evals#"$dir"/}" \
-                --ab-results "/tmp/ab-out/${name}.json" | tee -a /tmp/ab-out/pr-lines.md; then
+                --ab-results scripts/ab-results/ab-results.json \
+                > /tmp/ab-out/merge-line.txt 2>&1; then
+              cat /tmp/ab-out/merge-line.txt >> /tmp/ab-out/pr-lines.md
+              cat /tmp/ab-out/merge-line.txt
               ok=$((ok + 1))
             else
+              cat /tmp/ab-out/merge-line.txt || true
               echo "::warning::${name}: merge failed"
               failed+=("$name")
             fi
