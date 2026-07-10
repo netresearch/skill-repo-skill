@@ -1,0 +1,239 @@
+name: A/B Evals Schedule
+
+# Scheduled A/B eval runs (issue #146): runs scripts/run-ab-evals.sh for
+# marketplace catalog skills, merges the per-skill results (with a
+# provenance block) into docs/dashboard/data/results.json via
+# scripts/merge-ab-results.py, validates the dashboard, and opens a PR.
+#
+# Cost bound: a scheduled run processes BATCH_SIZE skills, selected
+# deterministically by ISO week number modulo the number of catalog groups
+# (ceil(catalog / BATCH_SIZE), currently ceil(42/5) = 9 groups), so the full
+# catalog rotates through in ~9 weekly runs. The full catalog runs only via
+# workflow_dispatch with full=true (takes several hours).
+#
+# Prerequisite (human setup step): the ANTHROPIC_API_KEY repository secret
+# must exist — run-ab-evals.sh drives the claude CLI with it. The run fails
+# early with a clear error if the secret is missing.
+#
+# The refresh PR is created with GITHUB_TOKEN, so PR CI does not start
+# automatically (GitHub limitation) — close/reopen the PR to trigger checks.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"  # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      skills:
+        description: "Comma/space-separated plugin names to run (empty = weekly rotation subset)"
+        type: string
+        default: ""
+      full:
+        description: "Run the full catalog instead of the rotation subset (several hours)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ab-evals-schedule
+  cancel-in-progress: false
+
+env:
+  BATCH_SIZE: "5"
+  MARKETPLACE_REPO: netresearch/claude-code-marketplace
+
+jobs:
+  ab-evals:
+    name: Run A/B evals and refresh dashboard data
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    permissions:
+      contents: write  # push the refresh branch
+      pull-requests: write  # open the refresh PR
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920 # v2.20.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Require ANTHROPIC_API_KEY secret
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [[ -z "$ANTHROPIC_API_KEY" ]]; then
+            echo "::error::Repository secret ANTHROPIC_API_KEY is not set (Settings > Secrets and variables > Actions). The eval runner cannot call the Anthropic API without it."
+            exit 1
+          fi
+          echo "ANTHROPIC_API_KEY is set."
+
+      - name: Install Claude Code CLI
+        run: |
+          # Pinned exact version (holds ANTHROPIC_API_KEY in env; latest
+          # verified 2026-07-10). Bump deliberately, not implicitly.
+          npm install -g @anthropic-ai/claude-code@2.1.206
+          claude --version
+
+      - name: Select catalog subset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_SKILLS: ${{ inputs.skills }}
+          INPUT_FULL: ${{ inputs.full }}
+        run: |
+          gh api "repos/${MARKETPLACE_REPO}/contents/.claude-plugin/marketplace.json" --jq '.content' | base64 -d > /tmp/marketplace.json
+          python3 - <<'PYEOF'
+          import datetime
+          import json
+          import os
+
+          with open("/tmp/marketplace.json") as f:
+              catalog = json.load(f)
+          plugins = sorted(
+              (p["name"], p["source"]["repo"], p.get("category", ""))
+              for p in catalog["plugins"]
+              if isinstance(p.get("source"), dict) and p["source"].get("repo")
+          )
+          requested = [
+              s for s in os.environ.get("INPUT_SKILLS", "").replace(",", " ").split() if s
+          ]
+          batch = int(os.environ["BATCH_SIZE"])
+          if requested:
+              selected = [p for p in plugins if p[0] in requested]
+              mode = f"name filter ({len(selected)}/{len(plugins)})"
+          elif os.environ.get("INPUT_FULL") == "true":
+              selected = plugins
+              mode = f"full catalog ({len(plugins)})"
+          else:
+              week = datetime.date.today().isocalendar()[1]
+              groups = -(-len(plugins) // batch)  # ceil
+              group = week % groups
+              selected = plugins[group * batch : (group + 1) * batch]
+              mode = f"rotation week={week} group={group}/{groups}"
+          with open("/tmp/ab-catalog.tsv", "w") as f:
+              for name, repo, category in selected:
+                  f.write(f"{name}\t{repo}\t{category}\n")
+          print(f"Selection mode: {mode}")
+          for name, repo, _ in selected:
+              print(f"  {name} ({repo})")
+          PYEOF
+
+      - name: Run A/B evals per skill (fail-soft)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          mkdir -p /tmp/ab-out
+          : > /tmp/ab-out/pr-lines.md
+          ok=0
+          failed=()
+          while IFS=$'\t' read -r -u3 name repo category; do
+            echo "::group::${name} (${repo})"
+            dir="/tmp/skill-checkouts/${name}"
+            if ! git clone --quiet --depth 1 "https://github.com/${repo}.git" "$dir"; then
+              echo "::warning::${name}: clone failed, skipping"
+              failed+=("$name"); echo "::endgroup::"; continue
+            fi
+            evals=""
+            for cand in "$dir"/skills/*/evals/evals.json "$dir/evals/evals.json"; do
+              if [[ -f "$cand" ]]; then evals="$cand"; break; fi
+            done
+            if [[ -z "$evals" ]]; then
+              echo "${name}: no evals.json, skipping"
+              echo "::endgroup::"; continue
+            fi
+            skilldir="$(dirname "$(dirname "$evals")")"
+            skill=""
+            for cand in "$skilldir/SKILL.md" "$dir"/skills/*/SKILL.md "$dir/SKILL.md"; do
+              if [[ -f "$cand" ]]; then skill="$cand"; break; fi
+            done
+            if [[ -z "$skill" ]]; then
+              echo "::warning::${name}: evals.json without SKILL.md, skipping"
+              failed+=("$name"); echo "::endgroup::"; continue
+            fi
+            rm -rf scripts/ab-results
+            if ! bash scripts/run-ab-evals.sh --evals="$evals" --skill="$skill" < /dev/null; then
+              echo "::warning::${name}: eval run failed, skipping"
+              failed+=("$name"); echo "::endgroup::"; continue
+            fi
+            if [[ ! -f scripts/ab-results/ab-results.json ]]; then
+              echo "::warning::${name}: run produced no ab-results.json, skipping"
+              failed+=("$name"); echo "::endgroup::"; continue
+            fi
+            cp scripts/ab-results/ab-results.json "/tmp/ab-out/${name}.json"
+            cp scripts/ab-results/summary.md "/tmp/ab-out/${name}-summary.md" 2>/dev/null || true
+            version=""
+            if [[ -f "$dir/.claude-plugin/plugin.json" ]]; then
+              version=$(python3 -c "import json, sys; print(json.load(open(sys.argv[1])).get('version', ''))" "$dir/.claude-plugin/plugin.json" || true)
+            fi
+            if python3 scripts/merge-ab-results.py \
+                --data-file docs/dashboard/data/results.json \
+                --name "$name" --repo "$repo" --category "$category" \
+                --version "$version" \
+                --skill-path "${skill#"$dir"/}" --evals-path "${evals#"$dir"/}" \
+                --ab-results scripts/ab-results/ab-results.json \
+                > /tmp/ab-out/merge-line.txt 2>&1; then
+              cat /tmp/ab-out/merge-line.txt >> /tmp/ab-out/pr-lines.md
+              cat /tmp/ab-out/merge-line.txt
+              ok=$((ok + 1))
+            else
+              cat /tmp/ab-out/merge-line.txt || true
+              echo "::warning::${name}: merge failed"
+              failed+=("$name")
+            fi
+            echo "::endgroup::"
+          done 3< /tmp/ab-catalog.tsv
+          echo "succeeded=${ok} failed=${#failed[@]} ${failed[*]:-}"
+          if [[ "$ok" -eq 0 ]]; then
+            echo "::error::No skill produced mergeable results"
+            exit 1
+          fi
+
+      - name: Validate dashboard against refreshed data
+        run: bash scripts/generate-dashboard.sh
+
+      - name: Upload raw eval results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ab-eval-results
+          path: /tmp/ab-out/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open PR with refreshed dashboard data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- docs/dashboard/data/results.json; then
+            echo "No changes to dashboard data; skipping PR."
+            exit 0
+          fi
+          branch="chore/ab-evals-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add docs/dashboard/data/results.json
+          git commit -m "chore(evals): refresh dashboard data from scheduled A/B eval run"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push -u origin "$branch"
+          {
+            echo "Scheduled A/B eval run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID} refreshed \`docs/dashboard/data/results.json\`."
+            echo ""
+            echo "## Skills updated"
+            echo ""
+            sed 's/^/- /' /tmp/ab-out/pr-lines.md
+            echo ""
+            echo "Raw eval outputs: \`ab-eval-results\` artifact on the run linked above."
+            echo ""
+            echo "Note: created with GITHUB_TOKEN, so PR CI does not start automatically — close and reopen this PR to trigger checks."
+          } > /tmp/pr-body.md
+          gh pr create \
+            --title "chore(evals): dashboard data refresh from scheduled A/B run" \
+            --body-file /tmp/pr-body.md \
+            --base main \
+            --head "$branch"
