@@ -59,6 +59,12 @@ def main() -> int:
     with open(ab_results) as f:
         ab = json.load(f)
 
+    if not isinstance(data, dict) or not isinstance(data.get("skills"), list):
+        sys.exit(
+            f"{args.data_file}: malformed data file "
+            f"(expected an object with a 'skills' array)"
+        )
+
     provenance = ab["provenance"]
     combined = ab["totals"]["combined"]
     checks = combined["checks"]
