@@ -346,10 +346,10 @@ audit_one() {
     local wf_prose wf_has_steps=0 wf_has_verify=0 wf_status="PASS"
     wf_prose=$(awk '/^[[:space:]]*```/{f=1-f;next} !f' <<<"$body")
     if grep -qE '^[[:space:]]*[0-9]+[.)][[:space:]]' <<<"$wf_prose" \
-        && grep -qiE '\b(run|then)\b' <<<"$wf_prose"; then
+        && grep -qiE '(^|[^a-zA-Z0-9_])(run|then)([^a-zA-Z0-9_]|$)' <<<"$wf_prose"; then
         wf_has_steps=1
     fi
-    if grep -qiE '\b(verif[a-z]*|evidence|outputs?)\b' <<<"$wf_prose"; then
+    if grep -qiE '(^|[^a-zA-Z0-9_])(verif[a-z]*|evidence|outputs?)([^a-zA-Z0-9_]|$)' <<<"$wf_prose"; then
         wf_has_verify=1
     fi
     if (( wf_has_steps == 1 && wf_has_verify == 0 )); then
