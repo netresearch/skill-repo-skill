@@ -342,12 +342,16 @@ audit_one() {
     # INFO when the body reads as an imperative multi-step workflow
     # (numbered steps plus run/then sequencing) but never states a
     # verification/evidence rule (no verify/evidence/output mention).
-    local wf_has_steps=0 wf_has_verify=0 wf_status="PASS"
-    if grep -qE '^[[:space:]]*[0-9]+[.)][[:space:]]' <<<"$body" \
-        && grep -qiE '\b(run|then)\b' <<<"$body"; then
+    # Strip fenced code blocks first — numbered steps inside a ```bash
+    # example are not workflow instructions (same fence toggle as
+    # generic_share_stats).
+    local wf_prose wf_has_steps=0 wf_has_verify=0 wf_status="PASS"
+    wf_prose=$(awk '/^[[:space:]]*```/{f=1-f;next} !f' <<<"$body")
+    if grep -qE '^[[:space:]]*[0-9]+[.)][[:space:]]' <<<"$wf_prose" \
+        && grep -qiE '\b(run|then)\b' <<<"$wf_prose"; then
         wf_has_steps=1
     fi
-    if grep -qiE '\b(verif[a-z]*|evidence|outputs?)\b' <<<"$body"; then
+    if grep -qiE '\b(verif[a-z]*|evidence|outputs?)\b' <<<"$wf_prose"; then
         wf_has_verify=1
     fi
     if (( wf_has_steps == 1 && wf_has_verify == 0 )); then
