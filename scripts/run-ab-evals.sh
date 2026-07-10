@@ -336,24 +336,34 @@ SKILL_REPO_SHA=$(git -C "$(dirname "$SKILL_FILE")" rev-parse HEAD 2>/dev/null ||
 RUNNER_REPO_SHA=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
 RUNNER_SCRIPT_SHA=$(git hash-object "$0" 2>/dev/null || echo "unknown")
 RUN_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-python3 - "$RESULTS_DIR/ab-results.json" <<PYEOF
+python3 - "$RESULTS_DIR/ab-results.json" \
+    "$RUN_DATE" \
+    "$EVAL_MODEL" \
+    "$GRADER_MODEL" \
+    "$SKILL_REPO_SHA" \
+    "$RUNNER_REPO_SHA" \
+    "$RUNNER_SCRIPT_SHA" \
+    "$EVAL_COUNT" \
+    "$TOTAL_WITHOUT" "$TOTAL_WITH" "$TOTAL_CHECKS" \
+    "$TOTAL_EXP_WITHOUT" "$TOTAL_EXP_WITH" "$TOTAL_EXPECTATIONS" \
+    "$COMBINED_WITHOUT" "$COMBINED_WITH" "$COMBINED_TOTAL" <<'PYEOF'
 import json, sys
 
 with open(sys.argv[1], "w") as f:
     json.dump({
         "provenance": {
-            "run_date": "$RUN_DATE",
-            "model": "$EVAL_MODEL",
-            "grader_model": "$GRADER_MODEL",
-            "skill_repo_commit": "$SKILL_REPO_SHA",
-            "runner_commit": "$RUNNER_REPO_SHA",
-            "runner_script_sha": "$RUNNER_SCRIPT_SHA",
+            "run_date": sys.argv[2],
+            "model": sys.argv[3],
+            "grader_model": sys.argv[4],
+            "skill_repo_commit": sys.argv[5],
+            "runner_commit": sys.argv[6],
+            "runner_script_sha": sys.argv[7],
         },
-        "eval_count": $EVAL_COUNT,
+        "eval_count": int(sys.argv[8]),
         "totals": {
-            "regex": {"without": $TOTAL_WITHOUT, "with": $TOTAL_WITH, "checks": $TOTAL_CHECKS},
-            "llm": {"without": $TOTAL_EXP_WITHOUT, "with": $TOTAL_EXP_WITH, "checks": $TOTAL_EXPECTATIONS},
-            "combined": {"without": $COMBINED_WITHOUT, "with": $COMBINED_WITH, "checks": $COMBINED_TOTAL},
+            "regex": {"without": int(sys.argv[9]), "with": int(sys.argv[10]), "checks": int(sys.argv[11])},
+            "llm": {"without": int(sys.argv[12]), "with": int(sys.argv[13]), "checks": int(sys.argv[14])},
+            "combined": {"without": int(sys.argv[15]), "with": int(sys.argv[16]), "checks": int(sys.argv[17])},
         },
     }, f, indent=2)
     f.write("\n")
