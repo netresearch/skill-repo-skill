@@ -8,6 +8,13 @@
 #   - CODE FENCE longest block (PASS/INFO at >25 lines)
 #   - REFERENCES reachability (P1 direct cite, P2 catalog convention,
 #                              P3 list-and-pick, ORPHAN otherwise)
+#   - GENERIC SHARE (PASS/INFO >30% of prose paragraphs carry generic-bloat
+#                    markers; paragraphs with failure-pattern, never-guess,
+#                    version-number, or org markers are protected and never
+#                    counted — see the "Content value rubric" in
+#                    skills/skill-repo/references/skill-quality.md)
+#   - WORKFLOW verification (PASS/INFO when the body has multi-step workflow
+#                            language but no verify/evidence/output rule)
 # Exit: 0 if no FAILs, 1 otherwise.
 #
 # shellcheck disable=SC2155 # local var with command substitution is intentional
@@ -43,6 +50,14 @@ Quality rules:
                Thresholds set by per-invocation token cost (~1.4x word count).
   CODE FENCES  INFO when longest fenced block exceeds 25 lines.
   REFERENCES   ORPHAN when references/*.md has no reachability pattern.
+  GENERIC      INFO when >30% of prose paragraphs in the body carry
+               generic-bloat markers ("best practice", "clean code", ...).
+               Paragraphs matching failure-pattern vocabulary, never-guess
+               rules, version numbers, or org names are protected and never
+               counted (content value rubric categories 3/5). Advisory only
+               while thresholds calibrate.
+  WORKFLOW     INFO when the body has numbered steps plus run/then language
+               but never mentions verify/evidence/output.
 
 Exit code: 0 if no FAILs across all skills, 1 otherwise.
 EOF
@@ -173,6 +188,55 @@ fence_stats() {
     ' <<<"$1"
 }
 
+# generic_share_stats <body_text (stdin)>: prints "<total> <generic> <protected>"
+#
+# Keyword heuristic for the generic-bloat share defined by the "Content value
+# rubric" in skills/skill-repo/references/skill-quality.md. A paragraph is a
+# blank-line-separated block of prose outside fenced code (fenced code is
+# rubric category 4 — executable — and never counted; headings and table
+# rows are structure/navigation, not prose).
+#
+# Protection comes FIRST and always wins: a paragraph matching failure-pattern
+# vocabulary (symptom/cause/verify), never-guess rules ("never guess",
+# "always read/run/check/fetch", "do not assume"), a version number, or an
+# org name is NEVER counted as generic, even when a generic marker also
+# matches. Rubric categories 3 (retro-born failure patterns) and 5
+# (inference suppression) are first-class value although they read as prose
+# advice.
+#
+# Deliberately conservative: high-precision generic markers only, so protected
+# content is not misflagged. Consumers emit INFO above 30%; a WARN tier
+# (>60% per netresearch/skill-repo-skill issue #144) stays disabled until the
+# thresholds are calibrated against the skill corpus.
+generic_share_stats() {
+    awk '
+        function flush(    lb) {
+            if (buf !~ /[^[:space:]]/) { buf = ""; return }
+            total++
+            lb = tolower(buf)
+            if (lb ~ protectre || buf ~ versionre) {
+                protected++
+            } else if (lb ~ genericre) {
+                generic++
+            }
+            buf = ""
+        }
+        BEGIN {
+            in_fence = 0; total = 0; generic = 0; protected = 0; buf = ""
+            protectre = "symptom|root cause|caused by|verif|evidence|never guess|never assume|do(n.t| not) (guess|assume)|always (read|run|check|fetch)|netresearch"
+            versionre = "[0-9]+\\.[0-9]+"
+            genericre = "write tests? first|clean code|best practices?|follow the principles?|keep it simple|single responsibility|separation of concerns|do(n.t| not) repeat yourself|meaningful names|self.documenting code|in this tutorial|this guide (will|shows)|step.by.step guide|as a general rule|it is important to|industry standard"
+        }
+        /^[[:space:]]*```/ { flush(); in_fence = 1 - in_fence; next }
+        in_fence { next }
+        /^[[:space:]]*$/ { flush(); next }
+        /^#/ { flush(); next }
+        /^[[:space:]]*\|/ { flush(); next }
+        { buf = buf " " $0 }
+        END { flush(); print total, generic, protected }
+    '
+}
+
 # audit_one <skill_md_path>
 audit_one() {
     local skill_md="$1"
@@ -195,14 +259,16 @@ audit_one() {
     local fm desc desc_status="PASS" desc_len=0 desc_warn_msg=""
     if ! fm=$(extract_frontmatter "$skill_md"); then
         # Broken frontmatter - WARN, skip rest of frontmatter checks.
-        # Pass all 17 args expected by emit_skill, with valid status strings
-        # for body/fence so $16/$17 are never unset under set -u.
+        # Pass all 25 args expected by emit_skill, with valid status strings
+        # for body/fence/generic/workflow so none are unset under set -u.
         TOTAL_WARN=$((TOTAL_WARN + 1))
         emit_skill "$skill_name" "$display_path" \
             "WARN" "0" "broken or missing frontmatter" \
             "PASS" "0" "0" \
             "PASS" "0" "0" \
-            "0" "0" "0" "0" "0" ""
+            "0" "0" "0" "0" "0" "" \
+            "PASS" "0" "0" "0" "0" \
+            "PASS" "0" "0"
         return
     fi
 
@@ -250,6 +316,44 @@ audit_one() {
     local fence_status="PASS"
     if (( fence_longest > 25 )); then
         fence_status="INFO"
+        TOTAL_INFO=$((TOTAL_INFO + 1))
+    fi
+
+    # --- Generic-bloat share (advisory; INFO only until thresholds are
+    #     calibrated — see issue #144 and the SR-38 checkpoint) ---
+    local gs_stats gs_total gs_generic gs_protected gs_pct=0 gs_status="PASS"
+    gs_stats=$(generic_share_stats <<<"$body")
+    read -r gs_total gs_generic gs_protected <<<"$gs_stats"
+    [[ -z "$gs_total" ]] && gs_total=0
+    [[ -z "$gs_generic" ]] && gs_generic=0
+    [[ -z "$gs_protected" ]] && gs_protected=0
+    if (( gs_total > 0 )); then
+        gs_pct=$(( gs_generic * 100 / gs_total ))
+    fi
+    if (( gs_pct > 30 )); then
+        gs_status="INFO"
+        TOTAL_INFO=$((TOTAL_INFO + 1))
+    fi
+
+    # --- Workflow-without-verification (advisory; part of
+    #     netresearch/automated-assessment-skill#48) ---
+    # INFO when the body reads as an imperative multi-step workflow
+    # (numbered steps plus run/then sequencing) but never states a
+    # verification/evidence rule (no verify/evidence/output mention).
+    # Strip fenced code blocks first — numbered steps inside a ```bash
+    # example are not workflow instructions (same fence toggle as
+    # generic_share_stats).
+    local wf_prose wf_has_steps=0 wf_has_verify=0 wf_status="PASS"
+    wf_prose=$(awk '/^[[:space:]]*```/{f=1-f;next} !f' <<<"$body")
+    if grep -qE '^[[:space:]]*[0-9]+[.)][[:space:]]' <<<"$wf_prose" \
+        && grep -qiE '(^|[^a-zA-Z0-9_])(run|then)([^a-zA-Z0-9_]|$)' <<<"$wf_prose"; then
+        wf_has_steps=1
+    fi
+    if grep -qiE '(^|[^a-zA-Z0-9_])(verif[a-z]*|evidence|outputs?)([^a-zA-Z0-9_]|$)' <<<"$wf_prose"; then
+        wf_has_verify=1
+    fi
+    if (( wf_has_steps == 1 && wf_has_verify == 0 )); then
+        wf_status="INFO"
         TOTAL_INFO=$((TOTAL_INFO + 1))
     fi
 
@@ -371,7 +475,9 @@ audit_one() {
         "$body_status" "$body_words" "$body_lines" \
         "$fence_status" "$fence_count" "$fence_longest" \
         "$ref_total" "$ref_p1" "$ref_p2" "$ref_p3" \
-        "$ref_orphan" "$orphan_list"
+        "$ref_orphan" "$orphan_list" \
+        "$gs_status" "$gs_pct" "$gs_generic" "$gs_protected" "$gs_total" \
+        "$wf_status" "$wf_has_steps" "$wf_has_verify"
 }
 
 # emit_skill: prints results in either text or JSON form.
@@ -379,12 +485,16 @@ audit_one() {
 #       body_status body_words body_lines
 #       fence_status fence_count fence_longest
 #       ref_total ref_p1 ref_p2 ref_p3 ref_orphan orphan_list
+#       gs_status gs_pct gs_generic gs_protected gs_total
+#       wf_status wf_has_steps wf_has_verify
 emit_skill() {
     local name="$1" path="$2"
     local ds="$3" dl="$4" dm="$5"
     local bs="$6" bw="$7" bln="$8"
     local fs="$9" fc="${10}" fl="${11}"
     local rt="${12}" rp1="${13}" rp2="${14}" rp3="${15}" rorph="${16}" olist="${17}"
+    local gss="${18}" gsp="${19}" gsg="${20}" gspr="${21}" gst="${22}"
+    local wfs="${23}" wfw="${24}" wfv="${25}"
 
     if [[ $JSON_OUTPUT -eq 1 ]]; then
         # Build orphan JSON array
@@ -404,12 +514,14 @@ emit_skill() {
             done
             orphans_json="[$items]"
         fi
-        printf '{"name":"%s","path":"%s","description":{"status":"%s","chars":%s,"message":"%s"},"body":{"status":"%s","words":%s,"lines":%s},"code_fences":{"status":"%s","count":%s,"longest_lines":%s},"references":{"total":%s,"p1_direct":%s,"p2_catalog":%s,"p3_listpick":%s,"reachable":%s,"orphans":%s,"orphan_files":%s}}\n' \
+        printf '{"name":"%s","path":"%s","description":{"status":"%s","chars":%s,"message":"%s"},"body":{"status":"%s","words":%s,"lines":%s},"code_fences":{"status":"%s","count":%s,"longest_lines":%s},"references":{"total":%s,"p1_direct":%s,"p2_catalog":%s,"p3_listpick":%s,"reachable":%s,"orphans":%s,"orphan_files":%s},"generic_share":{"status":"%s","percent":%s,"generic_paragraphs":%s,"protected_paragraphs":%s,"total_paragraphs":%s},"workflow_verification":{"status":"%s","has_workflow_steps":%s,"has_verification_rule":%s}}\n' \
             "$(json_escape "$name")" "$(json_escape "$path")" \
             "$ds" "$dl" "$(json_escape "$dm")" \
             "$bs" "$bw" "$bln" \
             "$fs" "$fc" "$fl" \
-            "$rt" "$rp1" "$rp2" "$rp3" "$((rp1 + rp2 + rp3))" "$rorph" "$orphans_json"
+            "$rt" "$rp1" "$rp2" "$rp3" "$((rp1 + rp2 + rp3))" "$rorph" "$orphans_json" \
+            "$gss" "$gsp" "$gsg" "$gspr" "$gst" \
+            "$wfs" "$wfw" "$wfv"
         return
     fi
 
@@ -430,6 +542,16 @@ emit_skill() {
     echo "BODY: $bw words, $bln lines [${bs_color}${bs}${NC}]"
     local fs_color="$GRN"; [[ "$fs" == "INFO" ]] && fs_color="$BLU"
     echo "CODE FENCES: $fc fenced blocks, longest $fl lines [${fs_color}${fs}${NC}]"
+    local gs_color="$GRN"; [[ "$gss" == "INFO" ]] && gs_color="$BLU"
+    echo "GENERIC SHARE: ${gsp}% (${gsg}/${gst} paragraphs generic, ${gspr} protected) [${gs_color}${gss}${NC}]"
+    local wf_color="$GRN"; [[ "$wfs" == "INFO" ]] && wf_color="$BLU"
+    if (( wfw == 0 )); then
+        echo "WORKFLOW: no multi-step workflow language [${wf_color}${wfs}${NC}]"
+    elif (( wfv == 1 )); then
+        echo "WORKFLOW: multi-step workflow with verification rule [${wf_color}${wfs}${NC}]"
+    else
+        echo "WORKFLOW: multi-step workflow, no verify/evidence/output rule [${wf_color}${wfs}${NC}]"
+    fi
     local reachable=$((rp1 + rp2 + rp3))
     if (( rt > 0 )); then
         echo "REFERENCES: $rt total -> ${rp1}/P1 + ${rp2}/P2 + ${rp3}/P3 = ${reachable} reachable, ${rorph} ORPHAN"
