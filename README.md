@@ -8,6 +8,12 @@ Netresearch maintains many agent skills; without a shared layout, packaging and 
 
 It extends Anthropic-style single-file skills with **repository-level** conventions (not a replacement for Anthropic’s skill-creator — see comparison below).
 
+## Why this is a skill (model delta)
+
+- **Value categories:** org/project-specific knowledge (Netresearch repo shape, split licensing, composer type `ai-agent-skill`) and executable scripts/validators (`validate-skill.sh`, `checkpoints.yaml`).
+- **Without the skill:** the model invents a plausible generic repo layout — single `LICENSE`, no `plugin.json`, `composer.json` without the `ai-agent-skill` type — that fails `validate-skill.sh` and org CI.
+- **Eval evidence:** `validate_skill_repo_structure` and `readme_requirements` in [`skills/skill-repo/evals/evals.json`](skills/skill-repo/evals/evals.json).
+
 ## Compatibility
 
 This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
