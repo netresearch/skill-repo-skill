@@ -11,6 +11,28 @@ Claude Code skills have two distinct context costs:
 
 Description bytes are the always-on tax; body bytes are the on-demand tax. References are free unless the model knows they exist and decides to read them.
 
+## Content value rubric
+
+Size rules bound how MUCH a skill costs; this rubric bounds WHAT KIND of content earns that cost. Every passage in a SKILL.md body or reference file must provide at least one of six value categories:
+
+1. **Org/project-specific knowledge** — Netresearch conventions, internal tooling, URLs, field IDs, policy decisions. (`jira` custom-field IDs; the split-licensing model.)
+2. **Version/ecosystem facts models get wrong** — post-training-cutoff changes, version-specific breaking changes, niche tool flags. (TYPO3 v14 `#108055` asset-concat removal; golangci-lint v2 config.)
+3. **Retro-born failure patterns** — symptom → cause → required behavior → verification, encoded from a real incident. (`github-project`: the auto-approve/Copilot race.)
+4. **Executable scripts/validators** — deterministic work shipped in `scripts/` or `checkpoints.yaml` instead of prose the model re-derives.
+5. **Inference suppression** — "read file X, never guess Y" rules that shut down a known guessing pattern and its retry cost. (`typo3-ddev`: never guess backend URLs — read `.ddev/config.yaml`.)
+6. **Anti-rationalization guards** — rules that stop the model from skipping steps or over-claiming. ("No 'tested' claim without pasted command output.")
+
+**Generic bloat** is content that provides none of these: restated public best practice a one-line prompt regenerates ("write tests first", "use parameterized SQL", tutorials paraphrased from public docs). The test, from Den Odell's essay (see Sources): *if you can generate the passage with a prompt, the skill doesn't need to carry it.*
+
+Two protections when applying the rubric:
+
+- Categories 3 and 5 are **first-class even when they read as prose**. Reducing wrong or unnecessary inference counts as value although the model "knows" the underlying facts — a skill that surfaces the right rule at the right moment saves the retry tokens the guess would have cost. Do not cut a failure pattern or a never-guess rule because it "looks like advice".
+- A claimed activation/recall benefit ("the model knows this but forgets") is an eval claim: back it with an A/B delta (repo-root `scripts/run-ab-evals.sh`) rather than asserting it.
+
+### Fact and trigger ownership
+
+Each fact and each trigger phrase has ONE canonical owning skill in the catalog; every other skill cross-references instead of restating. Duplicated facts drift apart at the next release, and duplicated trigger phrases compete for the model's skill selection. (Example: TYPO3 v14 breaking-change facts are owned by `typo3-conformance`; upgrade-execution phrasing by `typo3-extension-upgrade`; siblings link, they do not repeat.) This is the content-level twin of the discovery-level Mirroring rule in [`repository-quality-rules.md`](repository-quality-rules.md) — one canonical surface per fact, links from everywhere else.
+
 ## Description rules
 
 ### Caps
@@ -158,3 +180,4 @@ Pattern 2 detection is heuristic: a reference file counts as P2 when its stem ma
 - Anthropic Claude Code docs on skills: <https://code.claude.com/docs/en/skills>
 - Anthropic published skills: <https://github.com/anthropics/skills>
 - Settings schema: `skillListingBudgetFraction`, `skillListingMaxDescChars` (Claude Code settings.json)
+- Den Odell, "The Great Agent Skills Land Grab": <https://denodell.com/blog/the-great-agent-skills-land-grab> — the generate-it-with-a-prompt test and the eval-evidence bar for activation/recall claims
