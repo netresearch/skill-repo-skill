@@ -28,6 +28,11 @@ EVALS_FILE="${EVALS_FILE:-$REPO_DIR/skills/skill-repo/evals/evals.json}"
 SKILL_FILE="${SKILL_FILE:-$REPO_DIR/skills/skill-repo/SKILL.md}"
 RESULTS_DIR="${REPO_DIR}/scripts/ab-results"
 
+# Models used for the A/B completions and the LLM judge; recorded in the
+# provenance block of ab-results.json so published numbers stay reproducible.
+EVAL_MODEL="sonnet"
+GRADER_MODEL="haiku"
+
 mkdir -p "$RESULTS_DIR"
 
 # Normalize: support both top-level array and {evals: [...]} wrapper
@@ -76,7 +81,7 @@ run_single() {
             --no-session-persistence \
             --disable-slash-commands \
             --tools "" \
-            --model sonnet \
+            --model "$EVAL_MODEL" \
             "$prompt" \
             > "$output_file" 2>/dev/null || true
     else
@@ -84,7 +89,7 @@ run_single() {
             --no-session-persistence \
             --disable-slash-commands \
             --tools "" \
-            --model sonnet \
+            --model "$EVAL_MODEL" \
             --append-system-prompt "$(cat "$SKILL_FILE")" \
             "$prompt" \
             > "$output_file" 2>/dev/null || true
@@ -158,7 +163,7 @@ Format: one line per expectation, e.g.:
         --no-session-persistence \
         --disable-slash-commands \
         --tools "" \
-        --model haiku \
+        --model "$GRADER_MODEL" \
         "$grading_prompt" \
         > "$grader_file" 2>/dev/null || true
 }
@@ -324,3 +329,34 @@ if [[ "$COMBINED_TOTAL" -gt 0 ]]; then
 fi
 
 cat "$SUMMARY_FILE"
+
+# Emit machine-readable totals with a provenance block
+# (consumed by scripts/merge-ab-results.py)
+SKILL_REPO_SHA=$(git -C "$(dirname "$SKILL_FILE")" rev-parse HEAD 2>/dev/null || echo "unknown")
+RUNNER_REPO_SHA=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
+RUNNER_SCRIPT_SHA=$(git hash-object "$0" 2>/dev/null || echo "unknown")
+RUN_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+python3 - "$RESULTS_DIR/ab-results.json" <<PYEOF
+import json, sys
+
+with open(sys.argv[1], "w") as f:
+    json.dump({
+        "provenance": {
+            "run_date": "$RUN_DATE",
+            "model": "$EVAL_MODEL",
+            "grader_model": "$GRADER_MODEL",
+            "skill_repo_commit": "$SKILL_REPO_SHA",
+            "runner_commit": "$RUNNER_REPO_SHA",
+            "runner_script_sha": "$RUNNER_SCRIPT_SHA",
+        },
+        "eval_count": $EVAL_COUNT,
+        "totals": {
+            "regex": {"without": $TOTAL_WITHOUT, "with": $TOTAL_WITH, "checks": $TOTAL_CHECKS},
+            "llm": {"without": $TOTAL_EXP_WITHOUT, "with": $TOTAL_EXP_WITH, "checks": $TOTAL_EXPECTATIONS},
+            "combined": {"without": $COMBINED_WITHOUT, "with": $COMBINED_WITH, "checks": $COMBINED_TOTAL},
+        },
+    }, f, indent=2)
+    f.write("\n")
+PYEOF
+echo ""
+echo "Results JSON: $RESULTS_DIR/ab-results.json"

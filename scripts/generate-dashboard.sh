@@ -37,15 +37,20 @@ import json, sys
 with open("$DATA_FILE") as f:
     data = json.load(f)
 
+def res(s):
+    # Result blocks are keyed by the model id recorded in provenance
+    # (legacy entries: "opus"). Each entry carries exactly one model key.
+    return next(iter(s["results"].values()))
+
 skills = data["skills"]
 total_skills = len(skills)
 total_evals = sum(s["eval_count"] for s in skills)
-avg_delta = sum(s["results"]["opus"]["delta"] for s in skills) / total_skills
-perfect = sum(1 for s in skills if s["results"]["opus"]["with_skill_pass_rate"] >= 1.0)
+avg_delta = sum(res(s)["delta"] for s in skills) / total_skills
+perfect = sum(1 for s in skills if res(s)["with_skill_pass_rate"] >= 1.0)
 categories = {}
 for s in skills:
     cat = s["category"]
-    categories.setdefault(cat, []).append(s["results"]["opus"]["delta"])
+    categories.setdefault(cat, []).append(res(s)["delta"])
 
 print(f"Generated:     {data['generated']}")
 print(f"Total skills:  {total_skills}")
@@ -58,11 +63,11 @@ for cat, deltas in sorted(categories.items(), key=lambda x: -sum(x[1])/len(x[1])
     avg = sum(deltas) / len(deltas)
     print(f"  {cat:15s} {len(deltas):2d} skills  avg +{avg*100:.0f}%")
 
-best = max(skills, key=lambda s: s["results"]["opus"]["delta"])
-worst = min(skills, key=lambda s: s["results"]["opus"]["delta"])
+best = max(skills, key=lambda s: res(s)["delta"])
+worst = min(skills, key=lambda s: res(s)["delta"])
 print()
-print(f"Highest delta: {best['name']} (+{best['results']['opus']['delta']*100:.0f}%)")
-print(f"Lowest delta:  {worst['name']} (+{worst['results']['opus']['delta']*100:.0f}%)")
+print(f"Highest delta: {best['name']} (+{res(best)['delta']*100:.0f}%)")
+print(f"Lowest delta:  {worst['name']} (+{res(worst)['delta']*100:.0f}%)")
 PYEOF
 )
 
