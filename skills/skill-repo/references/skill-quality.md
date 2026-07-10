@@ -27,7 +27,7 @@ Size rules bound how MUCH a skill costs; this rubric bounds WHAT KIND of content
 Two protections when applying the rubric:
 
 - Categories 3 and 5 are **first-class even when they read as prose**. Reducing wrong or unnecessary inference counts as value although the model "knows" the underlying facts — a skill that surfaces the right rule at the right moment saves the retry tokens the guess would have cost. Do not cut a failure pattern or a never-guess rule because it "looks like advice".
-- A claimed activation/recall benefit ("the model knows this but forgets") is an eval claim: back it with an A/B delta (`scripts/run-ab-evals.sh`) rather than asserting it.
+- A claimed activation/recall benefit ("the model knows this but forgets") is an eval claim: back it with an A/B delta (repo-root `scripts/run-ab-evals.sh`) rather than asserting it.
 
 ### Fact and trigger ownership
 

@@ -35,7 +35,7 @@ Generalisiert die Routing-Regel der retro-skill `destination-taxonomy` („mecha
 
 - **PASS**, wenn jede mechanisch prüfbare Anforderung (Regex, Datei-Existenz, Kommando mit Exit-Code) als Eintrag in `checkpoints.yaml` **oder** als Script in `scripts/` vorliegt und der Fließtext nur mit **einer** Zeile darauf verweist.
 - **FAIL**, wenn eine mechanisch prüfbare Anforderung ausschließlich als Prosa-Anweisung existiert — der Agent muss sie dann bei jeder Anwendung neu interpretieren, und Abweichungen bleiben unentdeckt.
-- **Hinweis:** Checkpoint-Patterns unterliegen der Runner-Allowlist (`is_safe_eval_command`, automated-assessment `run-checkpoints.sh`): einzeilig, kein `bash` als Basiskommando, kein `;`/`&&`/`$()`; Repo-Scripts sind dort nicht aufrufbar — komplexe Prüfungen gehören nach `scripts/` und werden im Checkpoint gespiegelt (Beispiel: SR-37 / `check-version-parity.sh`).
+- **Hinweis:** Checkpoint-Patterns unterliegen der Runner-Allowlist (`is_safe_eval_command`, automated-assessment `run-checkpoints.sh`): einzeilig, kein `bash` als Basiskommando, kein `;`/`&&`/`$()`; Repo-Scripts sind dort nicht aufrufbar — komplexe Prüfungen gehören nach `scripts/` und werden im Checkpoint als allowlist-konformes Pattern **gespiegelt, nicht aufgerufen** (Beispiel: Checkpoint SR-37 spiegelt `skills/skill-repo/scripts/check-version-parity.sh`).
 - Inhaltliche Bewertung, was überhaupt in einen Skill gehört: siehe Content value rubric in [`skill-quality.md`](skill-quality.md).
 
 ---
@@ -83,8 +83,8 @@ Bei Änderungen an Discovery-Inhalten: siehe [`marketplace-integration.md`](mark
 - **PASS:** Name candidates validated against GitHub search results — `gh search repos "<candidate phrase>"` — preferring an uncontested, descriptive phrase over a crowded generic one.
 - **PASS:** Short aliases or command names (e.g. `jj`) are kept in the **description and topics** rather than spent on the slug, so command-searchers still match.
 
-**Good:** repo `jujutsu-workflow-skill`, skill `jujutsu-workflow` (rankable noun + function; `jj` lives in description/topics).
-**Bad:** `jj-agent-workflow-skill` (`jj` is generic/crowded; `agent` is redundant for a skill).
+- **Good:** repo `jujutsu-workflow-skill`, skill `jujutsu-workflow` (rankable noun + function; `jj` lives in description/topics).
+- **Bad:** `jj-agent-workflow-skill` (`jj` is generic/crowded; `agent` is redundant for a skill).
 
 ### Repository Description
 
@@ -93,8 +93,8 @@ Bei Änderungen an Discovery-Inhalten: siehe [`marketplace-integration.md`](mark
 - **FAIL:** Generic phrases such as “Useful AI skill for developers”, “ultimate automation assistant”.
 - **PASS:** Understandable **without** opening `README.md`.
 
-**Good:** `Agent skill for TYPO3 Vite setup, SCSS architecture and frontend asset integration.`
-**Bad:** `Useful AI skill for developers.`
+- **Good:** `Agent skill for TYPO3 Vite setup, SCSS architecture and frontend asset integration.`
+- **Bad:** `Useful AI skill for developers.`
 
 ### GitHub Topics
 
