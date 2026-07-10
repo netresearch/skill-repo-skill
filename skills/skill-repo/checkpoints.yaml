@@ -253,6 +253,26 @@ mechanical:
     severity: warning
     desc: "Release workflow should not declare workflow_dispatch or use --admin merges — the auto-bump path produced unsigned tags. Use signed tag-push only (see skill-repo-skill PR #15)."
 
+  - id: SR-37
+    type: command
+    # Mirrors scripts/check-version-parity.sh mechanically — the runner's
+    # command allowlist forbids invoking repo scripts (only vendor/bin/*),
+    # `bash` as base command, and `;`/`&&` anywhere in the pattern; hence
+    # a single-line awk with one statement per pattern-action block.
+    # Reads plugin.json .version, then compares every metadata.version
+    # declared in skills/*/SKILL.md FRONTMATTER against it (the fm gate
+    # keeps JSON examples in SKILL.md bodies from matching). Fails on any
+    # mismatch or when plugin.json declares no version.
+    # Not covered here (script-only): composer.json must-not-have-version,
+    # tag-argument parity. Run the script for exact diagnostics.
+    # The runner parses checkpoints line-by-line (no yq), so the pattern
+    # cannot be folded across lines — exempt it from the 200-char rule.
+    # yamllint disable-line rule:line-length
+    pattern: "awk 'FNR==1{fm=0} /^---$/{fm=1-fm} FILENAME~/json$/{if ($0 ~ /\"version\"/) gsub(/[\",]/,\"\")} FILENAME~/json$/{if ($1 == \"version:\") pv=$2} fm{if ($1 == \"version:\") sv=$2} fm{if ($1 == \"version:\") gsub(/[\"\\047]/,\"\",sv)} fm{if ($1 == \"version:\") if (sv != pv) bad=1} END{if (pv == \"\") bad=1} END{exit bad}' .claude-plugin/plugin.json skills/*/SKILL.md"
+    severity: error
+    desc: "plugin.json version must match every SKILL.md metadata.version (run skills/skill-repo/scripts/check-version-parity.sh to verify before tagging)"
+    tags: [release, versioning, parity]
+
 llm_reviews:
   - id: SR-32
     domain: repo-health
