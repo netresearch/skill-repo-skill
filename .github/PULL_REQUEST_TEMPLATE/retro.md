@@ -7,6 +7,13 @@
 <!-- If this PR comes from /retro, include: session date, finding signal ID, brief description -->
 <!-- Otherwise: link to issue, describe motivation -->
 
+<!-- State the finding using the failure-pattern schema (see skills/skill-repo/references/materialization-contract.md): -->
+
+- **Symptom:**
+- **Cause:**
+- **Required behavior:**
+- **Verification:** <!-- eval id (evals/evals.json name) or checkpoint id (checkpoints.yaml key) -->
+
 ## Change
 
 <!-- What concretely changed: files, scope, behavior. Paths are relative to skills/<skill-name>/ in this repo's layout. -->
