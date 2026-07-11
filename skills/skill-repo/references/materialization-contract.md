@@ -24,7 +24,7 @@ Every failure pattern encoded into a skill — a `skill-update`, a `new-skill`, 
 
 Verification is mandatory. It makes explicit the pipeline's existing TDD-eval-stub rule: a failure pattern without a named eval or checkpoint has no machine check.
 
-This is the single source of truth for the schema's four fields and their order. Consuming surfaces (`retro-skill`'s PR "Came from" section, `claude-coach-skill`'s `rule.md`/`antipattern.md` templates) require the schema; they do not redefine it.
+This is the single source of truth for the schema's four fields and their order. Consuming surfaces (`retro-skill`'s PR "Came from" section, `claude-coach-plugin`'s `rule.md`/`antipattern.md` templates) require the schema; they do not redefine it.
 
 ## Rule 1: Patches target source repos, never local cache
 

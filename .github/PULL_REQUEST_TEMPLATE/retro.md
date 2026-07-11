@@ -7,7 +7,7 @@
 <!-- If this PR comes from /retro, include: session date, finding signal ID, brief description -->
 <!-- Otherwise: link to issue, describe motivation -->
 
-<!-- State the finding using the failure-pattern schema (see references/materialization-contract.md): -->
+<!-- State the finding using the failure-pattern schema (see skills/skill-repo/references/materialization-contract.md): -->
 
 - **Symptom:**
 - **Cause:**
