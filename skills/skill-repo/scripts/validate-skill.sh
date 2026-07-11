@@ -179,6 +179,28 @@ PYEOF
         COUNT=$(echo "$RELATIVE_PATHS" | wc -l)
         warning "SKILL.md has $COUNT script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
     fi
+
+    # checkpoints.yaml presence (warning only — many skills legitimately lack
+    # one; a documented justification marker suppresses the warning per
+    # add-checkpoints' suitability criteria, e.g. purely conceptual skills)
+    SKILL_DIR="$(dirname "$SKILL_FILE")"
+    SKILL_DIR_REL="${SKILL_DIR#"$REPO_DIR"}"
+    SKILL_DIR_REL="${SKILL_DIR_REL#/}"
+    SKILL_DIR_REL="${SKILL_DIR_REL:-.}"
+    CHECKPOINTS_JUSTIFIED=0
+    for f in "$SKILL_FILE" "$REPO_DIR/README.md"; do
+        if [[ -f "$f" ]] && grep -qiE "^[[:space:]]*([*-][[:space:]]+)?checkpoints:[[:space:]]*none[[:space:]]*\(justified" "$f"; then
+            CHECKPOINTS_JUSTIFIED=1
+            break
+        fi
+    done
+    if [[ -f "$SKILL_DIR/checkpoints.yaml" ]]; then
+        success "checkpoints.yaml exists"
+    elif [[ $CHECKPOINTS_JUSTIFIED -eq 1 ]]; then
+        success "checkpoints.yaml absence is justified"
+    else
+        warning "checkpoints.yaml not found in ${SKILL_DIR_REL} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
+    fi
 else
     error "SKILL.md not found (checked root and skills/*/)"
 fi
