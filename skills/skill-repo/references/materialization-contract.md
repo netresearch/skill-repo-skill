@@ -11,6 +11,21 @@ This contract covers two destinations from [retro-skill](https://github.com/netr
 
 For the full destination taxonomy and routing heuristics, see [retro-skill/references/destination-taxonomy.md](https://github.com/netresearch/retro-skill/blob/main/references/destination-taxonomy.md).
 
+## Failure-pattern schema
+
+Every failure pattern encoded into a skill — a `skill-update`, a `new-skill`, a PR's "Came from" section, a coach `rule.md`/`antipattern.md` entry — is captured in **exactly** four fields, in this order:
+
+| Field | Content |
+|---|---|
+| **Symptom** | What was observed going wrong |
+| **Cause** | Why it happened (root cause, not the trigger) |
+| **Required behavior** | What the agent must do instead |
+| **Verification** | An eval id (`evals/evals.json` `name`) or checkpoint id (`checkpoints.yaml` key) that proves the required behavior — not free text |
+
+Verification is mandatory. It makes explicit the pipeline's existing TDD-eval-stub rule: a failure pattern without a named eval or checkpoint has no machine check.
+
+This is the single source of truth for the schema's four fields and their order. Consuming surfaces (`retro-skill`'s PR "Came from" section, `claude-coach-skill`'s `rule.md`/`antipattern.md` templates) require the schema; they do not redefine it.
+
 ## Rule 1: Patches target source repos, never local cache
 
 Local skill cache (`~/.claude/plugins/cache/`) is overwritten on plugin update. Edits there are lost. **Always** locate the source repository before patching.
@@ -85,7 +100,7 @@ gh pr create --template retro.md ...
 This invokes `.github/PULL_REQUEST_TEMPLATE/retro.md` (not the repo's default template, if any). The retro template has:
 
 - `## Summary`
-- `## Came from` (session date, finding signal ID)
+- `## Came from` (session date, finding signal ID, and the finding stated in the [failure-pattern schema](#failure-pattern-schema): Symptom → Cause → Required behavior → Verification)
 - `## Change` (concrete diff scope)
 - `## Target area` (`skills/<name>/SKILL.md` / `references/` / `scripts/` / `templates/` / `checkpoints.yaml` / `evals/evals.json`)
 - `## Learning source` (checkboxes: from /retro, reusable, scoped, eval included)
