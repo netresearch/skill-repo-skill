@@ -184,9 +184,12 @@ PYEOF
     # one; a documented justification marker suppresses the warning per
     # add-checkpoints' suitability criteria, e.g. purely conceptual skills)
     SKILL_DIR="$(dirname "$SKILL_FILE")"
+    SKILL_DIR_REL="${SKILL_DIR#"$REPO_DIR"}"
+    SKILL_DIR_REL="${SKILL_DIR_REL#/}"
+    SKILL_DIR_REL="${SKILL_DIR_REL:-.}"
     CHECKPOINTS_JUSTIFIED=0
     for f in "$SKILL_FILE" "$REPO_DIR/README.md"; do
-        if [[ -f "$f" ]] && grep -qE "^Checkpoints: none \(justified" "$f"; then
+        if [[ -f "$f" ]] && grep -qiE "^[[:space:]]*([*-][[:space:]]+)?checkpoints:[[:space:]]*none[[:space:]]*\(justified" "$f"; then
             CHECKPOINTS_JUSTIFIED=1
             break
         fi
@@ -196,7 +199,7 @@ PYEOF
     elif [[ $CHECKPOINTS_JUSTIFIED -eq 1 ]]; then
         success "checkpoints.yaml absence is justified"
     else
-        warning "checkpoints.yaml not found in ${SKILL_DIR#"$REPO_DIR"/} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
+        warning "checkpoints.yaml not found in ${SKILL_DIR_REL} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
     fi
 else
     error "SKILL.md not found (checked root and skills/*/)"
