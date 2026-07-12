@@ -15,8 +15,7 @@ got="$(get_description "$fm")"
 
 fail=0
 [[ "$got" == "$expected" ]] || { echo "FAIL: get_description returned '$got', expected '$expected'"; fail=1; }
-lines="$(printf '%s' "$got" | grep -c '^' || true)"
-[[ "$lines" == "1" ]] || { echo "FAIL: expected 1 line, got $lines (double-print regression)"; fail=1; }
+[[ "$got" != *$'\n'* ]] || { echo "FAIL: output contains a newline (double-print regression)"; fail=1; }
 [[ ${#got} -eq ${#expected} ]] || { echo "FAIL: char count ${#got} != real ${#expected}"; fail=1; }
 
 if [[ "$fail" == "0" ]]; then echo "PASS: get_description single-prints, char count matches real length"; fi
