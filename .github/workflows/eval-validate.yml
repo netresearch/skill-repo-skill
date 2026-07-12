@@ -2,6 +2,16 @@ name: Validate Evals
 
 on:
   workflow_call:
+    inputs:
+      require_evals:
+        description: >-
+          Fail when a skill exceeds the breadth threshold (SKILL.md body
+          >300 words or >3 reference files) and has no evals.json. Small
+          pointer-skills stay exempt. Default false: a missing evals.json
+          only emits a warning, unchanged.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -50,3 +60,7 @@ jobs:
       - name: Validate evals structure
         if: steps.find-evals.outputs.found == 'true'
         run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh "${{ steps.find-evals.outputs.path }}"
+
+      - name: Enforce required evals for broad skills
+        if: steps.find-evals.outputs.found == 'false' && inputs.require_evals == true
+        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh --require-evals
