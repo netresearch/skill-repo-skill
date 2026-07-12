@@ -132,7 +132,7 @@ get_description() {
     awk '
         BEGIN { collecting=0; val="" }
         /^[a-zA-Z_][a-zA-Z0-9_-]*:/ {
-            if (collecting) { print val; exit }
+            if (collecting) { print val; collecting=0; exit }
         }
         /^description:/ {
             sub(/^description:[[:space:]]*/, "", $0)
