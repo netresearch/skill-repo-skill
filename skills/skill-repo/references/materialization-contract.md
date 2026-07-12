@@ -147,7 +147,7 @@ Other skill repos may use different eval conventions; consult each target's `eva
 ### Quality rule: every eval needs a delta-discriminating assertion
 
 Every eval needs at least one assertion a no-skill baseline answer FAILS; verify with
-`run-ab-evals.sh` (the `without_skill` pass rate on that assertion must be <1.0). A
+`repo-root run-ab-evals.sh` (the `without` pass rate on that assertion must be <1.0). A
 keyword assertion that any generic answer would already contain (`"alpine"`, `"USER"`,
 a bare `"Plugin"`) rewards boilerplate and never tests the retro-born gotcha that is
 the skill's actual value — write the assertion against the specific fact, number, flag,
@@ -156,7 +156,8 @@ path, an exact risk multiplier, a non-obvious CLI invocation, a "do X not Y" cor
 of the model's default instinct).
 
 This verification is a **LOCAL/manual step, not CI** — `run-ab-evals.sh` calls out to
-`claude -p` per eval and is not wired into any workflow.
+`claude -p` per eval. It is referenced only by `.github/workflows/ab-evals-schedule.yml`,
+which is disabled by team decision, so it is not part of any active CI gate.
 
 ## Rule 8: Per-private-repo confirmation
 
