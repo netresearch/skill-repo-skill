@@ -8,8 +8,14 @@
 #   Legacy A: {"skill_name": "...", "evals": [{id, eval_name, prompt, assertions: [...]}]}
 #   Legacy B: [{name, prompt, assertions: [{type, value/pattern, description?}]}]
 #
-# Usage: bash validate-evals.sh [path-to-evals.json]
+# Usage: bash validate-evals.sh [path-to-evals.json] [--require-evals]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
+#
+#   --require-evals: only takes effect when no evals.json is found. Instead of
+#     the plain "no evals.json found" error, checks whether any SKILL.md in
+#     the repo exceeds the breadth threshold (body >300 words or >3 files in
+#     references/). Small pointer-skills stay exempt. Broad skills without an
+#     evals.json fail with a ::error:: annotation naming the skill.
 
 set -euo pipefail
 
@@ -21,8 +27,76 @@ pass() { PASS=$((PASS + 1)); echo "  PASS: $1"; }
 fail() { FAIL=$((FAIL + 1)); echo "  FAIL: $1"; }
 warn() { WARN=$((WARN + 1)); echo "  WARN: $1"; }
 
+# --- Breadth check (--require-evals mode) ---
+# Only called when no evals.json was found anywhere in the repo. Determines
+# whether any skill is broad enough (body >300 words or >3 reference files)
+# that it should have had one. Small pointer-skills are exempt. Exits 1 with
+# a ::error:: annotation per offending skill; otherwise returns 0.
+check_required_evals() {
+  local skill_md skill_dir skill_name body_words ref_count close_line
+  local -a skill_files=() broad_skills=()
+
+  [[ -f "SKILL.md" ]] && skill_files+=("SKILL.md")
+  for skill_md in skills/*/SKILL.md; do
+    [[ -f "$skill_md" ]] && skill_files+=("$skill_md")
+  done
+
+  if [[ ${#skill_files[@]} -eq 0 ]]; then
+    echo "WARN: --require-evals set but no SKILL.md found, skipping breadth check"
+    return 0
+  fi
+
+  for skill_md in "${skill_files[@]}"; do
+    skill_dir=$(dirname "$skill_md")
+    skill_name=$(basename "$skill_dir")
+    [[ "$skill_dir" == "." ]] && skill_name=$(basename "$(pwd)")
+
+    # Body word count: SKILL.md content after the frontmatter closing '---'.
+    if head -1 "$skill_md" | grep -q '^---$'; then
+      close_line=$(awk 'NR>1 && /^---$/{print NR; exit}' "$skill_md")
+      if [[ -n "$close_line" ]]; then
+        body_words=$(tail -n +"$((close_line + 1))" "$skill_md" | wc -w | tr -d ' ')
+      else
+        body_words=$(wc -w < "$skill_md" | tr -d ' ')
+      fi
+    else
+      body_words=$(wc -w < "$skill_md" | tr -d ' ')
+    fi
+
+    ref_count=0
+    if [[ -d "$skill_dir/references" ]]; then
+      ref_count=$(find "$skill_dir/references" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
+    fi
+
+    if [[ "$body_words" -gt 300 ]] || [[ "$ref_count" -gt 3 ]]; then
+      broad_skills+=("$skill_name (body: ${body_words} words, references: ${ref_count} files)")
+    fi
+  done
+
+  if [[ ${#broad_skills[@]} -eq 0 ]]; then
+    echo "PASS: no skill exceeds the breadth threshold (body >300 words or >3 reference files); evals.json not required"
+    return 0
+  fi
+
+  local entry
+  for entry in "${broad_skills[@]}"; do
+    echo "::error::require_evals: $entry exceeds the breadth threshold but has no evals.json — add skills/<name>/evals/evals.json (or evals/evals.json) with structural evals, or keep require_evals: false for this repo"
+  done
+  echo ""
+  echo "Results: 0 passed, ${#broad_skills[@]} failed, 0 warnings"
+  exit 1
+}
+
 # --- Locate evals.json ---
-EVALS_FILE="${1:-}"
+REQUIRE_EVALS=0
+EVALS_FILE=""
+for arg in "$@"; do
+  case "$arg" in
+    --require-evals) REQUIRE_EVALS=1 ;;
+    *) EVALS_FILE="$arg" ;;
+  esac
+done
+
 if [[ -z "$EVALS_FILE" ]]; then
   for candidate in skills/*/evals/evals.json evals/evals.json; do
     if [[ -f "$candidate" ]]; then
@@ -33,6 +107,10 @@ if [[ -z "$EVALS_FILE" ]]; then
 fi
 
 if [[ -z "$EVALS_FILE" ]] || [[ ! -f "$EVALS_FILE" ]]; then
+  if [[ "$REQUIRE_EVALS" -eq 1 ]]; then
+    check_required_evals
+    exit 0
+  fi
   echo "ERROR: No evals.json found"
   echo "Searched: skills/*/evals/evals.json, evals/evals.json"
   exit 1
