@@ -268,7 +268,7 @@ import json
 raw = json.load(open('$EVALS_FILE'))
 evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 for a in evals[$i].get('assertions', []):
-    print(a.get('pattern', ''))
+    print(a.get('value') or a.get('pattern') or '')
 ")"
 
         delta=$((pass_s - pass_w))
