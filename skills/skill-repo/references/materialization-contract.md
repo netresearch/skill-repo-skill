@@ -144,6 +144,20 @@ When a `skill-update` PR changes behavior expectations, **append a new eval obje
 
 Other skill repos may use different eval conventions; consult each target's `evals/` directory before submitting.
 
+### Quality rule: every eval needs a delta-discriminating assertion
+
+Every eval needs at least one assertion a no-skill baseline answer FAILS; verify with
+`run-ab-evals.sh` (the `without_skill` pass rate on that assertion must be <1.0). A
+keyword assertion that any generic answer would already contain (`"alpine"`, `"USER"`,
+a bare `"Plugin"`) rewards boilerplate and never tests the retro-born gotcha that is
+the skill's actual value — write the assertion against the specific fact, number, flag,
+or command shape a model can only produce by having read the skill (an internal script
+path, an exact risk multiplier, a non-obvious CLI invocation, a "do X not Y" correction
+of the model's default instinct).
+
+This verification is a **LOCAL/manual step, not CI** — `run-ab-evals.sh` calls out to
+`claude -p` per eval and is not wired into any workflow.
+
 ## Rule 8: Per-private-repo confirmation
 
 Before pushing to a private host (`git.netresearch.de`, `gitlab.com/<private-org>`, etc.), prompt the user. Decision is remembered per `(session, repo-url)` for the duration of the active retro-skill session; not persisted across sessions.
