@@ -33,8 +33,8 @@ warn() { WARN=$((WARN + 1)); echo "  WARN: $1"; }
 # that it should have had one. Small pointer-skills are exempt. Exits 1 with
 # a ::error:: annotation per offending skill; otherwise returns 0.
 check_required_evals() {
-  local skill_md skill_dir skill_name body_words ref_count close_line
-  local -a skill_files=() broad_skills=()
+  local skill_md skill_dir skill_name body_words ref_count
+  local -a skill_files=() broad_skills=() ref_files=()
 
   [[ -f "SKILL.md" ]] && skill_files+=("SKILL.md")
   for skill_md in skills/*/SKILL.md; do
@@ -52,20 +52,23 @@ check_required_evals() {
     [[ "$skill_dir" == "." ]] && skill_name=$(basename "$(pwd)")
 
     # Body word count: SKILL.md content after the frontmatter closing '---'.
-    if head -1 "$skill_md" | grep -q '^---$'; then
-      close_line=$(awk 'NR>1 && /^---$/{print NR; exit}' "$skill_md")
-      if [[ -n "$close_line" ]]; then
-        body_words=$(tail -n +"$((close_line + 1))" "$skill_md" | wc -w | tr -d ' ')
-      else
-        body_words=$(wc -w < "$skill_md" | tr -d ' ')
-      fi
-    else
-      body_words=$(wc -w < "$skill_md" | tr -d ' ')
-    fi
+    body_words=$(awk '
+      BEGIN { has_fm = 0; fm_closed = 0; total_words = 0; body_words = 0 }
+      NR == 1 { if (/^---$/) { has_fm = 1; next } }
+      /^---$/ && has_fm && !fm_closed { fm_closed = 1; next }
+      {
+        total_words += NF
+        if (fm_closed) { body_words += NF }
+      }
+      END { print (has_fm && fm_closed ? body_words : total_words) }
+    ' "$skill_md")
 
     ref_count=0
     if [[ -d "$skill_dir/references" ]]; then
-      ref_count=$(find "$skill_dir/references" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')
+      ref_files=("$skill_dir/references"/*.md)
+      if [[ -e "${ref_files[0]}" ]]; then
+        ref_count=${#ref_files[@]}
+      fi
     fi
 
     if [[ "$body_words" -gt 300 ]] || [[ "$ref_count" -gt 3 ]]; then
