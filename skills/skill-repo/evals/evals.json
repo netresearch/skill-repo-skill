@@ -179,5 +179,15 @@
       { "type": "content", "pattern": "netresearch/skill-repo-skill" },
       { "type": "content", "pattern": "(dependabot|renovate|pull_request)" }
     ]
+  },
+  {
+    "name": "retire_superseded_skill",
+    "prompt": "The 'example-legacy' skill is superseded by automation and must be decommissioned. Walk through the retirement.",
+    "assertions": [
+      { "type": "content", "pattern": "marketplace\\.json" },
+      { "type": "content", "pattern": "[Dd]eprecat" },
+      { "type": "content", "pattern": "archive" },
+      { "type": "content", "pattern": "plugin uninstall" }
+    ]
   }
 ]
