@@ -109,7 +109,15 @@ Reply "go" to proceed, or name repos to skip.
 
 Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
 
-- **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo — `[[ -d $d/.bare ]] … [[ -e $d/.git/HEAD ]] … $d/main/.git` — instead of assuming one shape.
+- **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`, which is a pointer *file* when the top level is itself a worktree), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo instead of assuming one shape:
+
+  ```bash
+  G=$([[ -d "$d/.bare" ]] && echo "$d/.bare" \
+      || git -C "$d" rev-parse --absolute-git-dir 2>/dev/null \
+      || git -C "$d/main" rev-parse --absolute-git-dir 2>/dev/null)
+  ```
+
+  `rev-parse --absolute-git-dir` handles both plain repos and worktree pointer files; it cannot discover `$d/.bare` (a worktree *parent* dir is not a repo, and upward discovery never looks into `.bare`), and it must not run first from `$d` when only `$d/main` is the repo — hence the explicit order.
 - **`git fetch --tags` fails wholesale on one stale tag** (`would clobber existing tag`), taking the branch fetch down with it. Survey with a branches-only refspec plus `git ls-remote --tags origin` and the peeled (`^{}`) SHA for the ahead-count; never resolve the tag locally.
 - **Duplicate checkouts happen** (two dirs, same `origin`). Dedupe the manifest by remote URL, not by directory name, or the same repo gets two bump PRs.
 - **CI-only deltas are not releases.** If every unreleased commit touches only `.github/**`, `.gitlab-ci.yml`, or `renovate.json`, the release archives would be byte-identical to the last tag — skip the repo and say so in the manifest.
