@@ -105,6 +105,16 @@ Execution order per repo:
 Reply "go" to proceed, or name repos to skip.
 ```
 
+### Building the manifest: fleet-survey gotchas
+
+Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
+
+- **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo — `[[ -d $d/.bare ]] … [[ -e $d/.git/HEAD ]] … $d/main/.git` — instead of assuming one shape.
+- **`git fetch --tags` fails wholesale on one stale tag** (`would clobber existing tag`), taking the branch fetch down with it. Survey with a branches-only refspec plus `git ls-remote --tags origin` and the peeled (`^{}`) SHA for the ahead-count; never resolve the tag locally.
+- **Duplicate checkouts happen** (two dirs, same `origin`). Dedupe the manifest by remote URL, not by directory name, or the same repo gets two bump PRs.
+- **CI-only deltas are not releases.** If every unreleased commit touches only `.github/**`, `.gitlab-ci.yml`, or `renovate.json`, the release archives would be byte-identical to the last tag — skip the repo and say so in the manifest.
+- **Archived repos are release-infeasible** (pushes rejected). A deprecated repo whose deprecation-banner commit landed *after* the last tag has never shipped its own deprecation notice — flag it for an unarchive decision instead of silently skipping.
+
 ## Immutable-Release Caveat
 
 Deleted GitHub releases do NOT free the tag for reuse. Once a release is published and deleted, that tag string is permanently locked as a deleted release — a new release with the same tag will fail. See `git-workflow-skill` → `references/github-releases.md`. Therefore: get it right the first time. The version-parity check above is what "right the first time" means in practice.
