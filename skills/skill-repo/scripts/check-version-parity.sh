@@ -12,7 +12,8 @@
 #
 # Behavior:
 #   * Reads .claude-plugin/plugin.json version (required)
-#   * If SKILL.md frontmatter has metadata.version, requires it matches
+#   * If SKILL.md frontmatter declares a version — metadata.version or a
+#     top-level version: key — requires it matches
 #   * composer.json MUST NOT have a version field (version is derived from
 #     git tags by the release workflow). Composer-shipped version would
 #     drift from the tag.
@@ -63,12 +64,13 @@ if [[ ${#SKILL_FILES[@]} -eq 0 ]]; then
 fi
 
 for skill_md in "${SKILL_FILES[@]}"; do
-  # Extract metadata.version from YAML frontmatter (indented key).
+  # Extract the version from YAML frontmatter: metadata.version (indented)
+  # or a top-level version: key — both forms exist in the fleet.
   # Tolerate quoted or unquoted values; return empty if absent.
   SKILL_VERSION=$(awk '
     /^---$/ { fm = !fm; next }
-    fm && /^[[:space:]]+version:[[:space:]]*/ {
-      gsub(/^[[:space:]]+version:[[:space:]]*/, "")
+    fm && /^[[:space:]]*version:[[:space:]]*/ {
+      gsub(/^[[:space:]]*version:[[:space:]]*/, "")
       gsub(/["\047]/, "")
       gsub(/[[:space:]]+$/, "")
       print

@@ -30,9 +30,15 @@ What it checks:
 - `.claude-plugin/plugin.json` has a `.version` field — exits with an error if missing.
 - `composer.json` does **not** have a `.version` field — composer versions come from the git tag via the Release workflow, so a hard-coded version drifts silently.
 - If a tag argument is provided, `plugin.json.version` equals that tag with the `v` prefix stripped.
-- Every `skills/*/SKILL.md` that declares `metadata.version` in frontmatter matches `plugin.json.version`.
+- Every `skills/*/SKILL.md` that declares a version in frontmatter — `metadata.version` *or* a top-level `version:` key (both forms exist in the fleet; some SKILL.md files declare none, which is fine) — matches `plugin.json.version`.
 
 If called without an argument and all parity passes, the script prints an advisory suggesting the next tag call. Run before every `git push origin vX.Y.Z`.
+
+Bump tooling must handle the same two frontmatter forms: a bump script that only rewrites the indented `metadata.version` silently leaves a top-level `version:` at the old value, and the tag pipeline's `validate:skill` then fails on exactly that mismatch (it-maintenance-skill v1.10.0 died this way; typo3-upgrade-estimator-skill nearly repeated it in the 2026-07-16 sweep).
+
+## Changelog Rollover in the Bump Commit
+
+If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
 
 ## Cache Safety: Never Edit the Installed Copy
 
