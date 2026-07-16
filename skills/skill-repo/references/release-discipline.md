@@ -30,9 +30,15 @@ What it checks:
 - `.claude-plugin/plugin.json` has a `.version` field — exits with an error if missing.
 - `composer.json` does **not** have a `.version` field — composer versions come from the git tag via the Release workflow, so a hard-coded version drifts silently.
 - If a tag argument is provided, `plugin.json.version` equals that tag with the `v` prefix stripped.
-- Every `skills/*/SKILL.md` that declares `metadata.version` in frontmatter matches `plugin.json.version`.
+- Every `skills/*/SKILL.md` that declares a version in frontmatter — `metadata.version` *or* a top-level `version:` key (both forms exist in the fleet; some SKILL.md files declare none, which is fine) — matches `plugin.json.version`.
 
 If called without an argument and all parity passes, the script prints an advisory suggesting the next tag call. Run before every `git push origin vX.Y.Z`.
+
+Bump tooling must handle the same two frontmatter forms: a bump script that only rewrites the indented `metadata.version` silently leaves a top-level `version:` at the old value, and the tag pipeline's `validate:skill` then fails on exactly that mismatch (it-maintenance-skill v1.10.0 died this way; typo3-upgrade-estimator-skill nearly repeated it in the 2026-07-16 sweep).
+
+## Changelog Rollover in the Bump Commit
+
+If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
 
 ## Cache Safety: Never Edit the Installed Copy
 
@@ -98,6 +104,24 @@ Execution order per repo:
 
 Reply "go" to proceed, or name repos to skip.
 ```
+
+### Building the manifest: fleet-survey gotchas
+
+Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
+
+- **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`, which is a pointer *file* when the top level is itself a worktree), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo instead of assuming one shape:
+
+  ```bash
+  G=$([[ -d "$d/.bare" ]] && echo "$d/.bare" \
+      || git -C "$d" rev-parse --absolute-git-dir 2>/dev/null \
+      || git -C "$d/main" rev-parse --absolute-git-dir 2>/dev/null)
+  ```
+
+  `rev-parse --absolute-git-dir` handles both plain repos and worktree pointer files; it cannot discover `$d/.bare` (a worktree *parent* dir is not a repo, and upward discovery never looks into `.bare`), and it must not run first from `$d` when only `$d/main` is the repo — hence the explicit order.
+- **`git fetch --tags` fails wholesale on one stale tag** (`would clobber existing tag`), taking the branch fetch down with it. Survey with a branches-only refspec plus `git ls-remote --tags origin` and the peeled (`^{}`) SHA for the ahead-count; never resolve the tag locally.
+- **Duplicate checkouts happen** (two dirs, same `origin`). Dedupe the manifest by remote URL, not by directory name, or the same repo gets two bump PRs.
+- **CI-only deltas are not releases.** If every unreleased commit touches only `.github/**`, `.gitlab-ci.yml`, or `renovate.json`, the release archives would be byte-identical to the last tag — skip the repo and say so in the manifest.
+- **Archived repos are release-infeasible** (pushes rejected). A deprecated repo whose deprecation-banner commit landed *after* the last tag has never shipped its own deprecation notice — flag it for an unarchive decision instead of silently skipping.
 
 ## Immutable-Release Caveat
 
