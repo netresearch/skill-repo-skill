@@ -122,6 +122,20 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 - **Duplicate checkouts happen** (two dirs, same `origin`). Dedupe the manifest by remote URL, not by directory name, or the same repo gets two bump PRs.
 - **CI-only deltas are not releases.** If every unreleased commit touches only `.github/**`, `.gitlab-ci.yml`, or `renovate.json`, the release archives would be byte-identical to the last tag — skip the repo and say so in the manifest.
 - **Archived repos are release-infeasible** (pushes rejected). A deprecated repo whose deprecation-banner commit landed *after* the last tag has never shipped its own deprecation notice — flag it for an unarchive decision instead of silently skipping.
+- **Read the version state from `origin/main`, never the local worktree.** Worktrees drift — some sit behind the remote, some ahead, some are dirty — so `cat repo/.claude-plugin/plugin.json` gives a misleading parity picture. Read the authoritative value with `git show origin/main:.claude-plugin/plugin.json` after fetching. `git show` takes a single literal path and does **not** glob, so enumerate the SKILL.md files first, then read each:
+
+  ```bash
+  for f in $(git ls-tree -r --name-only origin/main | grep -E 'skills/[^/]+/SKILL\.md$'); do
+    git show "origin/main:$f"
+  done
+  ```
+
+  Verified in the 2026-07-18 sweep (23 releases), where worktree reads disagreed with `origin/main` on ~6 repos.
+- **`plugin.json` ahead of the last tag ⇒ the bump already merged — tag only, no bump PR.** Classify each repo from the `origin/main` value: `plugin.json.version > last tag` means a prior bump PR already landed and the repo just needs a signed tag; `plugin.json.version == last tag` means it needs a bump PR first. Tagging a "prepared" repo at its committed version keeps parity true by construction. Don't open a bump PR for a repo that is already prepared — it would double-bump.
+
+## GitLab (`git.netresearch.de`) skill repos release on tag too
+
+The release-discipline above is GitHub-centric, but the `coding-ai` GitLab skill repos ship the same way: **a pushed signed tag triggers a pipeline that creates the GitLab Release** via the `claude-code-skill` CI component (`include:` in `.gitlab-ci.yml`). There is no separate release workflow file and **no manual `glab release create`** — pushing `vX.Y.Z` is sufficient; the Release object appears when the tag pipeline goes green. Confirm with `glab api "projects/coding-ai%2F<repo>/releases/v<ver>"` (and the tag pipeline via `pipelines?ref=v<ver>`). Same bump-PR-then-tag order as GitHub applies; merge the bump MR only when `detailed_merge_status == "mergeable"`.
 
 ## Immutable-Release Caveat
 
