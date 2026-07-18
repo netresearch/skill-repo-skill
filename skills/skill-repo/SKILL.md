@@ -51,7 +51,7 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (catalog conventions — no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md). Put discovery/catalog fields in README or optional YAML, not frontmatter — [`references/skill-discovery-metadata.md`](references/skill-discovery-metadata.md).
+Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md). Put discovery/catalog fields in README or optional YAML, not frontmatter — [`references/skill-discovery-metadata.md`](references/skill-discovery-metadata.md).
 
 ## plugin.json (`.claude-plugin/plugin.json`)
 
