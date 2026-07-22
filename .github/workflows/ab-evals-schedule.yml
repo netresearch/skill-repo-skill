@@ -1,42 +1,63 @@
-name: A/B Evals Schedule
+name: A/B Evals (reusable)
 
-# Scheduled A/B eval runs (issue #146): runs scripts/run-ab-evals.sh for
-# marketplace catalog skills, merges the per-skill results (with a
-# provenance block) into docs/dashboard/data/results.json via
-# scripts/merge-ab-results.py, validates the dashboard, and opens a PR.
+# Hosted reusable that runs the A/B eval sweep (issue #146): runs
+# scripts/run-ab-evals.sh for marketplace catalog skills, merges the
+# per-skill results (with a provenance block) into
+# docs/dashboard/data/results.json via scripts/merge-ab-results.py,
+# validates the dashboard, and opens a PR.
 #
-# Cost bound: a scheduled run processes BATCH_SIZE skills, selected
-# deterministically by ISO week number modulo the number of catalog groups
+# The scheduled entry point lives in ab-evals-caller.yml, which is a PURE
+# CALLER with no step-level action uses — the same caller + reusable split
+# this repo already uses for eval-validate and npm-pack-smoke. Every pinned
+# action now lives here, in the shared workflow, instead of in the consumer.
+#
+# Cost bound: a run processes BATCH_SIZE skills, selected deterministically
+# by ISO week number modulo the number of catalog groups
 # (ceil(catalog / BATCH_SIZE), currently ceil(42/5) = 9 groups), so the full
-# catalog rotates through in ~9 weekly runs. The full catalog runs only via
-# workflow_dispatch with full=true (takes several hours).
+# catalog rotates through in ~9 weekly runs. The full catalog runs only when
+# the caller passes full=true (takes several hours).
 #
-# Prerequisite (human setup step): the ANTHROPIC_API_KEY repository secret
-# must exist — run-ab-evals.sh drives the claude CLI with it. The run fails
-# early with a clear error if the secret is missing.
+# Prerequisite (human setup step): the caller must pass the
+# ANTHROPIC_API_KEY secret — run-ab-evals.sh drives the claude CLI with it.
+# The run fails early with a clear error if it is missing.
 #
 # The refresh PR is created with GITHUB_TOKEN, so PR CI does not start
 # automatically (GitHub limitation) — close/reopen the PR to trigger checks.
 
 on:
-  schedule:
-    - cron: "17 3 * * 1"  # Mondays 03:17 UTC
-  workflow_dispatch:
+  workflow_call:
     inputs:
       skills:
         description: "Comma/space-separated plugin names to run (empty = weekly rotation subset)"
+        required: false
         type: string
         default: ""
       full:
         description: "Run the full catalog instead of the rotation subset (several hours)"
+        required: false
         type: boolean
         default: false
+    secrets:
+      ANTHROPIC_API_KEY:
+        description: "Anthropic API key used by scripts/run-ab-evals.sh to drive the claude CLI."
+        required: true
 
+# CALLER REQUIREMENTS
+# ===================
+# The calling job MUST grant both scopes below, otherwise the run fails with
+# `startup_failure` before any job executes:
+#   contents: write       - push the refresh branch
+#   pull-requests: write  - open the refresh PR
+#
+#   jobs:
+#     ab-evals:
+#       uses: ./.github/workflows/ab-evals-schedule.yml
+#       permissions:
+#         contents: write
+#         pull-requests: write
+#       secrets:
+#         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 permissions: {}
-
-concurrency:
-  group: ab-evals-schedule
-  cancel-in-progress: false
 
 env:
   BATCH_SIZE: "5"
