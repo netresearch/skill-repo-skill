@@ -1,0 +1,60 @@
+name: A/B Evals Schedule
+
+# Scheduled entry point for the A/B eval sweep (issue #146). This is a PURE
+# CALLER: the run logic and every pinned action live in the hosted reusable
+# ab-evals-schedule.yml — the same caller + reusable split this repo already
+# uses for eval-validate and npm-pack-smoke.
+#
+# Why the reusable kept the "-schedule" filename: converting that file in
+# place (rather than renaming it) keeps `git blame` on the run logic and
+# keeps its untouched lines out of the "new code" window — SonarCloud does
+# not follow renames and would otherwise re-report pre-existing findings in
+# the moved body. Renaming it is a cosmetic follow-up, not worth re-opening
+# that window here.
+#
+# Cost bound: a scheduled run processes BATCH_SIZE skills, selected
+# deterministically by ISO week number modulo the number of catalog groups
+# (ceil(catalog / BATCH_SIZE), currently ceil(42/5) = 9 groups), so the full
+# catalog rotates through in ~9 weekly runs. The full catalog runs only via
+# workflow_dispatch with full=true (takes several hours).
+#
+# Prerequisite (human setup step): the ANTHROPIC_API_KEY repository secret
+# must exist — run-ab-evals.sh drives the claude CLI with it. The run fails
+# early with a clear error if the secret is missing.
+#
+# The refresh PR is created with GITHUB_TOKEN, so PR CI does not start
+# automatically (GitHub limitation) — close/reopen the PR to trigger checks.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"  # Mondays 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      skills:
+        description: "Comma/space-separated plugin names to run (empty = weekly rotation subset)"
+        type: string
+        default: ""
+      full:
+        description: "Run the full catalog instead of the rotation subset (several hours)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: ab-evals-schedule
+  cancel-in-progress: false
+
+jobs:
+  ab-evals:
+    uses: ./.github/workflows/ab-evals-schedule.yml
+    permissions:
+      contents: write  # push the refresh branch
+      pull-requests: write  # open the refresh PR
+    # On `schedule` the workflow_dispatch inputs are unset, so fall back to
+    # the rotation-subset defaults.
+    with:
+      skills: ${{ inputs.skills || '' }}
+      full: ${{ inputs.full || false }}
+    secrets:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
