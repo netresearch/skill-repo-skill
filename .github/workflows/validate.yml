@@ -179,10 +179,10 @@ jobs:
           echo "Found $COUNT Python file(s)"
           echo "=== ruff check ==="
           # renovate: datasource=pypi depName=ruff
-          uvx ruff@0.16.0 check .
+          uvx --no-build ruff@0.16.0 check .
           echo "=== ruff format ==="
           # renovate: datasource=pypi depName=ruff
-          uvx ruff@0.16.0 format --check .
+          uvx --no-build ruff@0.16.0 format --check .
 
       - name: Validate checkpoint schemas
         run: |
@@ -198,8 +198,7 @@ jobs:
           while IFS= read -r f; do
             [[ -z "$f" ]] && continue
             echo "=== Validating $f ==="
-            # renovate: datasource=pypi depName=pyyaml
-            uv run --with pyyaml==6.0.2 python3 - "$f" <<'PYEOF' || FAILED=1
+            uv run --with pyyaml python3 - "$f" <<'PYEOF' || FAILED=1
           import sys, yaml
           with open(sys.argv[1]) as fh:
               data = yaml.safe_load(fh)
