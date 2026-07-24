@@ -10,7 +10,7 @@
         "/^\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+.*?(?:uvx (?:--from \\S+ )?\\S+@|--with \\S+==)(?<currentValue>[0-9][^\\s]*)"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+(?:uvx (?:--from \\S+ )?\\S+@|uv run --with \\S+==)(?<currentValue>[0-9]\\S*)"
       ]
     }
   ]
