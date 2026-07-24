@@ -178,9 +178,11 @@ jobs:
           COUNT=$(echo "$PYFILES" | wc -l)
           echo "Found $COUNT Python file(s)"
           echo "=== ruff check ==="
-          uvx ruff check .
+          # renovate: datasource=pypi depName=ruff
+          uvx --no-build ruff@0.16.0 check .
           echo "=== ruff format ==="
-          uvx ruff format --check .
+          # renovate: datasource=pypi depName=ruff
+          uvx --no-build ruff@0.16.0 format --check .
 
       - name: Validate checkpoint schemas
         run: |
