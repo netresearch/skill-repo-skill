@@ -1,6 +1,8 @@
 name: A/B Evals Schedule
 
-# Scheduled entry point for the A/B eval sweep (issue #146). This is a PURE
+# Manual entry point for the A/B eval sweep (issue #146). Runs on
+# workflow_dispatch only — the weekly schedule was removed (no
+# ANTHROPIC_API_KEY configured; see below). This is a PURE
 # CALLER: the run logic and every pinned action live in the hosted reusable
 # ab-evals-schedule.yml — the same caller + reusable split this repo already
 # uses for eval-validate and npm-pack-smoke.
@@ -12,7 +14,7 @@ name: A/B Evals Schedule
 # the moved body. Renaming it is a cosmetic follow-up, not worth re-opening
 # that window here.
 #
-# Cost bound: a scheduled run processes BATCH_SIZE skills, selected
+# Cost bound: a run processes BATCH_SIZE skills, selected
 # deterministically by ISO week number modulo the number of catalog groups
 # (ceil(catalog / BATCH_SIZE), currently ceil(42/5) = 9 groups), so the full
 # catalog rotates through in ~9 weekly runs. The full catalog runs only via
@@ -26,8 +28,6 @@ name: A/B Evals Schedule
 # automatically (GitHub limitation) — close/reopen the PR to trigger checks.
 
 on:
-  schedule:
-    - cron: "17 3 * * 1"  # Mondays 03:17 UTC
   workflow_dispatch:
     inputs:
       skills:
