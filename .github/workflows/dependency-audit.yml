@@ -127,5 +127,6 @@ jobs:
           fi
           # shellcheck disable=SC2086
           # Hash-locked resolution (uv pip compile --universal --generate-hashes);
-          # wheels only. Bump via .github/requirements/pip-audit.txt, not here.
-          uv run --no-build --with-requirements .skill-repo-ci/.github/requirements/pip-audit.txt pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
+          # wheels only. The explicit ==pin must match the pinned entry in
+          # .github/requirements/pip-audit.txt — bump both together.
+          uv run --no-build --with pip-audit==2.10.1 --with-requirements .skill-repo-ci/.github/requirements/pip-audit.txt pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS

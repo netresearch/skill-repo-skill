@@ -87,8 +87,9 @@ jobs:
         run: |
           # shellcheck disable=SC2086  # intentional: BANDIT_ARGS is a list of flags
           # Hash-locked resolution (uv pip compile --universal --generate-hashes);
-          # wheels only. Bump via .github/requirements/bandit.txt, not here.
-          uv run --no-build --with-requirements .skill-repo-ci/.github/requirements/bandit.txt bandit $BANDIT_ARGS
+          # wheels only. The explicit ==pin must match the pinned entry in
+          # .github/requirements/bandit.txt — bump both together.
+          uv run --no-build --with bandit==1.9.4 --with-requirements .skill-repo-ci/.github/requirements/bandit.txt bandit $BANDIT_ARGS
 
   test:
     name: Test (Python ${{ matrix.python }})
