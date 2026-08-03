@@ -35,6 +35,19 @@ jobs:
         with:
           enable-cache: true
 
+      # Second checkout: this workflow runs in the CALLER's repo, so the
+      # hash-locked tool requirements must come from skill-repo-skill itself.
+      - name: Fetch locked tool requirements
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: netresearch/skill-repo-skill
+          ref: main
+          path: .skill-repo-ci
+          persist-credentials: false
+          sparse-checkout: |
+            .github/requirements
+          sparse-checkout-cone-mode: false
+
       - name: Collect PEP 723 dependencies
         env:
           SCAN_PATHS_JSON: ${{ inputs.scripts-paths }}
@@ -113,5 +126,6 @@ jobs:
             exit 0
           fi
           # shellcheck disable=SC2086
-          # Pinned exact version; wheels only. Bump deliberately, not implicitly.
-          uv run --no-build --with 'pip-audit==2.10.1' pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
+          # Hash-locked resolution (uv pip compile --universal --generate-hashes);
+          # wheels only. Bump via .github/requirements/pip-audit.txt, not here.
+          uv run --no-build --with-requirements .skill-repo-ci/.github/requirements/pip-audit.txt pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
