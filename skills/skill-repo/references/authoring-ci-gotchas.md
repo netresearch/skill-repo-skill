@@ -73,3 +73,20 @@ the first one has already gone green**.
 Before concluding the gate is stuck, confirm **every** validation run/check has reported
 — `gh pr checks <n>` — rather than acting on the first green. Re-running or "fixing" a gate
 that is merely still finishing wastes a round-trip.
+
+## 5. Installing the Claude Code CLI with `--ignore-scripts`
+
+Security scanners (SonarCloud `githubactions:S6505`) require `npm install
+--ignore-scripts` in workflows — but that breaks `@anthropic-ai/claude-code`,
+whose **postinstall downloads the platform-native binary**; the CLI then exits
+with "claude native binary not installed". The package documents its own
+sanctioned two-step (verified with 2.1.206):
+
+```bash
+npm install -g --ignore-scripts @anthropic-ai/claude-code@<pinned-version>
+node "$(npm root -g)/@anthropic-ai/claude-code/install.cjs"
+claude --version   # proves the binary is in place
+```
+
+This blocks lifecycle scripts of the whole dependency tree while running only
+the CLI's own vetted installer, explicitly.
