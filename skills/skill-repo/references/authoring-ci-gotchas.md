@@ -76,10 +76,10 @@ that is merely still finishing wastes a round-trip.
 
 ## 5. Installing the Claude Code CLI with `--ignore-scripts`
 
-Security scanners (SonarCloud `githubactions:S6505`) require `npm install
---ignore-scripts` in workflows — but that breaks `@anthropic-ai/claude-code`,
-whose **postinstall downloads the platform-native binary**; the CLI then exits
-with "claude native binary not installed". The package documents its own
+Security scanners (SonarCloud `githubactions:S6505`) require the
+`--ignore-scripts` flag on `npm install` in workflows — but that breaks
+`@anthropic-ai/claude-code`, whose **postinstall downloads the platform-native
+binary**; the CLI then exits with "claude native binary not installed". The package documents its own
 sanctioned two-step (verified with 2.1.206):
 
 ```bash
