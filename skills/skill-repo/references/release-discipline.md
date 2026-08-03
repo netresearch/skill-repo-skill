@@ -107,7 +107,7 @@ Reply "go" to proceed, or name repos to skip.
 
 ### Building the manifest: fleet-survey gotchas
 
-**Prefer a remote-first survey — the GitHub API answers the whole classification without touching a checkout** (verified in the 2026-08-03 sweep: 40 repos surveyed, 7 released). Three calls per repo: `gh api repos/$O/$R/releases/latest` (last tag), `gh api "repos/$O/$R/compare/<tag>...HEAD"` (ahead-count, commit subjects *and* changed files in one response — enough for both the CI-only-delta filter and the bump-type decision), `gh api repos/$O/$R/contents/.claude-plugin/plugin.json` (prepared-vs-needs-bump). The local-checkout gotchas below then apply only to the repos that actually release.
+**Prefer a remote-first survey — the GitHub API answers the whole classification without touching a checkout** (verified in the 2026-08-03 sweep: 40 repos surveyed, 7 released). Three calls per repo: `gh api repos/$O/$R/releases/latest` (tag of the latest *published release* — a 404 means the repo has never released; classify it for a first release instead of skipping), `gh api "repos/$O/$R/compare/<tag>...main"` (ahead-count, commit subjects *and* changed files in one response — enough for both the CI-only-delta filter and the bump-type decision; name the default branch explicitly, consistent with the `origin/main` guidance below), `gh api repos/$O/$R/contents/.claude-plugin/plugin.json` (prepared-vs-needs-bump). The local-checkout gotchas below then apply only to the repos that actually release.
 
 Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
 
