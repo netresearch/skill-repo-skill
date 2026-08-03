@@ -68,12 +68,31 @@ jobs:
             .github/workflows/*.yml
             .github/workflows/*.yaml
 
+      # Second checkout: this workflow runs in the CALLER's repo, so the
+      # hash-locked tool requirements must come from skill-repo-skill itself.
+      - name: Fetch locked tool requirements
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: netresearch/skill-repo-skill
+          ref: main
+          path: .skill-repo-ci
+          persist-credentials: false
+          sparse-checkout: |
+            .github/requirements
+          sparse-checkout-cone-mode: false
+
       - name: Run Bandit
         env:
           BANDIT_ARGS: ${{ inputs.bandit-args }}
         run: |
+          # Hash-locked tool env: requirements compiled with
+          # `uv pip compile --universal --generate-hashes`; --require-hashes
+          # rejects any artifact not pinned by digest, --only-binary blocks
+          # sdist setup scripts. Bump via .github/requirements/bandit.txt.
+          python3 -m venv "$RUNNER_TEMP/bandit-env"
+          "$RUNNER_TEMP/bandit-env/bin/pip" install --quiet --require-hashes --only-binary :all: -r .skill-repo-ci/.github/requirements/bandit.txt
           # shellcheck disable=SC2086  # intentional: BANDIT_ARGS is a list of flags
-          uv run --with bandit bandit $BANDIT_ARGS
+          "$RUNNER_TEMP/bandit-env/bin/bandit" $BANDIT_ARGS
 
   test:
     name: Test (Python ${{ matrix.python }})

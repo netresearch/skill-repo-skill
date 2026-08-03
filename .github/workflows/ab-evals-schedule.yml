@@ -98,7 +98,11 @@ jobs:
         run: |
           # Pinned exact version (holds ANTHROPIC_API_KEY in env; latest
           # verified 2026-07-10). Bump deliberately, not implicitly.
-          npm install -g @anthropic-ai/claude-code@2.1.206
+          # --ignore-scripts blocks lifecycle scripts from the dependency
+          # tree; the CLI's own native-binary installer is then run
+          # explicitly (documented fallback in the package's error message).
+          npm install -g --ignore-scripts @anthropic-ai/claude-code@2.1.206
+          node "$(npm root -g)/@anthropic-ai/claude-code/install.cjs"
           claude --version
 
       - name: Select catalog subset
