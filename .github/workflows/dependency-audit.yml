@@ -113,4 +113,5 @@ jobs:
             exit 0
           fi
           # shellcheck disable=SC2086
-          uv run --with pip-audit pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS
+          # Pinned exact version; wheels only. Bump deliberately, not implicitly.
+          uv run --no-build --with 'pip-audit==2.10.1' pip-audit -r /tmp/requirements-audit.txt $PIP_AUDIT_ARGS

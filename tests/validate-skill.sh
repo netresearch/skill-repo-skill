@@ -31,8 +31,8 @@ printf 'raise ImportError("yaml disabled for fallback test")\n' > "$SHIM/yaml.py
 YAML_RUNNER=()
 if python3 -c 'import yaml' >/dev/null 2>&1; then
     YAML_RUNNER=(env)
-elif command -v uv >/dev/null 2>&1 && uv run --with pyyaml python3 -c 'import yaml' >/dev/null 2>&1; then
-    YAML_RUNNER=(uv run --with pyyaml)
+elif command -v uv >/dev/null 2>&1 && uv run --no-build --with 'pyyaml==6.0.3' python3 -c 'import yaml' >/dev/null 2>&1; then
+    YAML_RUNNER=(uv run --no-build --with 'pyyaml==6.0.3')
 fi
 
 PASS=0

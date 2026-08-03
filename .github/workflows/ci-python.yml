@@ -73,7 +73,8 @@ jobs:
           BANDIT_ARGS: ${{ inputs.bandit-args }}
         run: |
           # shellcheck disable=SC2086  # intentional: BANDIT_ARGS is a list of flags
-          uv run --with bandit bandit $BANDIT_ARGS
+          # Pinned exact version; wheels only. Bump deliberately, not implicitly.
+          uv run --no-build --with 'bandit==1.9.4' bandit $BANDIT_ARGS
 
   test:
     name: Test (Python ${{ matrix.python }})

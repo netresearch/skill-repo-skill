@@ -198,7 +198,7 @@ jobs:
           while IFS= read -r f; do
             [[ -z "$f" ]] && continue
             echo "=== Validating $f ==="
-            uv run --with pyyaml python3 - "$f" <<'PYEOF' || FAILED=1
+            uv run --no-build --with 'pyyaml==6.0.3' python3 - "$f" <<'PYEOF' || FAILED=1
           import sys, yaml
           with open(sys.argv[1]) as fh:
               data = yaml.safe_load(fh)
