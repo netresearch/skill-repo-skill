@@ -107,6 +107,8 @@ Reply "go" to proceed, or name repos to skip.
 
 ### Building the manifest: fleet-survey gotchas
 
+**Prefer a remote-first survey — the GitHub API answers the whole classification without touching a checkout** (verified in the 2026-08-03 sweep: 40 repos surveyed, 7 released). Three calls per repo: `gh api repos/$O/$R/releases/latest` (tag of the latest *published release* — a 404 means the repo has never released; classify it for a first release instead of skipping), `gh api "repos/$O/$R/compare/<tag>...main"` (ahead-count, commit subjects *and* changed files in one response — enough for both the CI-only-delta filter and the bump-type decision; name the default branch explicitly, consistent with the `origin/main` guidance below), `gh api repos/$O/$R/contents/.claude-plugin/plugin.json` (prepared-vs-needs-bump). The local-checkout gotchas below then apply only to the repos that actually release.
+
 Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
 
 - **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`, which is a pointer *file* when the top level is itself a worktree), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo instead of assuming one shape:
@@ -132,6 +134,7 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 
   Verified in the 2026-07-18 sweep (23 releases), where worktree reads disagreed with `origin/main` on ~6 repos.
 - **`plugin.json` ahead of the last tag ⇒ the bump already merged — tag only, no bump PR.** Classify each repo from the `origin/main` value: `plugin.json.version > last tag` means a prior bump PR already landed and the repo just needs a signed tag; `plugin.json.version == last tag` means it needs a bump PR first. Tagging a "prepared" repo at its committed version keeps parity true by construction. Don't open a bump PR for a repo that is already prepared — it would double-bump.
+- **`git pull origin main` merges into whatever branch the worktree has checked out.** A fleet sweep hits worktrees parked on a leftover feature branch, and `--ff-only` does not protect you — the stale branch fast-forwards onto `origin/main` "successfully" (observed 2026-08-03: a leftover `ci/*` branch silently advanced to the main tip). `git switch main` first, then pull.
 
 ## GitLab (`git.netresearch.de`) skill repos release on tag too
 
