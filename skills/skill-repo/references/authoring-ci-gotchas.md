@@ -90,3 +90,20 @@ claude --version   # proves the binary is in place
 
 This blocks lifecycle scripts of the whole dependency tree while running only
 the CLI's own vetted installer, explicitly.
+
+## 6. Generated YAML: exactly one trailing newline
+
+The reusable `validate.yml` runs yamllint, whose **default config** (`extends:
+default`, `empty-lines: max-end: 0`) rejects trailing blank lines; the workflow
+writes that default only when the repo ships no `.yamllint*` of its own, so a
+repo config can override it — most skill repos don't. Batch-generated YAML
+(heredoc, `echo`, templating) routinely picks up a trailing blank line. One deploy of `auto-merge-deps.yml` across
+22 repos failed CI in every one of them on exactly this.
+
+When writing YAML programmatically, emit the content with a single trailing
+newline and verify before committing:
+
+```bash
+printf '%s\n' "$CONTENT" > file.yml     # not: echo "$CONTENT" > file.yml
+tail -c 2 file.yml | xxd -p             # must NOT be 0a0a
+```
