@@ -93,9 +93,11 @@ the CLI's own vetted installer, explicitly.
 
 ## 6. Generated YAML: exactly one trailing newline
 
-The reusable `validate.yml` runs yamllint with the `empty-lines` rule, which
-rejects trailing blank lines — and batch-generated YAML (heredoc, `echo`,
-templating) routinely picks one up. One deploy of `auto-merge-deps.yml` across
+The reusable `validate.yml` runs yamllint, whose **default config** (`extends:
+default`, `empty-lines: max-end: 0`) rejects trailing blank lines; the workflow
+writes that default only when the repo ships no `.yamllint*` of its own, so a
+repo config can override it — most skill repos don't. Batch-generated YAML
+(heredoc, `echo`, templating) routinely picks up a trailing blank line. One deploy of `auto-merge-deps.yml` across
 22 repos failed CI in every one of them on exactly this.
 
 When writing YAML programmatically, emit the content with a single trailing
