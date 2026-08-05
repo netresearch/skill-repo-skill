@@ -148,3 +148,16 @@ jobs:
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
 - `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`)
 - `checkpoints.yaml` presence in the skill directory — **warning** only, never fails; suppress by adding a line `Checkpoints: none (justified — <reason>)` to `SKILL.md` or `README.md` for skills that are not suitable per the add-checkpoints skill's suitability criteria (e.g. purely conceptual skills)
+
+## Structure docs drift as a set — update all six together
+
+Six documents describe this repo's layout / hosted reusable workflows and drift together. Any change to structure or workflow hosting updates ALL of them in the same PR:
+
+1. `README.md` (Repository Layout + "This Repository" trees)
+2. `AGENTS.md` (the Key Files table)
+3. `docs/ARCHITECTURE.md` (Reusable CI Workflows enumeration)
+4. `skills/skill-repo/SKILL.md` (structure tree + Required-callers list)
+5. `skills/skill-repo/templates/README.md.template` (Structure example shipped to new repos)
+6. `skills/skill-repo/checkpoints.yaml` (SR-32/SR-34 assert the expected structure/workflows)
+
+Fixing one without the others guarantees follow-up PRs (PR #86 fixed two of six; reviewers caught a third, and AGENTS.md + SR-34 still claimed a reusable that actually lives in `netresearch/.github`).
