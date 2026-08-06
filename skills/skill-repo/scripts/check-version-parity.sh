@@ -7,6 +7,11 @@
 #   check-version-parity.sh               # compare plugin.json vs SKILL.md
 #   check-version-parity.sh v1.2.3        # also require plugin.json == 1.2.3
 #   check-version-parity.sh 1.2.3         # same, leading v optional
+#   check-version-parity.sh --repo DIR v1.2.3   # check DIR instead of cwd
+#
+# All paths are resolved relative to the repo root. Without --repo that root
+# is the current directory, so a fleet driver iterating over many checkouts
+# must pass --repo per repo rather than a bare path argument.
 #
 # Exit codes: 0 = parity OK, 1 = mismatch or missing version.
 #
@@ -22,14 +27,42 @@
 
 set -euo pipefail
 
-TAG_ARG="${1:-}"
+REPO_DIR=""
+TAG_ARG=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      REPO_DIR="${2:-}"
+      [[ -n "$REPO_DIR" ]] || { echo "ERROR: --repo needs a directory" >&2; exit 1; }
+      shift 2
+      ;;
+    --repo=*)
+      REPO_DIR="${1#--repo=}"
+      shift
+      ;;
+    -h|--help)
+      sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      TAG_ARG="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ -n "$REPO_DIR" ]]; then
+  cd "$REPO_DIR" || { echo "ERROR: cannot enter $REPO_DIR" >&2; exit 1; }
+fi
+
 TAG_VERSION="${TAG_ARG#v}"  # strip leading v if present (empty stays empty)
 
 PLUGIN_JSON=".claude-plugin/plugin.json"
 COMPOSER_JSON="composer.json"
 
 if [[ ! -f "$PLUGIN_JSON" ]]; then
-  echo "ERROR: $PLUGIN_JSON not found — run from skill repo root" >&2
+  echo "ERROR: $PLUGIN_JSON not found in $(pwd)" >&2
+  echo "       Run from the skill repo root, or pass --repo <dir>." >&2
   exit 1
 fi
 
