@@ -23,7 +23,17 @@ skills/skill-repo/scripts/check-version-parity.sh
 
 # With tag argument — also require plugin.json.version == tag (v prefix optional)
 skills/skill-repo/scripts/check-version-parity.sh v1.2.4
+
+# From a driver that iterates over many checkouts — name the repo explicitly
+skills/skill-repo/scripts/check-version-parity.sh --repo /path/to/repo v1.2.4
 ```
+
+All paths the script reads are relative to the repo root, so without `--repo`
+the root is the current directory. A fleet driver that passes the repo as a
+bare argument gets it parsed as a *tag* and the script then aborts on the
+missing `plugin.json` — after the bump has already been written to disk,
+leaving every repo in that batch dirty (observed 2026-08-06: five repos in one
+batch). Pass `--repo`, or `cd` into the checkout first.
 
 What it checks:
 
@@ -39,6 +49,16 @@ Bump tooling must handle the same two frontmatter forms: a bump script that only
 ## Changelog Rollover in the Bump Commit
 
 If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
+
+**Two heading forms exist in the fleet, exactly like the two frontmatter version
+forms above.** Keep-a-Changelog repos use `## [Unreleased]` and `## [X.Y.Z] - YYYY-MM-DD`;
+others use `## Unreleased` and `## X.Y.Z (YYYY-MM-DD)` (it-maintenance-skill).
+A roll anchored on the bracketed form matches nothing in the second and exits 0,
+so the release ships with its content still under `Unreleased` and nobody sees an
+error. Match both forms, and **fail the roll when it changed no lines** — a
+no-match must not be indistinguishable from a successful roll. Same rule as for
+`metadata.version` vs a top-level `version:`: whichever surface the tooling does
+not know about is the one that silently keeps the old value.
 
 ## Cache Safety: Never Edit the Installed Copy
 
@@ -80,20 +100,20 @@ When releasing >3 skill repos in one sweep, produce this manifest and wait for u
 ```
 Skill-Repo Release Plan (2026-04-18)
 
-| Repo                        | Current | Target  | Change type | Notes                  |
-|-----------------------------|---------|---------|-------------|------------------------|
-| netresearch/git-workflow    | 1.9.0   | 1.10.0  | minor       | adds critical-rules    |
-| netresearch/github-project  | 2.10.0  | 2.11.0  | minor       | multi-repo-operations  |
-| netresearch/skill-repo      | 1.18.0  | 1.19.0  | minor       | release-discipline ref |
+| Repo                        | Current | Target  | Change type | Bump PR   | Notes                  |
+|-----------------------------|---------|---------|-------------|-----------|------------------------|
+| netresearch/git-workflow    | 1.9.0   | 1.10.0  | minor       | mine      | adds critical-rules    |
+| netresearch/github-project  | 2.10.0  | 2.11.0  | minor       | mine      | multi-repo-operations  |
+| netresearch/skill-repo      | 1.18.0  | 1.19.0  | minor       | #42 @kim  | NEEDS AUTHOR'S GO      |
 
 Preconditions (verified per repo):
   [✓] default branch CI green
-  [✓] no pending version-bump PR
+  [✓] no pending version-bump PR by another author
   [✓] version-parity check passes
   [✓] working tree clean
 
 Execution order per repo:
-  1. Create version-bump PR on feat/release-vX.Y.Z branch
+  1. Create version-bump PR on release/vX.Y.Z branch
   2. Wait for CI green and approval
   3. Merge via merge-commit (respects atomic-commit policy)
   4. Pull main; run check-version-parity.sh vX.Y.Z
@@ -105,9 +125,56 @@ Execution order per repo:
 Reply "go" to proceed, or name repos to skip.
 ```
 
+The branch and commit names are not this file's to invent: `release/vX.Y.Z` and
+`chore(release): vX.Y.Z` are owned by `github-release-skill`
+(`commands/release.md`, steps 4 and 8). Follow that skill when the two disagree.
+
+### A pre-existing bump PR by another author is not covered by the sweep's approval
+
+A sweep will sometimes find a repo whose version-bump PR is already open —
+opened by a colleague, days earlier, mergeable and green. Merging it is what the
+release needs, and the manifest row looks exactly like every other row, which is
+the problem: a single "go" over a 19-row table reads as approval of *your* work,
+and the author is never asked.
+
+Give the manifest a **Bump PR** column naming the author of every pre-existing
+PR, mark those rows as needing that author's go-ahead, and get it separately.
+Blanket batch approval covers only the PRs the sweep itself opens. (Observed
+2026-08-06: `ecom-orocommerce-docker-skill !5`, authored by a colleague, was
+merged inside a 19-repo batch on one blanket approval.)
+
 ### Building the manifest: fleet-survey gotchas
 
 **Prefer a remote-first survey — the GitHub API answers the whole classification without touching a checkout** (verified in the 2026-08-03 sweep: 40 repos surveyed, 7 released). Three calls per repo: `gh api repos/$O/$R/releases/latest` (tag of the latest *published release* — a 404 means the repo has never released; classify it for a first release instead of skipping), `gh api "repos/$O/$R/compare/<tag>...main"` (ahead-count, commit subjects *and* changed files in one response — enough for both the CI-only-delta filter and the bump-type decision; name the default branch explicitly, consistent with the `origin/main` guidance below), `gh api repos/$O/$R/contents/.claude-plugin/plugin.json` (prepared-vs-needs-bump). The local-checkout gotchas below then apply only to the repos that actually release.
+
+**The GitLab arm needs its own call triple — the response shapes differ.** Half
+the fleet lives on `git.netresearch.de/coding-ai`, and a GitHub-shaped `jq`
+filter returns *empty* against these rather than erroring, so the repo looks
+like it has no delta:
+
+```bash
+P="coding-ai%2F$R"
+glab api "projects/$P/releases?per_page=1"                                  # .[0].tag_name; empty ⇒ never released
+glab api "projects/$P/repository/compare?from=$tag&to=main"                 # .commits[].title  and  .diffs[].new_path
+glab api "projects/$P/repository/files/.claude-plugin%2Fplugin.json/raw?ref=main"
+```
+
+Note `.diffs[].new_path` where GitHub has `.files[].filename`, and
+`.commits[].title` where GitHub has `.commits[].commit.message`. GitLab's
+compare returns no `ahead_by`, so count `.commits[]` yourself. Verified in the
+2026-08-06 sweep (74 repos surveyed across both hosts, 19 released).
+
+**Compute the CI-only-delta filter, do not eyeball it.** The rule below ("CI-only
+deltas are not releases") is only usable if the survey reports it per repo. From
+the same compare response:
+
+```bash
+jq '[.files[].filename] | map(select(test("^\\.github/|^\\.gitlab-ci\\.yml$|^renovate\\.json$") | not)) | length'
+```
+
+A zero means the release archive would be byte-identical to the last tag — skip
+the repo and say so in the manifest. In the 2026-08-06 sweep this filter alone
+removed 13 of 32 repos that had commits since their tag.
 
 Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
 
@@ -134,7 +201,28 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 
   Verified in the 2026-07-18 sweep (23 releases), where worktree reads disagreed with `origin/main` on ~6 repos.
 - **`plugin.json` ahead of the last tag ⇒ the bump already merged — tag only, no bump PR.** Classify each repo from the `origin/main` value: `plugin.json.version > last tag` means a prior bump PR already landed and the repo just needs a signed tag; `plugin.json.version == last tag` means it needs a bump PR first. Tagging a "prepared" repo at its committed version keeps parity true by construction. Don't open a bump PR for a repo that is already prepared — it would double-bump.
-- **`git pull origin main` merges into whatever branch the worktree has checked out.** A fleet sweep hits worktrees parked on a leftover feature branch, and `--ff-only` does not protect you — the stale branch fast-forwards onto `origin/main` "successfully" (observed 2026-08-03: a leftover `ci/*` branch silently advanced to the main tip). `git switch main` first, then pull.
+- **`git pull origin main` merges into whatever branch the worktree has checked out.** A fleet sweep hits worktrees parked on a leftover feature branch, and `--ff-only` does not protect you — the stale branch fast-forwards onto `origin/main` "successfully" (observed 2026-08-03: a leftover `ci/*` branch silently advanced to the main tip).
+
+  **Do not check out at all — tag `origin/main` directly.** Fetching, verifying
+  and tagging need no working tree, which removes the hazard instead of stepping
+  around it, and it is the only form that leaves a colleague's parked worktree
+  untouched (in the 2026-08-06 sweep, `skill-repo-skill`'s only checkout sat on a
+  leftover `release/v1.25.2` the whole time; `git switch main` there would have
+  moved someone's workspace out from under them):
+
+  ```bash
+  git -C "$G" fetch origin --prune --quiet
+  remote_tip=$(gh api "repos/$O/$R/commits/main" --jq .sha)
+  [[ "$(git -C "$G" rev-parse origin/main)" == "$remote_tip" ]] || exit 1
+  # parity read from the ref, never from a working tree
+  git -C "$G" show "origin/main:.claude-plugin/plugin.json" | jq -r .version
+  git -C "$G" tag -s "v$V" -m "v$V" "$remote_tip"
+  git -C "$G" push origin "v$V"
+  ```
+
+  `git tag` takes any commit-ish, and it does not touch the index or the working
+  tree — so this is safe even in a plain (non-bare) checkout that is mid-edit.
+  Keep switch-then-pull only for the repos where you genuinely need files on disk.
 
 ## GitLab (`git.netresearch.de`) skill repos release on tag too
 
