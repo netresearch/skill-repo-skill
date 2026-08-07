@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# tests/portable-manifest.sh — cover the Agent Plugins 1.0.0 portable manifest:
+#   * validate-skill.sh verdicts for ./plugin.json (schema, name, closed field
+#     set, parity with .claude-plugin/plugin.json, skills/ discoverability)
+#   * sync-plugin-manifest.sh generate + --check behaviour
+#
+# Fixtures are minimal on purpose: the validator also reports missing
+# composer.json/README.md, so every assertion matches a specific verdict line
+# instead of the overall exit code.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$HERE/.." && pwd)"
+VALIDATOR="$REPO_ROOT/skills/skill-repo/scripts/validate-skill.sh"
+SYNC="$REPO_ROOT/skills/skill-repo/scripts/sync-plugin-manifest.sh"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+PASS=0
+FAIL=0
+
+SCHEMA="https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+
+# fixture <name> — repo with a valid skill, Claude manifest and portable manifest
+fixture() {
+    local dir="$TMP/$1"
+    rm -rf "$dir"
+    mkdir -p "$dir/skills/demo" "$dir/.claude-plugin"
+    printf -- '---\nname: demo\ndescription: "Use when demoing."\n---\n\n# Demo\n' \
+        > "$dir/skills/demo/SKILL.md"
+    cat > "$dir/plugin.json" <<JSON
+{
+  "\$schema": "$SCHEMA",
+  "name": "demo",
+  "version": "1.0.0",
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "url": "https://www.netresearch.de"
+  }
+}
+JSON
+    cat > "$dir/.claude-plugin/plugin.json" <<'JSON'
+{
+  "name": "demo",
+  "version": "1.0.0",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "url": "https://www.netresearch.de"
+  },
+  "license": "(MIT AND CC-BY-SA-4.0)",
+  "skills": [
+    "./skills/demo"
+  ]
+}
+JSON
+    printf '%s' "$dir"
+}
+
+# assert_line <expect|reject> <dir> <needle> <label>
+assert_line() {
+    local want="$1" dir="$2" needle="$3" label="$4" out
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    case "$want" in
+        expect)
+            if grep -qF -- "$needle" <<<"$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected a line containing '$needle'"; ((FAIL++)); fi ;;
+        reject)
+            if grep -qF -- "$needle" <<<"$out"; then
+                echo "  FAIL $label: did not expect '$needle'"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+
+# assert_cmd <expect_exit> <label> <command...>
+assert_cmd() {
+    local want="$1" label="$2"; shift 2
+    "$@" >/dev/null 2>&1
+    local rc=$?
+    if [[ $rc -eq $want ]]; then ((PASS++)); else
+        echo "  FAIL $label: exit $rc, wanted $want"; ((FAIL++)); fi
+    return 0
+}
+
+echo "== validate-skill.sh: portable manifest =="
+
+d="$(fixture happy)"
+assert_line expect "$d" "plugin.json (portable Agent Plugins manifest) exists" "happy: detected"
+assert_line expect "$d" "plugin.json targets Agent Plugins 1.0.0" "happy: schema"
+assert_line expect "$d" "plugin.json name valid: demo" "happy: name"
+assert_line expect "$d" ".claude-plugin/plugin.json is in sync" "happy: parity"
+assert_line expect "$d" "skills/ holds 1 portable skill(s): demo" "happy: discovery"
+
+d="$(fixture no_portable)"
+rm "$d/plugin.json"
+assert_line expect "$d" "portable Agent Plugins 1.0.0 manifest) not found" "missing: warns"
+# The absence must stay a warning: the fleet adopts the manifest one PR at a
+# time while this validator runs everywhere from main.
+out="$(bash "$VALIDATOR" "$d" 2>&1)"
+if grep -E "ERROR.*(Agent Plugins|portable)" <<<"$out" >/dev/null; then
+    echo "  FAIL missing: absence of plugin.json must not raise an ERROR"; ((FAIL++))
+else
+    ((PASS++))
+fi
+
+d="$(fixture bad_schema)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["$schema"] = "https://agent-plugins.org/schemas/0.9.0/plugin.schema.json"
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_line expect "$d" "plugin.json \$schema must be" "bad schema: rejected"
+
+d="$(fixture bad_name)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["name"] = "Demo--Skill"
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_line expect "$d" "plugin.json name is invalid" "bad name: rejected"
+
+d="$(fixture unknown_field)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["skills"] = ["./skills/demo"]
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_line expect "$d" "fields outside the Agent Plugins schema: skills" "unknown field: rejected"
+
+d="$(fixture drift)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["version"] = "2.0.0"
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_line expect "$d" "out of sync with plugin.json on: version" "drift: rejected"
+
+d="$(fixture root_skill_only)"
+rm -rf "$d/skills"
+printf -- '---\nname: demo\ndescription: "Use when demoing."\n---\n\n# Demo\n' > "$d/SKILL.md"
+assert_line expect "$d" "no skills/<name>/SKILL.md found" "root SKILL.md: rejected"
+
+d="$(fixture bad_author)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["author"] = "Netresearch DTT GmbH"
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_line expect "$d" "author must be an object" "author string: rejected"
+
+echo "== sync-plugin-manifest.sh =="
+
+d="$(fixture sync_ok)"
+assert_cmd 0 "sync: in-sync fixture passes --check" bash "$SYNC" --repo "$d" --check
+
+d="$(fixture sync_drift)"
+python3 - "$d/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["version"] = "2.0.0"
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_cmd 1 "sync: drift fails --check" bash "$SYNC" --repo "$d" --check
+assert_cmd 0 "sync: writes the Claude manifest" bash "$SYNC" --repo "$d"
+assert_cmd 0 "sync: --check passes after write" bash "$SYNC" --repo "$d" --check
+
+if [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$d/.claude-plugin/plugin.json")" == "2.0.0" ]]; then
+    ((PASS++))
+else
+    echo "  FAIL sync: version not projected into the Claude manifest"; ((FAIL++))
+fi
+
+if [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("skills"))' "$d/.claude-plugin/plugin.json")" == "['./skills/demo']" ]]; then
+    ((PASS++))
+else
+    echo "  FAIL sync: Claude-only 'skills' key was not preserved"; ((FAIL++))
+fi
+
+# shellcheck disable=SC2016  # "$schema" is a Python string literal, not a shell expansion
+if python3 -c 'import json,sys;sys.exit(0 if "$schema" not in json.load(open(sys.argv[1])) else 1)' "$d/.claude-plugin/plugin.json"; then
+    ((PASS++))
+else
+    echo "  FAIL sync: \$schema leaked into the Claude manifest"; ((FAIL++))
+fi
+
+# key order in the Claude manifest is not the check's business
+d="$(fixture sync_reordered)"
+python3 - "$d/.claude-plugin/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+open(p, "w").write(json.dumps(dict(reversed(list(d.items()))), indent=4) + "\n")
+PY
+assert_cmd 0 "sync: reordered/reformatted Claude manifest still passes --check" bash "$SYNC" --repo "$d" --check
+
+# a shared key present only in the Claude manifest is drift too
+d="$(fixture sync_claude_only_key)"
+python3 - "$d/.claude-plugin/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["keywords"] = ["extra"]
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_cmd 1 "sync: Claude-only shared key fails --check" bash "$SYNC" --repo "$d" --check
+
+d="$(fixture sync_absent)"
+rm "$d/plugin.json"
+assert_cmd 0 "sync: no portable manifest is a no-op" bash "$SYNC" --repo "$d" --check
+
+echo "----------------------------------------"
+echo "Passed: $PASS  Failed: $FAIL"
+[[ $FAIL -eq 0 ]] || { echo "Portable manifest tests FAILED"; exit 1; }
+echo "All portable manifest tests passed"

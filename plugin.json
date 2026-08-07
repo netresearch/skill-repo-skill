@@ -1,4 +1,5 @@
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "skill-repo",
   "version": "1.27.0",
   "description": "Guide for structuring Netresearch skill repositories",
@@ -7,8 +8,5 @@
     "url": "https://www.netresearch.de"
   },
   "repository": "https://github.com/netresearch/skill-repo-skill",
-  "license": "(MIT AND CC-BY-SA-4.0)",
-  "skills": [
-    "./skills/skill-repo"
-  ]
+  "license": "(MIT AND CC-BY-SA-4.0)"
 }

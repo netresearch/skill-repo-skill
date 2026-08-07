@@ -18,11 +18,13 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `skills/skill-repo/references/readme-template.md` | Required README headings and first-screen contract |
 | `skills/skill-repo/references/skill-discovery-metadata.md` | Discovery YAML, action/risk classification |
 | `skills/skill-repo/references/validation-checklist.md` | Pre-completion checklist for agents |
-| `.claude-plugin/plugin.json` | Plugin metadata (name, version, skills array) |
+| `plugin.json` | Agent Plugins 1.0.0 manifest — source of truth for name, version, description, author, license |
+| `.claude-plugin/plugin.json` | Claude Code manifest, generated from `plugin.json` by `sync-plugin-manifest.sh`; holds the Claude-only keys (skills array, …) |
 | `composer.json` | PHP/Composer distribution as `ai-agent-skill` type |
 | `.github/workflows/` | Reusable workflows consumed by other skill repos plus this repo's own CI. Canonical inventory in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#reusable-ci-workflows). Auto-merge for Dependabot/Renovate is delegated to `netresearch/.github` via a thin local caller — NOT hosted here. |
 | `skills/skill-repo/scripts/validate-skill.sh` | Validates skill repo structure, licensing, metadata consistency |
 | `skills/skill-repo/scripts/migrate-licensing.sh` | Migrates repos from single LICENSE to split licensing |
+| `skills/skill-repo/scripts/sync-plugin-manifest.sh` | Projects `plugin.json` into `.claude-plugin/plugin.json` (`--check` in CI) |
 | `skills/skill-repo/templates/` | Templates for new skill repos (README, licenses, workflows, composer.json) |
 | `Build/hooks/` | Git hooks (pre-commit, pre-push) |
 | `Build/Scripts/check-plugin-version.sh` | Version validation script |
@@ -63,7 +65,7 @@ Copyright entity: `Netresearch DTT GmbH`
 
 ### Versioning and Releases
 
-1. Bump version in `.claude-plugin/plugin.json`
+1. Bump version in `plugin.json`, then `bash skills/skill-repo/scripts/sync-plugin-manifest.sh` to carry it into `.claude-plugin/plugin.json`
 2. Commit: `chore: release vX.Y.Z`
 3. Create signed tag: `git tag -s vX.Y.Z -m "vX.Y.Z"`
 4. Push: `git push origin main vX.Y.Z`

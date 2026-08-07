@@ -37,6 +37,7 @@ batch). Pass `--repo`, or `cd` into the checkout first.
 
 What it checks:
 
+- Root `plugin.json` (Agent Plugins manifest), when present, is the **source of truth**: bump it first, run `sync-plugin-manifest.sh`, and the check fails if `.claude-plugin/plugin.json` still disagrees. Repos that have not adopted the portable manifest are unaffected — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
 - `.claude-plugin/plugin.json` has a `.version` field — exits with an error if missing.
 - `composer.json` does **not** have a `.version` field — composer versions come from the git tag via the Release workflow, so a hard-coded version drifts silently.
 - If a tag argument is provided, `plugin.json.version` equals that tag with the `v` prefix stripped.
