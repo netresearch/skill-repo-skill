@@ -76,7 +76,9 @@ migrated yet.
 1. Create `./plugin.json` with the fields above, copying the current values out
    of `.claude-plugin/plugin.json`. Drop `skills`/`agents`/`support` — they stay
    in the Claude manifest.
-2. Run `sync-plugin-manifest.sh` and confirm the diff is only a key reorder.
+2. `sync-plugin-manifest.sh --check` — it passes without rewriting anything when
+   the values were copied correctly. Run it without `--check` only when you want
+   the canonical rendering.
 3. If the repo ships a root `SKILL.md` instead of `skills/<name>/SKILL.md`, move
    it: Agent Plugins clients do not discover a root `SKILL.md`. Claude Code
    loads either layout, so the move is safe there — but the plugin's skill name
