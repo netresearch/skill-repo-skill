@@ -195,6 +195,27 @@ else
     echo "  FAIL sync: \$schema leaked into the Claude manifest"; ((FAIL++))
 fi
 
+# key order in the Claude manifest is not the check's business
+d="$(fixture sync_reordered)"
+python3 - "$d/.claude-plugin/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+open(p, "w").write(json.dumps(dict(reversed(list(d.items()))), indent=4) + "\n")
+PY
+assert_cmd 0 "sync: reordered/reformatted Claude manifest still passes --check" bash "$SYNC" --repo "$d" --check
+
+# a shared key present only in the Claude manifest is drift too
+d="$(fixture sync_claude_only_key)"
+python3 - "$d/.claude-plugin/plugin.json" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["keywords"] = ["extra"]
+json.dump(d, open(p, "w"), indent=2)
+PY
+assert_cmd 1 "sync: Claude-only shared key fails --check" bash "$SYNC" --repo "$d" --check
+
 d="$(fixture sync_absent)"
 rm "$d/plugin.json"
 assert_cmd 0 "sync: no portable manifest is a no-op" bash "$SYNC" --repo "$d" --check

@@ -66,8 +66,10 @@ bash skills/skill-repo/scripts/sync-plugin-manifest.sh --repo DIR # fleet driver
 The script copies `name`, `version`, `description`, `author`, `homepage`,
 `repository`, `license` and `keywords` into `.claude-plugin/plugin.json`,
 preserves every Claude-only key already there, and never copies `$schema` or
-`extensions`. Without a root `plugin.json` it is a no-op, so it is safe to run
-across repos that have not migrated yet.
+`extensions`. `--check` compares those shared values in both directions — key
+order and formatting in the Claude manifest are not enforced. Without a root
+`plugin.json` it is a no-op, so it is safe to run across repos that have not
+migrated yet.
 
 ## Migrating a repo
 

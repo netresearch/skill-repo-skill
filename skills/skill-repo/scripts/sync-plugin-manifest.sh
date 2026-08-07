@@ -100,6 +100,20 @@ for key, value in current.items():
 
 rendered = json.dumps(generated, indent=2, ensure_ascii=False) + "\n"
 
+if check:
+    # Value parity, not byte identity: key order and formatting in the Claude
+    # manifest are nobody's business, drift in the shared metadata is.
+    drift = [k for k in SHARED if portable.get(k) != current.get(k)]
+    if not drift:
+        print(f"OK: {claude_path} is in sync with {portable_path}")
+        sys.exit(0)
+    print(f"ERROR: {claude_path} is out of sync with {portable_path}", file=sys.stderr)
+    print("       Run: bash skills/skill-repo/scripts/sync-plugin-manifest.sh", file=sys.stderr)
+    for key in drift:
+        print(f"       {key}: portable={portable.get(key)!r} claude={current.get(key)!r}",
+              file=sys.stderr)
+    sys.exit(1)
+
 try:
     with open(claude_path, encoding="utf-8") as fh:
         on_disk = fh.read()
@@ -109,15 +123,6 @@ except OSError:
 if on_disk == rendered:
     print(f"OK: {claude_path} is in sync with {portable_path}")
     sys.exit(0)
-
-if check:
-    print(f"ERROR: {claude_path} is out of sync with {portable_path}", file=sys.stderr)
-    print("       Run: bash skills/skill-repo/scripts/sync-plugin-manifest.sh", file=sys.stderr)
-    for key in SHARED:
-        if key in portable and current.get(key) != portable[key]:
-            print(f"       {key}: portable={portable[key]!r} claude={current.get(key)!r}",
-                  file=sys.stderr)
-    sys.exit(1)
 
 os.makedirs(os.path.dirname(claude_path) or ".", exist_ok=True)
 with open(claude_path, "w", encoding="utf-8") as fh:
