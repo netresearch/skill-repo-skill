@@ -1,0 +1,12 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "{skill-name}",
+  "version": "0.1.0",
+  "description": "{Skill description}",
+  "author": {
+    "name": "Netresearch DTT GmbH",
+    "url": "https://www.netresearch.de"
+  },
+  "repository": "https://github.com/netresearch/{repo-name}",
+  "license": "(MIT AND CC-BY-SA-4.0)"
+}

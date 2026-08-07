@@ -5,7 +5,7 @@ license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
 compatibility: "Requires bash 4.3+, python3."
 metadata:
   author: Netresearch DTT GmbH
-  version: "1.26.5"
+  version: "1.27.0"
   repository: https://github.com/netresearch/skill-repo-skill
 allowed-tools: Bash(bash:*) Bash(python3:*) Read Write Glob Grep
 ---
@@ -18,7 +18,8 @@ Standards for Netresearch skill repository layout and distribution.
 
 ```
 {repo-name}/
-├── .claude-plugin/plugin.json   # Plugin metadata (required)
+├── plugin.json                  # portable manifest (required)
+├── .claude-plugin/plugin.json   # generated
 ├── skills/{name}/SKILL.md       # AI instructions (required)
 ├── README.md                    # Human docs (required)
 ├── LICENSE-MIT                  # Code license (required)
@@ -51,15 +52,17 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (no orphans). Audit: `scripts/audit-skills.sh`. See [`references/skill-quality.md`](references/skill-quality.md). Put discovery/catalog fields in README or optional YAML, not frontmatter — [`references/skill-discovery-metadata.md`](references/skill-discovery-metadata.md).
+Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (no orphans). Audit: `scripts/audit-skills.sh`. Put discovery/catalog fields in README or optional YAML, not frontmatter.
 
-## plugin.json (`.claude-plugin/plugin.json`)
+## Manifests
+
+Root `plugin.json` ([Agent Plugins 1.0.0](https://agent-plugins.org), closed field set) is the source of truth; `sync-plugin-manifest.sh` generates `.claude-plugin/plugin.json` plus Claude-only keys — [agent-plugins-compat](references/agent-plugins-compat.md).
 
 ```json
 {
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "skill-name",
   "version": "1.0.0",
-  "skills": ["./skills/skill-name"],
   "license": "(MIT AND CC-BY-SA-4.0)",
   "author": {"name": "Netresearch DTT GmbH", "url": "https://www.netresearch.de"}
 }
@@ -92,28 +95,22 @@ Callers: `validate.yml`, `release.yml` (here); `auto-merge-deps.yml` (`netresear
 
 ## Releasing
 
-Bump PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Never edit installed paths (`~/.claude/skills/**`, `~/.claude/plugins/**`); always the worktree. Multi-repo (>3) needs dry-run + approval. See `references/release-discipline.md`.
+Bump root `plugin.json` → sync → PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Multi-repo (>3) needs dry-run + approval. Never edit installed paths — [release-discipline](references/release-discipline.md).
 
 ## Installation
 
 1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
 2. **Release**: Download to `~/.claude/skills/{name}/`
 3. **Composer**: `composer require netresearch/{repo-name}`
-4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (minimal `files` default; see `references/installation-methods.md`).
+4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (minimal `files` default).
 
 ## Validation
 
-```bash
-scripts/validate-skill.sh
-```
-
-## Cross-platform Compatibility
-
-`grep -E` (not `-P`); `bash` shebangs (zsh on macOS); `[[ ]]` for conditionals.
+`scripts/validate-skill.sh` (layout, manifests). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
 
 ## References (`references/`)
 
-**Distribution:** [installation-methods](references/installation-methods.md), [composer-setup](references/composer-setup.md), [release-discipline](references/release-discipline.md), [review-replies](references/review-replies.md) · **SKILL text:** [skill-quality](references/skill-quality.md) · **Repo/README:** [repository-quality-rules](references/repository-quality-rules.md), [readme-template](references/readme-template.md) · **Discovery:** [skill-discovery-metadata](references/skill-discovery-metadata.md) · **Done:** [validation-checklist](references/validation-checklist.md) · **Sync:** [marketplace-integration](references/marketplace-integration.md) · **Retro:** [materialization-contract](references/materialization-contract.md) · **Gotchas:** [authoring-ci-gotchas](references/authoring-ci-gotchas.md) · **Retirement:** [skill-retirement](references/skill-retirement.md)
+[agent-plugins-compat](references/agent-plugins-compat.md) · [installation-methods](references/installation-methods.md) · [composer-setup](references/composer-setup.md) · [release-discipline](references/release-discipline.md) · [review-replies](references/review-replies.md) · [skill-quality](references/skill-quality.md) · [repository-quality-rules](references/repository-quality-rules.md) · [readme-template](references/readme-template.md) · [skill-discovery-metadata](references/skill-discovery-metadata.md) · [validation-checklist](references/validation-checklist.md) · [marketplace-integration](references/marketplace-integration.md) · [materialization-contract](references/materialization-contract.md) · [authoring-ci-gotchas](references/authoring-ci-gotchas.md) · [skill-retirement](references/skill-retirement.md)
 
 ## See Also
 

@@ -58,6 +58,7 @@ fi
 TAG_VERSION="${TAG_ARG#v}"  # strip leading v if present (empty stays empty)
 
 PLUGIN_JSON=".claude-plugin/plugin.json"
+PORTABLE_JSON="plugin.json"
 COMPOSER_JSON="composer.json"
 
 if [[ ! -f "$PLUGIN_JSON" ]]; then
@@ -70,6 +71,21 @@ PLUGIN_VERSION=$(jq -r '.version // empty' "$PLUGIN_JSON")
 if [[ -z "$PLUGIN_VERSION" ]]; then
   echo "ERROR: $PLUGIN_JSON has no .version field" >&2
   exit 1
+fi
+
+# Root plugin.json (Agent Plugins 1.0.0) is the source of truth for the version
+# once a repo has adopted it; .claude-plugin/plugin.json is generated from it.
+if [[ -f "$PORTABLE_JSON" ]]; then
+  PORTABLE_VERSION=$(jq -r '.version // empty' "$PORTABLE_JSON")
+  if [[ -z "$PORTABLE_VERSION" ]]; then
+    echo "ERROR: $PORTABLE_JSON has no .version field" >&2
+    exit 1
+  fi
+  if [[ "$PORTABLE_VERSION" != "$PLUGIN_VERSION" ]]; then
+    echo "ERROR: $PORTABLE_JSON=$PORTABLE_VERSION does not match $PLUGIN_JSON=$PLUGIN_VERSION" >&2
+    echo "       Bump the root plugin.json, then run sync-plugin-manifest.sh." >&2
+    exit 1
+  fi
 fi
 
 # composer.json MUST NOT have a version field

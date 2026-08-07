@@ -408,6 +408,143 @@ else
     error ".claude-plugin/plugin.json not found"
 fi
 
+# --- Portable manifest checks (Agent Plugins 1.0.0) ---
+# Root ./plugin.json is the portable manifest every Agent Plugins client reads.
+# It is the source of truth for shared metadata; .claude-plugin/plugin.json is
+# generated from it by sync-plugin-manifest.sh. A missing portable manifest is
+# a warning, not an error: repos adopt it one PR at a time and this validator
+# runs fleet-wide from main.
+PORTABLE_FILE="$REPO_DIR/plugin.json"
+if [[ -f "$PORTABLE_FILE" ]]; then
+    PORTABLE_REPORT=$(python3 - "$PORTABLE_FILE" "$PLUGIN_FILE" "$REPO_DIR" <<'PYEOF' 2>&1 || true
+import json
+import os
+import re
+import sys
+
+portable_path, claude_path, repo_dir = sys.argv[1], sys.argv[2], sys.argv[3]
+
+SCHEMA_URL = "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json"
+# Closed schema: agent-plugins.org/schemas/1.0.0/plugin.schema.json
+ALLOWED = ["$schema", "name", "version", "description", "author",
+           "homepage", "repository", "license", "keywords", "extensions"]
+SHARED = ["name", "version", "description", "author",
+          "homepage", "repository", "license", "keywords"]
+NAME_RE = re.compile(r"^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$")
+
+out = []
+
+
+def err(msg):
+    out.append("ERROR:" + msg)
+
+
+def ok(msg):
+    out.append("OK:" + msg)
+
+
+try:
+    with open(portable_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except ValueError as exc:
+    err(f"plugin.json is not valid JSON: {exc}")
+    data = None
+except OSError as exc:
+    err(f"plugin.json could not be read: {exc}")
+    data = None
+
+if isinstance(data, dict):
+    ok("plugin.json (portable Agent Plugins manifest) exists")
+
+    if data.get("$schema") != SCHEMA_URL:
+        err(f'plugin.json $schema must be "{SCHEMA_URL}" (got: {data.get("$schema")!r})')
+    else:
+        ok("plugin.json targets Agent Plugins 1.0.0")
+
+    name = data.get("name")
+    if not isinstance(name, str) or not name:
+        err("plugin.json is missing the required 'name' field")
+    elif len(name) > 64 or not NAME_RE.match(name):
+        err(f"plugin.json name is invalid: {name!r} "
+            "(1-64 chars, lowercase a-z0-9 . -, must start and end alphanumeric, no -- or ..)")
+    else:
+        ok(f"plugin.json name valid: {name}")
+
+    unknown = [k for k in data if k not in ALLOWED]
+    if unknown:
+        err("plugin.json has fields outside the Agent Plugins schema: "
+            + ", ".join(sorted(unknown))
+            + " (client-specific data belongs in 'extensions' or in .claude-plugin/plugin.json)")
+    else:
+        ok("plugin.json has no fields outside the Agent Plugins schema")
+
+    for key in ("version", "description", "homepage", "repository", "license"):
+        if key in data and not isinstance(data[key], str):
+            err(f"plugin.json {key} must be a string")
+    if "keywords" in data and (not isinstance(data["keywords"], list)
+                               or not all(isinstance(k, str) for k in data["keywords"])):
+        err("plugin.json keywords must be an array of strings")
+    if "author" in data:
+        author = data["author"]
+        if not isinstance(author, dict):
+            err("plugin.json author must be an object with name/email/url")
+        else:
+            extra = [k for k in author if k not in ("name", "email", "url")]
+            if extra:
+                err("plugin.json author allows only name, email, url — got: "
+                    + ", ".join(sorted(extra)))
+            for k, v in author.items():
+                if not isinstance(v, str):
+                    err(f"plugin.json author.{k} must be a string")
+    if "extensions" in data:
+        ext = data["extensions"]
+        if not isinstance(ext, dict) or not all(isinstance(v, dict) for v in ext.values()):
+            err("plugin.json extensions must be an object of reverse-domain "
+                "namespace keys mapping to objects")
+
+    # Parity with the generated Claude Code manifest.
+    if os.path.isfile(claude_path):
+        try:
+            with open(claude_path, encoding="utf-8") as fh:
+                claude = json.load(fh)
+        except (OSError, ValueError):
+            claude = None
+        if isinstance(claude, dict):
+            drift = [k for k in SHARED if k in data and claude.get(k) != data[k]]
+            if drift:
+                err(".claude-plugin/plugin.json is out of sync with plugin.json on: "
+                    + ", ".join(drift)
+                    + " — run skills/skill-repo/scripts/sync-plugin-manifest.sh")
+            else:
+                ok(".claude-plugin/plugin.json is in sync with plugin.json")
+
+    # Agent Plugins clients discover skills only under skills/<name>/SKILL.md.
+    skills_dir = os.path.join(repo_dir, "skills")
+    found = []
+    if os.path.isdir(skills_dir):
+        found = sorted(d for d in os.listdir(skills_dir)
+                       if os.path.isfile(os.path.join(skills_dir, d, "SKILL.md")))
+    if found:
+        ok(f"skills/ holds {len(found)} portable skill(s): " + ", ".join(found))
+    else:
+        err("no skills/<name>/SKILL.md found — Agent Plugins clients do not "
+            "discover a SKILL.md at the repository root")
+
+print("\n".join(out))
+PYEOF
+)
+    while IFS= read -r line; do
+        [[ -n "$line" ]] || continue
+        case "$line" in
+            OK:*) success "${line#OK:}" ;;
+            ERROR:*) error "${line#ERROR:}" ;;
+            *) error "portable manifest check produced unexpected output: $line" ;;
+        esac
+    done <<< "$PORTABLE_REPORT"
+else
+    warning "plugin.json (portable Agent Plugins 1.0.0 manifest) not found at repo root — Agent Plugins clients (Cursor, Copilot, …) cannot load this plugin; see skill-repo skills/skill-repo/references/agent-plugins-compat.md"
+fi
+
 # --- README.md quality checks (warnings by default) ---
 # Heading misses are warnings unless STRICT_README=1 promotes them to errors.
 # The default must stay warnings-only: consumer repos run this script from

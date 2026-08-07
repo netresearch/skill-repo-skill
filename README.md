@@ -16,7 +16,7 @@ It extends Anthropic-style single-file skills with **repository-level** conventi
 
 ## Compatibility
 
-This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use.
+This is an **Agent Skill** following the [open standard](https://agentskills.io) originally developed by Anthropic and released for cross-platform use. The repository is also packaged as an [Agent Plugins 1.0.0](https://agent-plugins.org) plugin: the root `plugin.json` plus `skills/` layout is what any conformant client loads.
 
 **Supported platforms:**
 
@@ -30,7 +30,7 @@ This is an **Agent Skill** following the [open standard](https://agentskills.io)
 ## Use when
 
 - Creating or bootstrapping a **Netresearch-style skill repository**
-- Standardizing layout, `composer.json`, `.claude-plugin/plugin.json`, or release workflows
+- Standardizing layout, `composer.json`, `plugin.json` / `.claude-plugin/plugin.json`, or release workflows
 - Wiring **reusable CI** from `netresearch/skill-repo-skill`
 - Fixing **validation errors** from `validate-skill.sh` or marketplace packaging
 - Migrating to **split licensing** (`LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`)
@@ -177,7 +177,8 @@ skill-repo-skill/
 ├── composer.json
 ├── package.json
 ├── renovate.json
-├── .claude-plugin/plugin.json
+├── plugin.json                    # Agent Plugins 1.0.0 manifest (source of truth)
+├── .claude-plugin/plugin.json     # Claude Code manifest (generated)
 ├── .github/workflows/             # validate, release, pr-quality,
 │                                  # harness-verify, eval-validate,
 │                                  # validate-agents, dependency-audit,

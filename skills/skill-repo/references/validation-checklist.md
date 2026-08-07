@@ -1,6 +1,6 @@
 # Validation checklist — skill repository changes
 
-Agents **must** walk through this list before declaring a skill-repo task complete.  
+Agents **must** walk through this list before declaring a skill-repo task complete.
 Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.md`** — do not merge those steps here.
 
 ## README
@@ -16,6 +16,14 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 - [ ] Optional keys only if needed: `license`, `compatibility`, `metadata`, `allowed-tools` (per validator).
 - [ ] `description` starts with `Use when`.
 - [ ] Body describes triggers and use cases without duplicating full README marketing copy.
+
+## Manifests
+
+- [ ] Root **`plugin.json`** exists and targets `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`.
+- [ ] It carries **only** the fields of the closed schema — no `skills`, `agents`, `support`, … — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
+- [ ] `.claude-plugin/plugin.json` regenerated: `bash skills/skill-repo/scripts/sync-plugin-manifest.sh` leaves the tree clean (`--check` exits 0).
+- [ ] Version bumped in the **root** `plugin.json` (source of truth), then synced; `check-version-parity.sh` exits 0.
+- [ ] Every skill lives at `skills/<name>/SKILL.md` — a root `SKILL.md` is invisible to Agent Plugins clients.
 
 ## Agents / OpenAI
 
