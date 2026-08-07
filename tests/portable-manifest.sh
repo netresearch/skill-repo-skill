@@ -94,14 +94,13 @@ assert_line expect "$d" "skills/ holds 1 portable skill(s): demo" "happy: discov
 
 d="$(fixture no_portable)"
 rm "$d/plugin.json"
-assert_line expect "$d" "portable Agent Plugins 1.0.0 manifest) not found" "missing: warns"
-# The absence must stay a warning: the fleet adopts the manifest one PR at a
-# time while this validator runs everywhere from main.
+assert_line expect "$d" "portable Agent Plugins 1.0.0 manifest) not found" "missing: reported"
+# The absence is an error since the fleet finished adopting the manifest.
 out="$(bash "$VALIDATOR" "$d" 2>&1)"
-if grep -E "ERROR.*(Agent Plugins|portable)" <<<"$out" >/dev/null; then
-    echo "  FAIL missing: absence of plugin.json must not raise an ERROR"; ((FAIL++))
-else
+if grep -E "ERROR.*portable Agent Plugins 1\.0\.0 manifest\) not found" <<<"$out" >/dev/null; then
     ((PASS++))
+else
+    echo "  FAIL missing: absence of plugin.json must raise an ERROR"; ((FAIL++))
 fi
 
 d="$(fixture bad_schema)"

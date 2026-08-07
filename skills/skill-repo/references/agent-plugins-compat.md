@@ -92,8 +92,9 @@ migrated yet.
 the `name` pattern, that no field outside the closed schema is present, the
 `author`/`keywords`/`extensions` shapes, that the shared fields match
 `.claude-plugin/plugin.json`, and that at least one `skills/<name>/SKILL.md`
-exists. A **missing** `./plugin.json` is a warning, not an error — the validator
-runs fleet-wide from `main` while repos adopt the manifest one PR at a time.
+exists. A **missing** `./plugin.json` is an error: the fleet finished adopting
+the manifest on 2026-08-07, so a repo without one is a new gap rather than a
+repo still waiting its turn.
 
 `check-version-parity.sh` treats the root `plugin.json` version as
 authoritative and fails when `.claude-plugin/plugin.json` disagrees.
