@@ -1,0 +1,43 @@
+name: Self-test
+
+# lint.yml calls the reusable validate.yml from `main`, so a PR that changes
+# the validator does not gate itself. This workflow runs the scripts and their
+# tests from the PR's own tree. It is repo-local on purpose: consumer repos
+# ship no tests/ directory.
+#
+# Not part of netresearch/.github/templates/skill — an extra workflow file is
+# not template drift.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  self-test:
+    name: Script self-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Validator smoke tests
+        run: bash tests/validate-skill.sh
+
+      - name: Portable manifest tests
+        run: bash tests/portable-manifest.sh
+
+      - name: Validate this repo with the PR's validator
+        run: bash skills/skill-repo/scripts/validate-skill.sh .
+
+      - name: Version parity
+        run: bash skills/skill-repo/scripts/check-version-parity.sh
