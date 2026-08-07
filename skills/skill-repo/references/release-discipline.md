@@ -46,6 +46,10 @@ If called without an argument and all parity passes, the script prints an adviso
 
 Bump tooling must handle the same two frontmatter forms: a bump script that only rewrites the indented `metadata.version` silently leaves a top-level `version:` at the old value, and the tag pipeline's `validate:skill` then fails on exactly that mismatch (it-maintenance-skill v1.10.0 died this way; typo3-upgrade-estimator-skill nearly repeated it in the 2026-07-16 sweep).
 
+Use `scripts/bump-version.sh <version> [--apply]` rather than a per-repo helper. It writes every surface `check-version-parity.sh` validates — `plugin.json` plus *each* frontmatter `version:` line in *every* `skills/*/SKILL.md`, both forms, indentation and quoting preserved — refuses when `composer.json` carries a version, and re-runs the parity check afterwards. Dry-run by default.
+
+It deliberately does not commit, tag or push. A helper that bumps and tags in one step is how the canonical order above gets skipped: the tag then lands on an unmerged branch, or on a tree where only one of the version surfaces moved. Two repos grew such a target locally (`make release` in it-account-lifecycle-skill and it-maintenance-skill) and both diverged from this page — one bumped only `plugin.json`, the other hard-coded a single skill path and produced the v1.10.0 failure above.
+
 ## Changelog Rollover in the Bump Commit
 
 If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
