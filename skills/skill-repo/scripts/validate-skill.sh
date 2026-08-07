@@ -411,9 +411,9 @@ fi
 # --- Portable manifest checks (Agent Plugins 1.0.0) ---
 # Root ./plugin.json is the portable manifest every Agent Plugins client reads.
 # It is the source of truth for shared metadata; .claude-plugin/plugin.json is
-# generated from it by sync-plugin-manifest.sh. A missing portable manifest is
-# a warning, not an error: repos adopt it one PR at a time and this validator
-# runs fleet-wide from main.
+# generated from it by sync-plugin-manifest.sh. Its absence is an error: the
+# fleet finished adopting it on 2026-08-07, so a repo without one is a new gap,
+# not a repo still waiting its turn.
 PORTABLE_FILE="$REPO_DIR/plugin.json"
 if [[ -f "$PORTABLE_FILE" ]]; then
     PORTABLE_REPORT=$(python3 - "$PORTABLE_FILE" "$PLUGIN_FILE" "$REPO_DIR" <<'PYEOF' 2>&1 || true
@@ -542,7 +542,7 @@ PYEOF
         esac
     done <<< "$PORTABLE_REPORT"
 else
-    warning "plugin.json (portable Agent Plugins 1.0.0 manifest) not found at repo root — Agent Plugins clients (Cursor, Copilot, …) cannot load this plugin; see skill-repo skills/skill-repo/references/agent-plugins-compat.md"
+    error "plugin.json (portable Agent Plugins 1.0.0 manifest) not found at repo root — Agent Plugins clients (Cursor, Copilot, …) cannot load this plugin; see skill-repo skills/skill-repo/references/agent-plugins-compat.md"
 fi
 
 # --- README.md quality checks (warnings by default) ---
