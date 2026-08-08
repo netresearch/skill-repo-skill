@@ -11,6 +11,11 @@
 # Exit codes: 0 = done (or dry run clean), 1 = refused or nothing to write.
 #
 # Behavior:
+#   * Rewrites the root plugin.json .version when the repo carries the portable
+#     Agent Plugins manifest, then projects it into .claude-plugin/plugin.json
+#     via sync-plugin-manifest.sh. Root plugin.json is the source of truth;
+#     writing only the generated manifest leaves the source behind and
+#     check-version-parity.sh then rejects the half-bumped tree.
 #   * Rewrites .claude-plugin/plugin.json .version (required, must exist)
 #   * Rewrites EVERY version: line inside the YAML frontmatter of every
 #     skills/*/SKILL.md — both the indented metadata.version and a top-level
@@ -30,6 +35,10 @@
 # the tag pipeline then rejects (it-maintenance-skill v1.10.0 died this way).
 
 set -euo pipefail
+
+# Resolved before any --repo cd: a relative invocation would otherwise not find
+# its sibling scripts once the working directory has moved.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 REPO_DIR=""
 VERSION=""
@@ -76,7 +85,10 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
 fi
 
 PLUGIN_JSON=".claude-plugin/plugin.json"
+PORTABLE_JSON="plugin.json"
 COMPOSER_JSON="composer.json"
+SYNC="$SCRIPT_DIR/sync-plugin-manifest.sh"
+PARITY="$SCRIPT_DIR/check-version-parity.sh"
 
 if [[ ! -f "$PLUGIN_JSON" ]]; then
   echo "ERROR: $PLUGIN_JSON not found — run this from the repo root or pass --repo" >&2
@@ -102,15 +114,44 @@ report() { # path old new
   printf '  %-46s %s -> %s\n' "$1" "$2" "$3"
 }
 
+set_json_version() { # path
+  local tmp
+  tmp=$(mktemp)
+  # jq already terminates its output with a single newline; adding one here
+  # produces a blank line at EOF that the end-of-file hook then strips back.
+  jq --arg v "$VERSION" '.version = $v' "$1" > "$tmp"
+  mv "$tmp" "$1"
+}
+
+# Root plugin.json is the source of truth once a repo has adopted the portable
+# Agent Plugins manifest; .claude-plugin/plugin.json is generated from it. Writing
+# only the generated manifest leaves the source at the old version, which is
+# exactly what check-version-parity.sh rejects — so the bump used to end with a
+# half-written tree and exit 1 on every repo that had adopted the manifest.
+if [[ -f "$PORTABLE_JSON" ]]; then
+  if ! jq -e 'has("version")' "$PORTABLE_JSON" > /dev/null 2>&1; then
+    echo "ERROR: $PORTABLE_JSON has no .version field" >&2
+    exit 1
+  fi
+  OLD_PORTABLE_VERSION=$(jq -r '.version' "$PORTABLE_JSON")
+  if [[ "$OLD_PORTABLE_VERSION" != "$VERSION" ]]; then
+    report "$PORTABLE_JSON" "$OLD_PORTABLE_VERSION" "$VERSION"
+    CHANGES=1
+    (( APPLY )) && set_json_version "$PORTABLE_JSON"
+  fi
+fi
+
 if [[ "$OLD_PLUGIN_VERSION" != "$VERSION" ]]; then
   report "$PLUGIN_JSON" "$OLD_PLUGIN_VERSION" "$VERSION"
   CHANGES=1
   if (( APPLY )); then
-    tmp=$(mktemp)
-    # jq already terminates its output with a single newline; adding one here
-    # produces a blank line at EOF that the end-of-file hook then strips back.
-    jq --arg v "$VERSION" '.version = $v' "$PLUGIN_JSON" > "$tmp"
-    mv "$tmp" "$PLUGIN_JSON"
+    # Project the source of truth rather than writing the generated manifest
+    # directly, so any other shared-metadata drift is corrected in the same pass.
+    if [[ -f "$PORTABLE_JSON" ]] && [[ -x "$SYNC" ]]; then
+      "$SYNC" > /dev/null
+    else
+      set_json_version "$PLUGIN_JSON"
+    fi
   fi
 fi
 
@@ -173,7 +214,6 @@ if (( ! APPLY )); then
   exit 0
 fi
 
-PARITY="$(dirname "${BASH_SOURCE[0]}")/check-version-parity.sh"
 if [[ -x "$PARITY" ]]; then
   echo
   "$PARITY" "$VERSION"

@@ -13,6 +13,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 VALIDATOR="$REPO_ROOT/skills/skill-repo/scripts/validate-skill.sh"
 SYNC="$REPO_ROOT/skills/skill-repo/scripts/sync-plugin-manifest.sh"
+BUMP="$REPO_ROOT/skills/skill-repo/scripts/bump-version.sh"
+PARITY="$REPO_ROOT/skills/skill-repo/scripts/check-version-parity.sh"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
@@ -218,6 +220,48 @@ assert_cmd 1 "sync: Claude-only shared key fails --check" bash "$SYNC" --repo "$
 d="$(fixture sync_absent)"
 rm "$d/plugin.json"
 assert_cmd 0 "sync: no portable manifest is a no-op" bash "$SYNC" --repo "$d" --check
+
+echo "== bump-version.sh =="
+
+json_version() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$1"; }
+skill_version() {
+    awk '/^---$/{fm=!fm;next} fm && /^[[:space:]]*version:/{
+        gsub(/^[[:space:]]*version:[[:space:]]*/,""); gsub(/["\047]/,""); print; exit}' "$1"
+}
+
+# A repo carrying the portable manifest must end up bumped on BOTH manifests.
+# Before the fix the bump wrote only .claude-plugin/plugin.json and then exited 1
+# on its own parity check, leaving the tree half-written.
+d="$(fixture bump_portable)"
+printf -- '---\nname: demo\nmetadata:\n  version: 1.0.0\n---\n\n# Demo\n' > "$d/skills/demo/SKILL.md"
+assert_cmd 0 "bump: succeeds on a portable-manifest repo" bash "$BUMP" --repo "$d" 2.0.0 --apply
+for f in plugin.json .claude-plugin/plugin.json; do
+    if [[ "$(json_version "$d/$f")" == "2.0.0" ]]; then ((PASS++)); else
+        echo "  FAIL bump: $f is $(json_version "$d/$f"), wanted 2.0.0"; ((FAIL++)); fi
+done
+if [[ "$(skill_version "$d/skills/demo/SKILL.md")" == "2.0.0" ]]; then ((PASS++)); else
+    echo "  FAIL bump: SKILL.md metadata.version not bumped"; ((FAIL++)); fi
+assert_cmd 0 "bump: result passes the parity check" bash "$PARITY" --repo "$d" v2.0.0
+
+# Claude-only keys must survive the projection.
+if [[ "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("skills"))' \
+        "$d/.claude-plugin/plugin.json")" == "['./skills/demo']" ]]; then ((PASS++)); else
+    echo "  FAIL bump: Claude-only 'skills' key lost during the bump"; ((FAIL++)); fi
+
+# A repo that never adopted the portable manifest keeps the old direct-write path.
+d="$(fixture bump_legacy)"
+rm "$d/plugin.json"
+assert_cmd 0 "bump: succeeds without a portable manifest" bash "$BUMP" --repo "$d" 2.0.0 --apply
+if [[ "$(json_version "$d/.claude-plugin/plugin.json")" == "2.0.0" ]]; then ((PASS++)); else
+    echo "  FAIL bump: legacy repo's Claude manifest not bumped"; ((FAIL++)); fi
+
+# Dry run writes nothing but still reports the root manifest.
+d="$(fixture bump_dryrun)"
+out="$(bash "$BUMP" --repo "$d" 2.0.0 2>&1)"
+if grep -qE '^  plugin\.json ' <<<"$out"; then ((PASS++)); else
+    echo "  FAIL bump: dry run does not report the root plugin.json"; ((FAIL++)); fi
+if [[ "$(json_version "$d/plugin.json")" == "1.0.0" ]]; then ((PASS++)); else
+    echo "  FAIL bump: dry run wrote to plugin.json"; ((FAIL++)); fi
 
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
