@@ -234,6 +234,20 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
   ```
 
   Verified in the 2026-07-18 sweep (23 releases), where worktree reads disagreed with `origin/main` on ~6 repos.
+- **Survey for a `composer.json` `version` field before the sweep, not at bump
+  time.** `bump-version.sh` and `check-version-parity.sh` both refuse while it is
+  present, so a repo carrying one fails mid-bump with a half-written tree and has
+  to be re-run after the field is removed. Four GitLab repos hit this on
+  2026-08-08, and three of the four were already *behind* their own latest tag
+  (`dxp-project-init` declared `0.1.0` against tag `v0.2.6`) — which is precisely
+  the drift the no-version rule exists to prevent, so removing it is the fix, not
+  a workaround. One extra call per repo during the survey turns a mid-sweep
+  failure into a manifest row:
+
+  ```bash
+  glab api "projects/coding-ai%2F$R/repository/files/composer.json/raw?ref=main" | jq -e 'has("version")'
+  ```
+
 - **A QUEUED GitHub check reports `conclusion: ""`, not `null` — so the obvious
   red-check filter calls it a failure.** The natural gate,
   `select(.conclusion != null and .conclusion != "SUCCESS" …)`, lets the empty
@@ -281,6 +295,57 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 ## GitLab (`git.netresearch.de`) skill repos release on tag too
 
 The release-discipline above is GitHub-centric, but the `coding-ai` GitLab skill repos ship the same way: **a pushed signed tag triggers a pipeline that creates the GitLab Release** via the `claude-code-skill` CI component (`include:` in `.gitlab-ci.yml`). There is no separate release workflow file and **no manual `glab release create`** — pushing `vX.Y.Z` is sufficient; the Release object appears when the tag pipeline goes green. Confirm with `glab api "projects/coding-ai%2F<repo>/releases/v<ver>"` (and the tag pipeline via `pipelines?ref=v<ver>`). Same bump-PR-then-tag order as GitHub applies; merge the bump MR only when `detailed_merge_status == "mergeable"`.
+
+This holds only for repos whose release job is gated on the tag you actually push — see [A pushed tag is not a release](#a-pushed-tag-is-not-a-release--check-the-pattern-the-release-job-matches) below, which is where the exceptions live.
+
+## A pushed tag is not a release — check the pattern the release job matches
+
+The sentence above ("pushing `vX.Y.Z` is sufficient") holds **only while the tag
+you push matches the pattern that repo's release job is gated on.** When it does
+not, the push succeeds, the pipeline may even go green, and no Release object is
+ever created. Nothing fails; the release is simply missing. Three variants, all
+found in the 2026-08-08 sweep:
+
+| Repo | Tag pushed | Release rule | Result |
+|---|---|---|---|
+| `dxp-project-maintenance` | `0.5.4` (bare) | component: `^v\d+\.\d+\.\d+$` | job never ran; releases hand-made for months |
+| `oro-bundle-upgrade-skill` | `v1.1.0` | no tag rule at all — CI runs only on MRs and the default branch | job does not exist; releases hand-made |
+| `tender-estimation` | `tender-estimation--v0.6.1` | `^tender-estimation--v\d+\.\d+\.\d+$` | **correct** — a deliberate non-standard convention |
+
+So the check is not "does the repo use `vX.Y.Z`" but **"does its release job's
+rule match the tag its maintainers actually cut?"** The third row is the reason:
+that prefix is deliberate, documented in the file as matching the
+`claude plugin tag` CLI, and its release job fires on it. Normalising it to
+`vX.Y.Z` would have *broken* a working release path.
+
+Before tagging a repo you have not released before, read the whole
+`.gitlab-ci.yml` / release workflow and compare the rule against the last tag:
+
+```bash
+glab api "projects/coding-ai%2F$R/repository/tags?per_page=1" | jq -r '.[0].name'
+glab api "projects/coding-ai%2F$R/repository/files/.gitlab-ci.yml/raw?ref=main" | grep -n 'CI_COMMIT_TAG'
+```
+
+**Read the whole file, not its head.** A release job commonly sits at the bottom,
+after the lint and validate jobs; concluding "this repo has no release job" from
+the first screenful is wrong, and in this sweep that mistake was made and acted
+on — it produced a plan to "fix" CI that was already correct.
+
+After every tag push, **verify the Release object exists rather than assuming the
+tag implied it.** If it is missing, the tag pipeline's job list says why — a rule
+that did not match shows up as the release job being absent from an otherwise
+green pipeline, not as a failure:
+
+```bash
+glab api "projects/coding-ai%2F$R/pipelines?ref=$TAG" | jq -r '.[0].id'
+glab api "projects/coding-ai%2F$R/pipelines/<id>/jobs" | jq -r '.[]|"\(.stage)/\(.name): \(.status)"'
+```
+
+The same trap exists on the GitHub side one level in: `node-agent-skill-coordinator`'s
+release workflow ran, but died on `Script not found "build"` because the caller
+never set `build-cmd` and the shared reusable defaults to `bun run build`. A
+caller that adopts a reusable and then does not cut a release has not tested it —
+the first tag after the adoption is the test.
 
 ## Immutable-Release Caveat
 
