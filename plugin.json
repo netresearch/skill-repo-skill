@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "skill-repo",
-  "version": "1.28.0",
+  "version": "1.29.0",
   "description": "Guide for structuring Netresearch skill repositories",
   "author": {
     "name": "Netresearch DTT GmbH",

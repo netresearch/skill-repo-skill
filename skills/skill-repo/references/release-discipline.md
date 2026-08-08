@@ -57,15 +57,41 @@ It deliberately does not commit, tag or push. A helper that bumps and tags in on
 
 If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
 
-**Two heading forms exist in the fleet, exactly like the two frontmatter version
-forms above.** Keep-a-Changelog repos use `## [Unreleased]` and `## [X.Y.Z] - YYYY-MM-DD`;
-others use `## Unreleased` and `## X.Y.Z (YYYY-MM-DD)` (it-maintenance-skill).
-A roll anchored on the bracketed form matches nothing in the second and exits 0,
-so the release ships with its content still under `Unreleased` and nobody sees an
-error. Match both forms, and **fail the roll when it changed no lines** — a
-no-match must not be indistinguishable from a successful roll. Same rule as for
-`metadata.version` vs a top-level `version:`: whichever surface the tooling does
-not know about is the one that silently keeps the old value.
+**Five heading shapes exist in the fleet**, not the two this page claimed until
+v1.29.0 — the 2026-08-08 sweep hit all of them across 63 repos:
+
+| Shape | Example | Seen in |
+|---|---|---|
+| bracketed dash | `## [1.2.3] - 2026-08-08` | most keep-a-changelog repos |
+| bare paren | `## 1.2.3 (2026-08-08)` | it-maintenance-skill, gitlab-skill |
+| bracketed em dash | `## [0.3.23] — 2026-07-02` | nr-monatliche-abrechnung |
+| linked | `## [v2.6.0](…/releases/tag/v2.6.0) — 2026-02-28` | typo3-docs-skill |
+| `[Unreleased]` only, no released heading yet | — | source-digest-skill |
+
+A roll anchored on one shape matches nothing in the others and exits 0, so the
+release ships with its content still under `Unreleased` and nobody sees an error.
+Detect the shape from the newest *released* heading and reproduce it — including
+the dash character and, for the linked form, rewriting the tag inside the URL.
+The fifth shape has no released heading to copy from; that is the first release,
+not an error, so default to the keep-a-changelog form its `[Unreleased]` bracket
+already implies rather than aborting.
+
+**Fail the roll when it changed no lines** — a no-match must not be
+indistinguishable from a successful roll. Same rule as for `metadata.version` vs
+a top-level `version:`: whichever surface the tooling does not know about is the
+one that silently keeps the old value.
+
+**A generated entry must satisfy markdownlint, because every repo lints its
+CHANGELOG in CI.** Emit a blank line after each `### Added`/`### Fixed` heading
+and around every list, or the bump PR goes red on MD022 (blanks-around-headings)
+and MD032 (blanks-around-lists) — in one repo, in every repo, all at once. This
+red-lit 16 of 63 repos mid-sweep on 2026-08-08. It is worth running
+`npx markdownlint-cli2 CHANGELOG.md` on the rolled file before committing:
+the roll is generated text, and generated text is exactly what nobody proofreads.
+
+Boundary regexes are also **fence-blind** — a scan anchored on `^##` matches a
+heading-looking line inside a fenced code block and splices the new section into
+the middle of an example. Track fences while scanning.
 
 ## Cache Safety: Never Edit the Installed Copy
 
@@ -208,6 +234,26 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
   ```
 
   Verified in the 2026-07-18 sweep (23 releases), where worktree reads disagreed with `origin/main` on ~6 repos.
+- **A QUEUED GitHub check reports `conclusion: ""`, not `null` — so the obvious
+  red-check filter calls it a failure.** The natural gate,
+  `select(.conclusion != null and .conclusion != "SUCCESS" …)`, lets the empty
+  string through and the sweep aborts on checks that were merely still starting.
+  Gate on completion first and only then on the verdict:
+
+  ```bash
+  gh pr view "$BRANCH" --repo "$O/$R" --json mergeStateStatus,statusCheckRollup --jq '{
+    p: [.statusCheckRollup[] | select((.__typename=="CheckRun" and .status!="COMPLETED")
+                                    or (.__typename=="StatusContext" and .state=="PENDING")) | .name],
+    f: [.statusCheckRollup[] | select(.__typename=="CheckRun" and .status=="COMPLETED"
+                                    and (.conclusion|IN("SUCCESS","SKIPPED","NEUTRAL")|not)) | .name]}'
+  ```
+
+  Wait while `p` is non-empty; fail only on `f`. The two shapes in the rollup need
+  different fields — `CheckRun` has `.status`/`.conclusion`, `StatusContext` has
+  `.state` — and a filter written for one silently mis-reads the other. Note also
+  that `gh pr checks --watch` only blocks *while it can run*: if its output
+  redirect fails (a missing log directory), the command dies instantly and the
+  very next query reads a still-pending rollup. Observed 2026-08-08.
 - **`plugin.json` ahead of the last tag ⇒ the bump already merged — tag only, no bump PR.** Classify each repo from the `origin/main` value: `plugin.json.version > last tag` means a prior bump PR already landed and the repo just needs a signed tag; `plugin.json.version == last tag` means it needs a bump PR first. Tagging a "prepared" repo at its committed version keeps parity true by construction. Don't open a bump PR for a repo that is already prepared — it would double-bump.
 - **`git pull origin main` merges into whatever branch the worktree has checked out.** A fleet sweep hits worktrees parked on a leftover feature branch, and `--ff-only` does not protect you — the stale branch fast-forwards onto `origin/main` "successfully" (observed 2026-08-03: a leftover `ci/*` branch silently advanced to the main tip).
 
