@@ -75,8 +75,11 @@ jobs:
           done
           exit $rc
 
+      # always(): a failing shell suite must not hide the Python results. One
+      # run should report every failing test, not the first kind of failure.
       - name: Python tests
         id: python
+        if: always()
         env:
           PYTHON_GLOB: ${{ inputs.python_glob }}
         run: |
@@ -102,6 +105,7 @@ jobs:
       # state this workflow exists to surface. Reported always; fatal only when
       # the caller asks for it, so adoption is never a breaking change.
       - name: Report coverage of shipped scripts
+        if: always()
         env:
           SHELL_COUNT: ${{ steps.shell.outputs.count }}
           PYTHON_COUNT: ${{ steps.python.outputs.count }}
@@ -109,7 +113,10 @@ jobs:
         run: |
           shopt -s nullglob globstar
           scripts=(skills/*/scripts/*)
-          total=$(( SHELL_COUNT + PYTHON_COUNT ))
+          # Defaulted because `if: always()` can reach this step while an
+          # earlier one never wrote its `count=`. Bash reads an empty variable
+          # as 0 here, so this is explicitness, not a crash guard.
+          total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} ))
           echo "shipped scripts: ${#scripts[@]} | test files run: $total"
           if [ ${#scripts[@]} -gt 0 ] && [ "$total" -eq 0 ]; then
             msg="repo ships ${#scripts[@]} script(s) under skills/*/scripts/ but no test file was run"
