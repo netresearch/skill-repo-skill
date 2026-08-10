@@ -1,0 +1,19 @@
+name: Skill Tests
+
+# Caller for this repo's own test suite. Calls the LOCAL reusable so the caller
+# tests the in-repo version of tests.yml (matching the eval-validate-caller and
+# npm-pack-smoke-caller convention). Consumer skill repos instead pin
+# netresearch/skill-repo-skill/.github/workflows/tests.yml@main.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions: {}
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+    permissions:
+      contents: read

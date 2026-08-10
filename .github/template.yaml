@@ -21,3 +21,8 @@ intentional-drift:
   - .github/workflows/eval-validate.yml
   - .github/workflows/harness-verify.yml
   - .github/workflows/release.yml
+  # This repo is the source of the tests reusable, so it holds both the
+  # reusable and a caller that pins the LOCAL copy — consumers instead pin
+  # netresearch/skill-repo-skill/.github/workflows/tests.yml@main.
+  - .github/workflows/tests.yml
+  - .github/workflows/tests-caller.yml
