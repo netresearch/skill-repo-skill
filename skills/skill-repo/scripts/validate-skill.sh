@@ -201,6 +201,69 @@ PYEOF
     else
         warning "checkpoints.yaml not found in ${SKILL_DIR_REL} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
     fi
+
+    # --- Shipped scripts without a test ---
+    # A skill's scripts are its executable surface, and until this check existed
+    # nothing noticed when they had no test: across the fleet, 27 of 33 repos
+    # that ship scripts had no test file at all. Referenced-by-name is a coarse
+    # signal on purpose — it costs nothing and catches the "no test whatsoever"
+    # case, which is the one that actually occurs.
+    if [[ -d "$SKILL_DIR/scripts" ]]; then
+        UNTESTED=$(
+            shopt -s nullglob
+            for s in "$SKILL_DIR"/scripts/*; do
+                [[ -f "$s" ]] || continue
+                base="$(basename "$s")"
+                if [[ -d "$REPO_DIR/tests" ]] && grep -rqF -- "$base" "$REPO_DIR/tests" 2>/dev/null; then
+                    continue
+                fi
+                printf '%s ' "$base"
+            done
+        )
+        UNTESTED="${UNTESTED% }"
+        if [[ -z "$UNTESTED" ]]; then
+            success "every script under ${SKILL_DIR_REL}/scripts is referenced by a test"
+        else
+            warning "no test references these script(s): ${UNTESTED} — add a test under tests/ (run by the tests.yml reusable) or the script ships unexercised"
+        fi
+    fi
+
+    # --- LLM checkpoints that are mechanically verifiable ---
+    # add-checkpoints reserves llm_reviews for "subjective requirements that
+    # can't be mechanically verified". A prompt that opens a line with a
+    # runnable command is describing a mechanical check in prose — GW-21 in
+    # git-workflow shipped a whole shell pipeline inside an llm_review, so the
+    # rule was never executable and never regressed visibly. Prose that merely
+    # mentions a command inline ("Use `git log …` to analyze") does not match:
+    # the command must start the line.
+    #
+    # An entry that legitimately keeps both halves — a mechanical checkpoint for
+    # the decidable part, an LLM prompt for the judgement — declares it with a
+    # `# mechanical-counterpart: <ID>` comment anywhere in its block, and is
+    # then exempt.
+    if [[ -f "$SKILL_DIR/checkpoints.yaml" ]]; then
+        MISCLASSIFIED=$(awk '
+            /^llm_reviews:/ { in_llm = 1; next }
+            /^[a-z_]+:/     { in_llm = 0 }
+            !in_llm         { next }
+            # A marker above the entry (2-space comment) belongs to the entry
+            # that follows; one inside the block belongs to the current entry.
+            /^  #.*mechanical-counterpart:/     { pending = 1; next }
+            /^ {3,}#.*mechanical-counterpart:/  { if (id != "") exempt[id] = 1; next }
+            /^  - id:/ { id = $3; if (pending) { exempt[id] = 1; pending = 0 } ; next }
+            /^[[:space:]]+(git|gh|grep|sed|awk|test|jq|yq|find|ls|python3?|composer|npm|curl)[[:space:]]/ {
+                if (id != "") hit[id] = 1
+            }
+            END { n = 0; for (i in hit) if (!(i in exempt)) ids[n++] = i
+                  for (a = 0; a < n; a++) for (b = a + 1; b < n; b++)
+                      if (ids[b] < ids[a]) { t = ids[a]; ids[a] = ids[b]; ids[b] = t }
+                  for (a = 0; a < n; a++) printf "%s ", ids[a] }
+        ' "$SKILL_DIR/checkpoints.yaml")
+        MISCLASSIFIED="${MISCLASSIFIED% }"
+        if [[ -n "$MISCLASSIFIED" ]]; then
+            warning "llm_reviews checkpoint(s) contain a runnable command: ${MISCLASSIFIED} — if the command decides the outcome, move it to mechanical (type: command); keep the LLM entry only for the judgement the command cannot make"
+        fi
+    fi
 else
     error "SKILL.md not found (checked root and skills/*/)"
 fi

@@ -1,0 +1,121 @@
+name: Skill Tests
+
+# Runs a skill repo's own test suite. Skill repos ship executable surface —
+# scripts under skills/*/scripts/ — but every workflow in the template set was
+# a thin caller of a *validator*: lint, structure, evals, security. None of them
+# ran anything under tests/. Across the fleet that left 276 shipped scripts in
+# 27 repos with no test that any pipeline executes, and defects that survive
+# indefinitely because nothing exercises the code (a `set -e` + `((VAR++))`
+# abort skipped 11 of 12 sections of one verifier for years).
+#
+# A test nothing runs is not a gate. This workflow is the gate.
+
+on:
+  workflow_call:
+    inputs:
+      shell_glob:
+        description: "Glob for shell test files, relative to the repo root."
+        required: false
+        type: string
+        default: "tests/**/*.sh"
+      python_glob:
+        description: "Glob for Python test files, relative to the repo root."
+        required: false
+        type: string
+        default: "tests/**/*.py"
+      require_tests:
+        description: >-
+          Fail when the repo ships scripts under skills/*/scripts/ but matches
+          no test files. Default false: a repo without tests only gets a
+          warning, so adopting this workflow never breaks a repo on day one.
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Skill Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Nothing here talks to the remote; leaving the token in .git/config
+          # only exposes it to later steps and artifacts.
+          persist-credentials: false
+
+      - name: Shell tests
+        id: shell
+        env:
+          SHELL_GLOB: ${{ inputs.shell_glob }}
+        run: |
+          shopt -s nullglob globstar
+          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
+          files=(${SHELL_GLOB})
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No shell tests matched ${SHELL_GLOB}"
+            exit 0
+          fi
+          rc=0
+          for t in "${files[@]}"; do
+            echo "::group::$t"
+            bash "$t" || { echo "::error file=$t::test failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Python tests
+        id: python
+        env:
+          PYTHON_GLOB: ${{ inputs.python_glob }}
+        run: |
+          shopt -s nullglob globstar
+          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
+          files=(${PYTHON_GLOB})
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No python tests matched ${PYTHON_GLOB}"
+            exit 0
+          fi
+          # Standalone scripts with a main() and a non-zero exit, not pytest
+          # modules — pytest collects nothing from them and exits 5.
+          rc=0
+          for t in "${files[@]}"; do
+            echo "::group::$t"
+            python3 "$t" || { echo "::error file=$t::test failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      # A repo that ships executable surface and matched zero tests is the
+      # state this workflow exists to surface. Reported always; fatal only when
+      # the caller asks for it, so adoption is never a breaking change.
+      - name: Report coverage of shipped scripts
+        env:
+          SHELL_COUNT: ${{ steps.shell.outputs.count }}
+          PYTHON_COUNT: ${{ steps.python.outputs.count }}
+          REQUIRE_TESTS: ${{ inputs.require_tests }}
+        run: |
+          shopt -s nullglob globstar
+          scripts=(skills/*/scripts/*)
+          total=$(( SHELL_COUNT + PYTHON_COUNT ))
+          echo "shipped scripts: ${#scripts[@]} | test files run: $total"
+          if [ ${#scripts[@]} -gt 0 ] && [ "$total" -eq 0 ]; then
+            msg="repo ships ${#scripts[@]} script(s) under skills/*/scripts/ but no test file was run"
+            if [ "$REQUIRE_TESTS" = "true" ]; then
+              echo "::error::$msg"
+              exit 1
+            fi
+            echo "::warning::$msg"
+          fi

@@ -118,8 +118,9 @@ Each `skill-update` PR should touch **one primary area**; multi-area is allowed 
 | `skills/<name>/references/*.md` | Detailed knowledge, examples, schemas |
 | `skills/<name>/scripts/*` | Mechanical operations |
 | `skills/<name>/templates/*` | Output formats |
-| `skills/<name>/checkpoints.yaml` | Quality gates (mechanical or LLM checks) |
+| `skills/<name>/checkpoints.yaml` | Quality gates — mechanical by default, LLM only for what a command cannot decide |
 | `skills/<name>/evals/evals.json` | Behavioral regression tests |
+| `tests/*` | Regression coverage for `scripts/*`, run by the `tests.yml` reusable |
 
 Multi-area PRs split unrelated concerns into separate PRs.
 
