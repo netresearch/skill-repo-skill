@@ -75,7 +75,12 @@ migrated yet.
 
 1. Create `./plugin.json` with the fields above, copying the current values out
    of `.claude-plugin/plugin.json`. Drop `skills`/`agents`/`support` — they stay
-   in the Claude manifest.
+   in the Claude manifest. Copy **every** shared field: a root manifest missing
+   one (`keywords` is the one that gets dropped in practice, because minimal
+   manifests from repos that never had it look like templates) fails `--check`,
+   and a plain sync then *deletes* the missing key from the Claude manifest —
+   that is data loss that ships, not a rendering difference (claude-coach-plugin
+   v2.6.0 lost its `keywords` exactly this way, 2026-08-13).
 2. `sync-plugin-manifest.sh --check` — it passes without rewriting anything when
    the values were copied correctly. Run it without `--check` only when you want
    the canonical rendering.
