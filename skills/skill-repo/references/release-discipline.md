@@ -2,6 +2,28 @@
 
 Every step that caused the "30 failed plugin releases" incident, codified as rules.
 
+## Fleet sweeps: use the shipped driver, do not hand-write a new one
+
+Everything below that a fleet sweep needs is mechanized in
+`scripts/fleet-release-github.sh` on top of the host-neutral
+`scripts/fleet-release-common.sh` engine. The driver runs `survey` →
+`manifest` (stops for human approval; versions and PR bodies are operator
+judgment the scripts never invent) → `bump` → `finish`, resumable from remote
+reality at every step. The changelog rollover below is its own tool,
+`scripts/roll-changelog.py`. Fleets on other hosts keep their driver, their
+repo list and their host specifics in their own (private) repository — that
+driver vendors the shared engine and implements the `host_*` callbacks its
+header documents; host knowledge stays with the host. Every sweep before
+these existed re-implemented this page as one-off scripts and re-earned the
+same bugs (#218 records the last one: brace-group exits, pretty-printed survey
+rows, `//` on empty strings — all now encoded as tests). Deliberately out of
+scope, by design: merging anyone else's PR, unarchiving, cloning missing
+checkouts, writing CI files (a NO-RELEASE-JOB manifest row means adopt the
+shared release CI first), and non-default-branch releases — the
+`--latest=false` rule below stays a manual concern. When a sweep needs
+something the driver lacks, extend it in a PR; a session-local driver script
+is how the next incident starts.
+
 ## Canonical Order: Bump PR Merged → Tag Pushed
 
 **Tag a version only after the version-bump PR is merged to the default branch.** Tagging first causes the Release workflow to run against the old code, fail CI, and produce an immutable GitHub release locked to a bad tag.

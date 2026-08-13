@@ -1,0 +1,53 @@
+# Default repo list for fleet-release-github.sh survey (--repos/--repos-file
+# override it). One repo per line, org-relative; '#' and blank lines ignored.
+#
+# Snapshot of the public GitHub skill fleet as of the 2026-08-13 sweep.
+# Naming conventions do NOT enumerate this fleet (plugins and oddly-named
+# repos exist), so the list is maintained here — reviewable, and cheap to
+# refresh:
+#   gh repo list netresearch --limit 300 --no-archived \
+#     --json name --jq '.[].name' | grep -E -- '-(skill|plugin)$' | sort
+# The survey dedupes rename redirects by resolved full_name, so a stale name
+# here becomes a DUPLICATE row, never a second bump PR.
+agent-harness-skill
+agent-rules-skill
+agents-skill
+automated-assessment-skill
+claude-coach-skill
+cli-tools-skill
+concourse-ci-skill
+context7-skill
+data-tools-skill
+docker-development-skill
+enterprise-readiness-skill
+file-search-skill
+german-technical-writing-skill
+git-workflow-skill
+github-project-skill
+github-release-skill
+go-development-skill
+jira-skill
+jujutsu-workflow-skill
+markdown-to-pdf-skill
+matrix-skill
+netresearch-branding-skill
+orocommerce-skill
+pagerangers-skill
+peer-qa-review-skill
+php-modernization-skill
+retro-skill
+security-audit-skill
+skill-repo-skill
+typo3-a11y-skill
+typo3-ckeditor5-skill
+typo3-conformance-skill
+typo3-core-contributions-skill
+typo3-ddev-skill
+typo3-docs-skill
+typo3-extension-upgrade-skill
+typo3-project-upgrade-skill
+typo3-site-conformance-skill
+typo3-testing-skill
+typo3-typoscript-ref-skill
+typo3-upgrade-effort-model-skill
+typo3-vite-skill
