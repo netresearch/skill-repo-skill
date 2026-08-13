@@ -32,6 +32,12 @@ Auto-merge for Dependabot/Renovate PRs is delegated to `netresearch/.github/.git
 - `skills/skill-repo/scripts/migrate-licensing.sh` -- Migrates repos from single LICENSE to split licensing (LICENSE-MIT + LICENSE-CC-BY-SA-4.0).
 - `Build/Scripts/check-plugin-version.sh` -- Validates plugin.json version format.
 
+### Release Tooling
+
+- `skills/skill-repo/scripts/bump-version.sh` / `check-version-parity.sh` / `sync-plugin-manifest.sh` -- Single-repo version surfaces: bump, parity check, manifest projection.
+- `skills/skill-repo/scripts/roll-changelog.py` -- Shape-aware CHANGELOG rollover (all five fleet heading shapes, fence-aware, fails on a no-op roll).
+- `skills/skill-repo/scripts/fleet-release-github.sh` -- Fleet release driver for the public GitHub org; shared host-neutral engine in `fleet-release-common.sh` (private-host fleets vendor the engine and ship their own driver in their own infrastructure), default repo list in `fleet-repos-github.txt`. Flow and guarantees: `skills/skill-repo/references/release-discipline.md`.
+
 ### Templates
 
 `skills/skill-repo/templates/` provides starter files for bootstrapping new skill repos (README, licenses, workflows, composer.json).
