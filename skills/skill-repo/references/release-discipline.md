@@ -24,6 +24,20 @@ shared release CI first), and non-default-branch releases — the
 something the driver lacks, extend it in a PR; a session-local driver script
 is how the next incident starts.
 
+**Budget the API before a sweep: the survey costs ~10 calls per repo, and
+each GitHub quota pool (REST 5,000/h, GraphQL 5,000 points/h — separate
+pools) is shared across every tool, watcher and agent in the session.** A
+40-repo survey plus check-watchers plus a merge-gate poll can exhaust them
+mid-sweep — the GraphQL pool usually dies first because `gh pr merge`,
+`gh pr view --json` and pr-status.sh all draw from it, while plain REST
+still answers apart from short burst limits (2026-08-13: a sweep session hit
+exactly this between "all gates verified" and "merge"). Practice: act on a verified, unchanged head
+with ONE call instead of re-running preflight batteries — the REST merge
+takes an `sha` pin (`gh api -X PUT .../pulls/N/merge -f merge_method=merge
+-f sha=$(git rev-parse HEAD)`) whose 409 IS the freshness check — prefer one
+`--watch` over repeated status reads, and stop any watcher whose answer is
+already known.
+
 ## Canonical Order: Bump PR Merged → Tag Pushed
 
 **Tag a version only after the version-bump PR is merged to the default branch.** Tagging first causes the Release workflow to run against the old code, fail CI, and produce an immutable GitHub release locked to a bad tag.
