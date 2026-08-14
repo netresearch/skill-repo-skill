@@ -183,11 +183,13 @@ jobs:
           COUNT=$(echo "$PYFILES" | wc -l)
           echo "Found $COUNT Python file(s)"
           echo "=== ruff check ==="
+          # --extend-exclude: the vendored tools checkout must not be linted
+          # under the CONSUMER repo's ruff config (find above prunes it too)
           # renovate: datasource=pypi depName=ruff
-          uvx --no-build ruff@0.16.0 check .
+          uvx --no-build ruff@0.16.0 check --extend-exclude .skill-repo-tools .
           echo "=== ruff format ==="
           # renovate: datasource=pypi depName=ruff
-          uvx --no-build ruff@0.16.0 format --check .
+          uvx --no-build ruff@0.16.0 format --check --extend-exclude .skill-repo-tools .
 
       - name: Validate checkpoint schemas
         run: |
