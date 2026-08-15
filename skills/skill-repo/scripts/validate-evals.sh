@@ -8,6 +8,12 @@
 #   Legacy A: {"skill_name": "...", "evals": [{id, eval_name, prompt, assertions: [...]}]}
 #   Legacy B: [{name, prompt, assertions: [{type, value/pattern, description?}]}]
 #
+# Any eval may carry an optional self-check:
+#   "samples": {"passing": "<answer every assertion must match>",
+#               "failing": ["<answer at least one assertion must reject>"]}
+# Content assertion patterns are compiled; with samples present they are also
+# run, which is what separates a discriminating assertion from an inverted one.
+#
 # Usage: bash validate-evals.sh [path-to-evals.json] [--require-evals]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
 #
@@ -134,6 +140,7 @@ pass "Valid JSON"
 # --- Run all structural checks via Python ---
 RESULT=$(python3 - "$EVALS_FILE" <<'PYEOF'
 import json
+import re
 import sys
 
 with open(sys.argv[1]) as f:
@@ -264,6 +271,50 @@ for i, ev in enumerate(evals):
                 else:
                     invalid_assertions += 1
                     print(f"FAIL|{label} ({name}): assertion[{j}] invalid type (not string or object)")
+
+            # A pattern only had to be a non-empty string until now, so an
+            # unbalanced group passed validation and first misbehaved wherever
+            # the eval was actually graded.
+            patterns = []
+            for j, a in enumerate(assertions):
+                if not isinstance(a, dict):
+                    continue
+                pat = a.get("pattern") or a.get("value") or ""
+                if a.get("type") not in (None, "content") or not str(pat).strip():
+                    continue
+                try:
+                    patterns.append((j, re.compile(str(pat))))
+                except re.error as exc:
+                    invalid_assertions += 1
+                    print(f"FAIL|{label} ({name}): assertion[{j}] is not a valid regex: {exc}")
+
+            # Optional self-check. Without it nothing distinguishes an assertion
+            # that discriminates from one that is inverted or vacuous: both look
+            # like a non-empty string. With it, the eval carries one answer that
+            # must satisfy every assertion and answers that must not.
+            samples = ev.get("samples")
+            if isinstance(samples, dict) and patterns:
+                passing = samples.get("passing")
+                if isinstance(passing, str) and passing.strip():
+                    for j, rx in patterns:
+                        if not rx.search(passing):
+                            invalid_assertions += 1
+                            print(
+                                f"FAIL|{label} ({name}): assertion[{j}] does not match its own "
+                                "passing sample — the eval would reject a correct answer"
+                            )
+                failing = samples.get("failing")
+                if isinstance(failing, str):
+                    failing = [failing]
+                for k, bad in enumerate(failing or []):
+                    if not isinstance(bad, str) or not bad.strip():
+                        continue
+                    if all(rx.search(bad) for _, rx in patterns):
+                        invalid_assertions += 1
+                        print(
+                            f"FAIL|{label} ({name}): failing sample[{k}] satisfies every "
+                            "assertion — the eval would accept an answer it calls wrong"
+                        )
 
             if invalid_assertions == 0:
                 has_assertions = True

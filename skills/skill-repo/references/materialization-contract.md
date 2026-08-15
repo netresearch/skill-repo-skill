@@ -160,6 +160,33 @@ This verification is a **LOCAL/manual step, not CI** — `run-ab-evals.sh` calls
 `claude -p` per eval. It is referenced only by `.github/workflows/ab-evals-schedule.yml`,
 which is disabled by team decision, so it is not part of any active CI gate.
 
+### `samples`: the part of that quality rule CI can decide
+
+An assertion is only a non-empty string as far as structural validation used to be
+concerned, so an inverted one — demanding a word the intended answer never uses — read
+exactly like a discriminating one. Add an optional `samples` block and the validator
+decides it mechanically, with no model call:
+
+```json
+{
+  "name": "worktree_cleanup_spares_the_primary_directory",
+  "prompt": "…",
+  "assertions": [{ "type": "content", "pattern": "(?i)\\bswitch\\b[^\\n]{0,30}\\b(main|master)" }],
+  "samples": {
+    "passing": "Do not remove it — run git -C project/main switch main instead.",
+    "failing": ["Remove every merged worktree, including project/main."]
+  }
+}
+```
+
+Every `content` assertion must match `passing`, and each entry in `failing` must be
+rejected by at least one assertion. The block is optional and evals without it validate
+exactly as before, so adopting it never breaks a repo on day one. Write the `failing`
+samples from the answer a model actually gives without the skill — a straw man that
+shares no vocabulary with a correct answer passes the check while proving nothing.
+`content` assertion patterns are now compiled during validation as well, whether or not
+samples are present.
+
 ## Rule 8: Per-private-repo confirmation
 
 Before pushing to a private host (`git.netresearch.de`, `gitlab.com/<private-org>`, etc.), prompt the user. Decision is remembered per `(session, repo-url)` for the duration of the active retro-skill session; not persisted across sessions.
