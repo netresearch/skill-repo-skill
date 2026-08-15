@@ -179,13 +179,24 @@ decides it mechanically, with no model call:
 }
 ```
 
-Every `content` assertion must match `passing`, and each entry in `failing` must be
-rejected by at least one assertion. The block is optional and evals without it validate
-exactly as before, so adopting it never breaks a repo on day one. Write the `failing`
-samples from the answer a model actually gives without the skill — a straw man that
-shares no vocabulary with a correct answer passes the check while proving nothing.
-`content` assertion patterns are now compiled during validation as well, whether or not
-samples are present.
+Every assertion must match `passing`, and each entry in `failing` must be rejected by at
+least one assertion. Write the `failing` samples from the answer a model actually gives
+without the skill — a straw man that shares no vocabulary with a correct answer passes
+the check while proving nothing.
+
+**Matching uses the grader's instrument, not a similar one.** `run-ab-evals.sh` grades
+with `grep -qiE` after stripping a leading `(?i)`: case-insensitive POSIX ERE, with no
+type filter — it takes `value or pattern` from *every* assertion. The validator calls the
+same binary with the same flags, because Python's `re` disagrees with ERE in ways that
+decide real cases (`[^\n]` excludes the letter `n` in ERE, and `re` is case-sensitive),
+and a self-check measuring with a different engine certifies evals the grader would fail.
+For the same reason a pattern under `tool_use` or `content_regex` is validated too. An
+assertion typed `must_not` is checked inverted: it must NOT match `passing`.
+
+Two things change for evals **without** a samples block: patterns are now checked to be
+parseable by `grep -E`, and an unparseable one fails — except under a `*_contains` type,
+where the value is usually a literal and the mismatch is the grader's, so it only warns.
+Nothing else about validation changed, and no evals.json in the fleet changes verdict.
 
 ## Rule 8: Per-private-repo confirmation
 

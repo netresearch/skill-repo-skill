@@ -95,7 +95,10 @@ suite "$WORK/uncompilable.json" <<'EOF'
 EOF
 out=$(bash "$SCRIPT" "$WORK/uncompilable.json" 2>&1)
 check "rejects an assertion pattern that does not compile" 1 "$?"
-check "names the uncompilable eval" yes "$(grep -q 'broken_pattern' <<<"$out" && echo yes || echo no)"
+# The eval name appears in the ordinary PASS output too, so asserting on the
+# name alone is green against an implementation that never checks anything.
+check "names the uncompilable eval in the FAIL line" yes \
+    "$(grep -qE 'FAIL.*broken_pattern.*(valid|ERE|regex)' <<<"$out" && echo yes || echo no)"
 
 # --- samples: the self-check that tells a discriminating eval from a vacuous one
 suite "$WORK/samples-good.json" <<'EOF'
@@ -147,6 +150,56 @@ suite "$WORK/samples-vacuous.json" <<'EOF'
 EOF
 out=$(bash "$SCRIPT" "$WORK/samples-vacuous.json" 2>&1)
 check "rejects a failing sample that no assertion rejects" 1 "$?"
+
+# --- the self-check must match the way the grader matches --------------------
+# run-ab-evals.sh grades with `grep -qiE`. Validating with a case-sensitive
+# engine rejects evals the grader accepts, and accepts vacuous ones it would
+# have caught.
+suite "$WORK/samples-case.json" <<'EOF'
+{ "name": "case_differs_from_the_sample",
+  "prompt": "Which licence file?",
+  "assertions": [
+    {"type": "content", "pattern": "Netresearch DTT GmbH"},
+    {"type": "content", "pattern": "LICENSE-MIT"}
+  ],
+  "samples": {
+    "passing": "Add license-mit and set the holder to netresearch dtt gmbh.",
+    "failing": ["Leave the licence alone."]
+  } }
+EOF
+bash "$SCRIPT" "$WORK/samples-case.json" >/dev/null 2>&1
+check "case-insensitive like the grader" 0 "$?"
+
+# --- every graded assertion is validated, whatever its type is ---------------
+# The grader takes value-or-pattern from EVERY assertion with no type filter,
+# so a broken pattern under tool_use is graded and must be caught.
+suite "$WORK/tooluse-pattern.json" <<'EOF'
+{ "name": "broken_pattern_under_tool_use", "prompt": "Anything.",
+  "assertions": [{"type": "tool_use", "tool": "Bash", "pattern": "(unclosed group"},
+                 {"type": "content", "pattern": "fine"}] }
+EOF
+bash "$SCRIPT" "$WORK/tooluse-pattern.json" >/dev/null 2>&1
+check "an unparseable tool_use pattern is rejected too" 1 "$?"
+
+# --- a misconfigured samples block must not be a silent no-op ---------------
+suite "$WORK/samples-typo.json" <<'EOF'
+{ "name": "typo_in_the_samples_key", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}],
+  "samples": {"passes": "alpha beta", "failing": ["nothing here"]} }
+EOF
+out=$(bash "$SCRIPT" "$WORK/samples-typo.json" 2>&1)
+check "an unknown samples key is an error, not a no-op" 1 "$?"
+check "names the unknown key" yes "$(grep -q 'passes' <<<"$out" && echo yes || echo no)"
+
+suite "$WORK/samples-shape.json" <<'EOF'
+{ "name": "failing_is_a_number", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}],
+  "samples": {"passing": "alpha beta", "failing": 42} }
+EOF
+bash "$SCRIPT" "$WORK/samples-shape.json" >/dev/null 2>&1
+check "a non-list failing value is rejected, not a traceback" 1 "$?"
 
 # --- evals without samples keep validating exactly as before -----------------
 suite "$WORK/no-samples.json" <<'EOF'

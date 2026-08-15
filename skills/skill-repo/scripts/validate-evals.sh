@@ -11,8 +11,11 @@
 # Any eval may carry an optional self-check:
 #   "samples": {"passing": "<answer every assertion must match>",
 #               "failing": ["<answer at least one assertion must reject>"]}
-# Content assertion patterns are compiled; with samples present they are also
-# run, which is what separates a discriminating assertion from an inverted one.
+# Patterns are checked with `grep -E` and matched with `grep -qiE`, the same
+# binary and flags run-ab-evals.sh grades with, so the check cannot certify an
+# eval the grader would fail. Every assertion carrying value/pattern counts,
+# whatever its type, because the grader has no type filter either; `must_not`
+# is checked inverted.
 #
 # Usage: bash validate-evals.sh [path-to-evals.json] [--require-evals]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
@@ -140,8 +143,38 @@ pass "Valid JSON"
 # --- Run all structural checks via Python ---
 RESULT=$(python3 - "$EVALS_FILE" <<'PYEOF'
 import json
-import re
+import subprocess
 import sys
+
+# Assertions are graded by run-ab-evals.sh with `grep -qiE` after stripping a
+# leading (?i) — case-insensitive POSIX ERE, not Python's re. Validating them
+# with a different engine measures a different thing: `[^\n]` means one thing
+# in Python and another in ERE, and case-sensitive matching rejects patterns
+# the grader accepts. So the checks below call the same binary with the same
+# flags rather than approximating it.
+def _grep(args, text):
+    try:
+        return subprocess.run(
+            ["grep", *args], input=text, text=True,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def _ere(pattern):
+    return pattern[4:] if pattern.startswith("(?i)") else pattern
+
+
+def pattern_compiles(pattern):
+    # grep exits 2 on a pattern it cannot parse and 1 on "no match".
+    rc = _grep(["-qE", "--", _ere(pattern)], "")
+    return rc is None or rc != 2
+
+
+def grader_matches(pattern, text):
+    return _grep(["-qiE", "--", _ere(pattern)], text) == 0
+
 
 with open(sys.argv[1]) as f:
     raw = json.load(f)
@@ -274,42 +307,95 @@ for i, ev in enumerate(evals):
 
             # A pattern only had to be a non-empty string until now, so an
             # unbalanced group passed validation and first misbehaved wherever
-            # the eval was actually graded.
+            # the eval was actually graded. Which assertions count is decided by
+            # the grader, not by a type name: run-ab-evals.sh takes
+            # `value or pattern` from EVERY assertion with no type filter, so a
+            # broken pattern under type "tool_use", "content_regex" or any other
+            # label is graded and must be validated the same way.
             patterns = []
             for j, a in enumerate(assertions):
                 if not isinstance(a, dict):
                     continue
-                pat = a.get("pattern") or a.get("value") or ""
-                if a.get("type") not in (None, "content") or not str(pat).strip():
+                pat = str(a.get("pattern") or a.get("value") or "")
+                if not pat.strip():
                     continue
-                try:
-                    patterns.append((j, re.compile(str(pat))))
-                except re.error as exc:
-                    invalid_assertions += 1
-                    print(f"FAIL|{label} ({name}): assertion[{j}] is not a valid regex: {exc}")
+                if not pattern_compiles(pat):
+                    # A *_contains assertion states a literal, and the value is
+                    # usually not meant as a regex at all — `((` in a Concourse
+                    # eval, `public function __construct(` in a PHP one. The
+                    # grader still greps it as an ERE, so it never matches, but
+                    # the defect is the grader's literal handling rather than
+                    # the eval's, and failing here would turn CI red in repos
+                    # this change does not fix. It warns instead.
+                    literal = "contains" in str(a.get("type") or "")
+                    if literal:
+                        print(
+                            f"WARN|{label} ({name}): assertion[{j}] is not a valid POSIX ERE. "
+                            "run-ab-evals.sh greps every assertion with -qiE, including this "
+                            "one, so it can never match — escape the value or make it a regex"
+                        )
+                    else:
+                        invalid_assertions += 1
+                        print(
+                            f"FAIL|{label} ({name}): assertion[{j}] is not a valid POSIX ERE "
+                            "— grep rejects it, so the grader scores it as never matching"
+                        )
+                    continue
+                patterns.append((j, pat, a.get("type") == "must_not"))
 
             # Optional self-check. Without it nothing distinguishes an assertion
             # that discriminates from one that is inverted or vacuous: both look
             # like a non-empty string. With it, the eval carries one answer that
             # must satisfy every assertion and answers that must not.
             samples = ev.get("samples")
-            if isinstance(samples, dict) and patterns:
+            if samples is not None and not isinstance(samples, dict):
+                invalid_assertions += 1
+                print(f"FAIL|{label} ({name}): samples must be an object, got {type(samples).__name__}")
+            elif isinstance(samples, dict):
+                unknown = sorted(set(samples) - {"passing", "failing"})
+                if unknown:
+                    invalid_assertions += 1
+                    print(
+                        f"FAIL|{label} ({name}): samples has unknown key(s) {', '.join(unknown)} "
+                        "— only 'passing' and 'failing' are read, so a typo would check nothing"
+                    )
+                if not patterns:
+                    invalid_assertions += 1
+                    print(
+                        f"FAIL|{label} ({name}): samples present but no assertion carries a "
+                        "pattern — the self-check would verify nothing"
+                    )
                 passing = samples.get("passing")
-                if isinstance(passing, str) and passing.strip():
-                    for j, rx in patterns:
-                        if not rx.search(passing):
-                            invalid_assertions += 1
-                            print(
-                                f"FAIL|{label} ({name}): assertion[{j}] does not match its own "
-                                "passing sample — the eval would reject a correct answer"
+                if passing is not None and (not isinstance(passing, str) or not passing.strip()):
+                    invalid_assertions += 1
+                    print(f"FAIL|{label} ({name}): samples.passing must be a non-empty string")
+                elif isinstance(passing, str) and passing.strip():
+                    for j, pat, negated in patterns:
+                        hit = grader_matches(pat, passing)
+                        if hit == negated:
+                            problem = (
+                                "matches its own passing sample although it is a must_not "
+                                "assertion" if negated else
+                                "does not match its own passing sample — the eval would "
+                                "reject a correct answer"
                             )
+                            invalid_assertions += 1
+                            print(f"FAIL|{label} ({name}): assertion[{j}] {problem}")
                 failing = samples.get("failing")
                 if isinstance(failing, str):
                     failing = [failing]
+                if failing is not None and not isinstance(failing, list):
+                    invalid_assertions += 1
+                    print(f"FAIL|{label} ({name}): samples.failing must be a string or an array")
+                    failing = []
                 for k, bad in enumerate(failing or []):
                     if not isinstance(bad, str) or not bad.strip():
+                        invalid_assertions += 1
+                        print(f"FAIL|{label} ({name}): samples.failing[{k}] must be a non-empty string")
                         continue
-                    if all(rx.search(bad) for _, rx in patterns):
+                    if patterns and all(
+                        grader_matches(pat, bad) != negated for _, pat, negated in patterns
+                    ):
                         invalid_assertions += 1
                         print(
                             f"FAIL|{label} ({name}): failing sample[{k}] satisfies every "
