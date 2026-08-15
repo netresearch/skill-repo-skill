@@ -160,6 +160,44 @@ This verification is a **LOCAL/manual step, not CI** — `run-ab-evals.sh` calls
 `claude -p` per eval. It is referenced only by `.github/workflows/ab-evals-schedule.yml`,
 which is disabled by team decision, so it is not part of any active CI gate.
 
+### `samples`: the part of that quality rule CI can decide
+
+An assertion is only a non-empty string as far as structural validation used to be
+concerned, so an inverted one — demanding a word the intended answer never uses — read
+exactly like a discriminating one. Add an optional `samples` block and the validator
+decides it mechanically, with no model call:
+
+```json
+{
+  "name": "worktree_cleanup_spares_the_primary_directory",
+  "prompt": "…",
+  "assertions": [{ "type": "content", "pattern": "(?i)\\bswitch\\b[^\\n]{0,30}\\b(main|master)" }],
+  "samples": {
+    "passing": "Do not remove it — run git -C project/main switch main instead.",
+    "failing": ["Remove every merged worktree, including project/main."]
+  }
+}
+```
+
+Every assertion must match `passing`, and each entry in `failing` must be rejected by at
+least one assertion. Write the `failing` samples from the answer a model actually gives
+without the skill — a straw man that shares no vocabulary with a correct answer passes
+the check while proving nothing.
+
+**Matching uses the grader's instrument, not a similar one.** `run-ab-evals.sh` grades
+with `grep -qiE` after stripping a leading `(?i)`: case-insensitive POSIX ERE, with no
+type filter — it takes `value or pattern` from *every* assertion. The validator calls the
+same binary with the same flags, because Python's `re` disagrees with ERE in ways that
+decide real cases (`[^\n]` excludes the letter `n` in ERE, and `re` is case-sensitive),
+and a self-check measuring with a different engine certifies evals the grader would fail.
+For the same reason a pattern under `tool_use` or `content_regex` is validated too. An
+assertion typed `must_not` is checked inverted: it must NOT match `passing`.
+
+Two things change for evals **without** a samples block: patterns are now checked to be
+parseable by `grep -E`, and an unparseable one fails — except under a `*_contains` type,
+where the value is usually a literal and the mismatch is the grader's, so it only warns.
+Nothing else about validation changed, and no evals.json in the fleet changes verdict.
+
 ## Rule 8: Per-private-repo confirmation
 
 Before pushing to a private host (`git.netresearch.de`, `gitlab.com/<private-org>`, etc.), prompt the user. Decision is remembered per `(session, repo-url)` for the duration of the active retro-skill session; not persisted across sessions.
