@@ -98,6 +98,14 @@ def main() -> int:
         }
     }
     entry["provenance"] = provenance
+    # A delta belongs to the actor tuple it was measured under, so the
+    # dashboard has to be able to render it next to the number. Older runs
+    # have no harness field; say so rather than implying the current one.
+    provenance.setdefault("harness", "unknown")
+    if "discriminating_checks" in ab:
+        entry["discriminating_checks"] = ab["discriminating_checks"]
+    if "evals_without_delta" in ab:
+        entry["evals_without_delta"] = ab["evals_without_delta"]
     if args.category:
         entry["category"] = args.category
     entry.setdefault("category", "other")
@@ -117,12 +125,19 @@ def main() -> int:
         json.dump(data, f, indent=2)
         f.write("\n")
 
+    version = entry.get("version", "unknown")
     print(
-        f"{args.name}: merged {checks} checks "
+        f"{args.name}@{version}: merged {checks} checks "
         f"(without={without_rate} with={with_rate} "
         f"delta={entry['results'][provenance['model']]['delta']}) "
-        f"model={provenance['model']}"
+        f"model={provenance['model']} harness={provenance['harness']}"
     )
+    no_delta = entry.get("evals_without_delta") or []
+    if no_delta:
+        print(
+            f"{args.name}: {len(no_delta)} eval(s) with no check the baseline "
+            f"fails: {', '.join(no_delta)}"
+        )
     return 0
 
 

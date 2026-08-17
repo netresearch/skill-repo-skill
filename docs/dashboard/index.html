@@ -394,7 +394,13 @@ async function loadData() {
     // Result blocks are keyed by the model id recorded in provenance
     // (legacy entries: "opus"). Alias the single model key to `opus`
     // so the render code below has one canonical accessor.
-    DATA.skills.forEach(s => { if (s.results && !s.results.opus) s.results.opus = Object.values(s.results)[0]; });
+    DATA.skills.forEach(s => {
+      // Keep the model the entry was actually measured under before the alias
+      // below adds a second key; the provenance block is authoritative when
+      // present, and for older entries the result key is all there is.
+      s.modelKey = (s.provenance && s.provenance.model) || (s.results && Object.keys(s.results)[0]) || null;
+      if (s.results && !s.results.opus) s.results.opus = Object.values(s.results)[0];
+    });
   } catch (e) {
     document.body.innerHTML = '<p style="padding:2rem;color:red;">Failed to load data/results.json</p>';
     return;
@@ -421,6 +427,16 @@ const severityLabels = { critical: 'Would Cause Failures', quality: 'Quality Gap
 function ghUrl(s, path) { return `https://github.com/${s.repo}/blob/main/${path}`; }
 function repoUrl(s) { return `https://github.com/${s.repo}`; }
 function releaseUrl(s) { return `https://github.com/${s.repo}/releases/tag/v${s.version}`; }
+// A delta is not a property of a skill: it is what one skill version scored
+// under one model, one harness and one eval set. The number is only
+// interpretable next to that tuple, so every delta carries it.
+function measuredUnder(s) {
+  const p = s.provenance || {};
+  const evalSet = p.eval_set ? `${p.eval_set.count} evals @ ${String(p.eval_set.sha).slice(0, 8)}` : `${s.eval_count} evals`;
+  return `${s.name}@${s.version || 'unknown'} · ${p.harness || 'harness not recorded'}`
+    + ` · model ${s.modelKey || 'unknown'} · ${evalSet}`
+    + (p.run_date ? ` · ${p.run_date.split('T')[0]}` : '');
+}
 function skillUrl(s) { return ghUrl(s, s.skill_path || `skills/${s.name}/SKILL.md`); }
 function evalsUrl(s) { return ghUrl(s, s.evals_path || `skills/${s.name}/evals/evals.json`); }
 
@@ -434,10 +450,24 @@ let activeSeverity = 'all';
 // Header
 const totalEvals = skills.reduce((s, sk) => s + sk.eval_count, 0);
 const avgDelta = skills.reduce((s, sk) => s + sk.results.opus.delta, 0) / skills.length;
+// The actor tuple behind the aggregate. Where entries were measured under
+// different actors it says "mixed" rather than picking one and implying the
+// whole table shares it.
+function distinct(values) {
+  return [...new Set(values.filter(Boolean))];
+}
+function tupleField(values, fallback) {
+  const seen = distinct(values);
+  if (seen.length === 0) return fallback;
+  return seen.length === 1 ? seen[0] : `mixed (${seen.length})`;
+}
 document.getElementById('headerMeta').innerHTML =
   `<span><span class="num">${skills.length}</span> skills</span>` +
   `<span><span class="num">${totalEvals}</span> evals</span>` +
   `<span><span class="num">+${(avgDelta * 100).toFixed(0)}%</span> avg delta</span>` +
+  `<span title="A delta is measured for one skill version under one harness, model and eval set — it is not a property of the skill. Hover a delta for the tuple behind it.">` +
+  `model ${tupleField(skills.map(s => s.modelKey), 'unknown')} · ` +
+  `${tupleField(skills.map(s => (s.provenance || {}).harness), 'harness not recorded')}</span>` +
   `<span>${DATA.generated.split('T')[0]}</span>`;
 
 // Nav
@@ -507,7 +537,7 @@ function renderTable() {
           <span class="bar-label">${wp}% / ${wip}%</span>
         </div>
       </td>
-      <td class="delta-cell ${deltaClass(o.delta)}"><a href="${repoUrl(s)}" target="_blank" title="View repository">+${(o.delta * 100).toFixed(0)}%</a></td>
+      <td class="delta-cell ${deltaClass(o.delta)}"><a href="${repoUrl(s)}" target="_blank" title="${measuredUnder(s)}">+${(o.delta * 100).toFixed(0)}%</a></td>
       <td><span class="category-badge cat-${s.category}">${s.category}</span></td>
       <td class="finding">${s.top_finding} <a href="${releaseUrl(s)}" target="_blank" title="Latest release" style="font-size:0.75em;opacity:0.6">v${s.version}</a></td>
     </tr>`;
