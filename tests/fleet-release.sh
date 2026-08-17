@@ -273,6 +273,22 @@ check "plan: version equal to the surveyed one refused" no \
 printf '%s\n' '{"repo":"g","classification":"TAG-ONLY","version":"1.4.0","default":"main","last":"1.3.0"}' > "$PLAN"
 check "plan: TAG-ONLY must tag exactly the committed version" no \
     "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+# FIRST-RELEASE has no previous release or tag to regress from: its `.last` is
+# the committed plugin.json version. Tagging a prepared repo as-is must be
+# expressible without retyping the row TAG-ONLY or inventing a version.
+printf '%s\n' '{"repo":"i","classification":"FIRST-RELEASE","version":"0.7.0","default":"main","last":"0.7.0"}' > "$PLAN"
+check "plan: FIRST-RELEASE may tag the already-committed version" yes \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"i","classification":"FIRST-RELEASE","version":"0.8.0","default":"main","last":"0.7.0"}' > "$PLAN"
+check "plan: FIRST-RELEASE may also bump above the committed version" yes \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"i","classification":"FIRST-RELEASE","version":"0.6.0","default":"main","last":"0.7.0"}' > "$PLAN"
+check "plan: FIRST-RELEASE below the committed version refused (parity would fail)" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+# A lexical compare would call 1.10.0 lower than 1.9.0 and refuse this row.
+printf '%s\n' '{"repo":"i","classification":"FIRST-RELEASE","version":"1.10.0","default":"main","last":"1.9.0"}' > "$PLAN"
+check "plan: FIRST-RELEASE ordering is NUMERIC (1.10.0 over 1.9.0)" yes \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
 printf '%s\n' '{"repo":"h","classification":"OWN-PR-OPEN","version":"","default":"main","last":"1.3.0"}' > "$PLAN"
 check "plan: OWN-PR-OPEN needs its version filled" no \
     "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
