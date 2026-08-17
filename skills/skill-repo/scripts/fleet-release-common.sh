@@ -529,12 +529,27 @@ fr_plan_validate() { # PLAN — refuse the whole phase before mutating anything
     [[ -z "$bad" ]] || fr_die "plan rows with a non-semver version: $(tr '\n' ' ' <<< "$bad")"
     # Monotonicity: a planned version below or equal to the surveyed one would
     # ship a parity-consistent version REGRESSION that no later gate can see.
-    # TAG-ONLY is the exception and must equal the committed version exactly.
+    # Two classes are exceptions, for opposite reasons:
+    #   TAG-ONLY      the bump already merged, so the plan must name that exact
+    #                 committed version and nothing else.
+    #   FIRST-RELEASE there is no previous release OR tag to regress from — its
+    #                 `.last` is the committed plugin.json version, not a
+    #                 shipped one. Tagging it as-is is the normal case for a
+    #                 repo someone already prepared, and bumping above it is
+    #                 equally legal; only going BELOW the committed version is
+    #                 wrong, because parity would then fail at tag time.
+    #                 Rejecting equality here left a prepared first release
+    #                 unrepresentable: the operator had to either retype the row
+    #                 TAG-ONLY by hand or invent a version nobody wrote
+    #                 (hit on both ecom-* repos in the 2026-08-17 sweep).
     bad=$(jq -r "$FR_JQ_VPARSE"'
         select((.version // "") != "" and (.last // "") != "")
         | if .classification == "TAG-ONLY"
           then select(.version != .last)
                | "\(.repo) (TAG-ONLY must tag the committed \(.last), not \(.version))"
+          elif .classification == "FIRST-RELEASE"
+          then select((.version | vparse) < (.last | vparse))
+               | "\(.repo) (FIRST-RELEASE may tag or exceed the committed \(.last), not fall below it with \(.version))"
           else select((.version | vparse) <= (.last | vparse))
                | "\(.repo) (\(.version) is not above the surveyed \(.last))"
           end' < "$plan")
