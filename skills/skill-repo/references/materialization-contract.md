@@ -156,9 +156,25 @@ or command shape a model can only produce by having read the skill (an internal 
 path, an exact risk multiplier, a non-obvious CLI invocation, a "do X not Y" correction
 of the model's default instinct).
 
+The runner computes this for you. It calls an assertion **discriminating** when the
+baseline fails it and the with-skill run passes it, prints
+`discriminating=<n>/<total>` on every eval line, and lists each eval that scored zero
+under a "no discriminating check" heading at the end. `ab-results.json` carries the same
+information as `discriminating_checks` and `evals_without_delta`. `--require-delta`
+turns that list into exit 1 — use it in a repo whose evals are already clean, so the
+next eval cannot arrive without evidence.
+
+Zero discriminating checks does not make an eval wrong: a regression guard both arms
+pass today is doing its job. It makes it unusable as evidence *for the skill*, which is
+a different claim and the one being made whenever skill content is defended.
+
 This verification is a **LOCAL/manual step, not CI** — `run-ab-evals.sh` calls out to
 `claude -p` per eval. It is referenced only by `.github/workflows/ab-evals-schedule.yml`,
 which is disabled by team decision, so it is not part of any active CI gate.
+
+**Report the delta with the actor it was measured under**, never as a bare percentage —
+see [`skill-quality.md`](skill-quality.md) ("A delta belongs to an actor, not to a
+skill"). The runner prints the tuple and stores it in the `provenance` block.
 
 ### `samples`: the part of that quality rule CI can decide
 

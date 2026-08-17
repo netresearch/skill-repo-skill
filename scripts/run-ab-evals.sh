@@ -1,8 +1,19 @@
 #!/bin/bash
 # run-ab-evals.sh - A/B test evals WITHOUT vs WITH skill context
-# Usage: ./scripts/run-ab-evals.sh [--no-llm] [concurrency]
+# Usage: ./scripts/run-ab-evals.sh [--no-llm] [--require-delta] [concurrency]
 # Default concurrency: 4 (parallel eval pairs)
 # --no-llm: Skip LLM-based grading of expectations (regex assertions only)
+# --require-delta: exit 1 if any eval has no discriminating assertion, i.e. no
+#   assertion that the no-skill baseline fails and the with-skill run passes.
+#   Such an eval measures boilerplate the model produces either way; it cannot
+#   support a claim that the skill changed anything.
+#
+# A delta is not a property of a skill. It is a function of skill version,
+# model, agent harness, eval set and tool environment, so every run records
+# that tuple in the provenance block of ab-results.json and prints it at the
+# end. Quote a number together with the tuple it was measured under, never on
+# its own: a stronger actor may derive the same content unaided, and then the
+# skill only costs context.
 
 set -euo pipefail
 
@@ -11,12 +22,14 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Parse flags and positional args
 NO_LLM=false
+REQUIRE_DELTA=false
 CONCURRENCY=4
 EVALS_FILE=""
 SKILL_FILE=""
 for arg in "$@"; do
     case "$arg" in
         --no-llm) NO_LLM=true ;;
+        --require-delta) REQUIRE_DELTA=true ;;
         --evals=*) EVALS_FILE="${arg#--evals=}" ;;
         --skill=*) SKILL_FILE="${arg#--skill=}" ;;
         [0-9]*) CONCURRENCY="$arg" ;;
@@ -32,6 +45,41 @@ RESULTS_DIR="${REPO_DIR}/scripts/ab-results"
 # provenance block of ab-results.json so published numbers stay reproducible.
 EVAL_MODEL="sonnet"
 GRADER_MODEL="haiku"
+
+# The rest of the actor tuple. The harness is the agent runtime that has to
+# discover and apply the skill -- a different one can be worse at that with an
+# unchanged skill -- and the skill version says which text was measured. Both
+# fall back to "unknown" rather than failing the run, because a missing
+# version is a weaker claim, not a broken measurement.
+HARNESS_VERSION="claude-code $(claude --version 2>/dev/null | head -1 | tr -d '\r\n' || true)"
+[[ "$HARNESS_VERSION" == "claude-code " ]] && HARNESS_VERSION="claude-code unknown"
+
+skill_version_of() {
+    # Nearest plugin.json above the SKILL.md, then composer.json; the skill
+    # repo convention keeps those in version parity.
+    local dir="$1" manifest
+    while [[ "$dir" != "/" && -n "$dir" ]]; do
+        for manifest in "$dir/.claude-plugin/plugin.json" "$dir/plugin.json" "$dir/composer.json"; do
+            if [[ -f "$manifest" ]]; then
+                local version
+                version=$(python3 -c "
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get('version') or '')
+except Exception:
+    print('')
+" "$manifest")
+                if [[ -n "$version" ]]; then
+                    echo "$version"
+                    return
+                fi
+            fi
+        done
+        dir="$(dirname "$dir")"
+    done
+    echo "unknown"
+}
+SKILL_VERSION=$(skill_version_of "$(cd "$(dirname "$SKILL_FILE")" && pwd)")
 
 mkdir -p "$RESULTS_DIR"
 
@@ -168,6 +216,28 @@ Format: one line per expectation, e.g.:
         > "$grader_file" 2>/dev/null || true
 }
 
+# Expectations the with-skill run passes and the baseline does not. Same
+# anchor as count_expectation_passes below, so the two cannot disagree about
+# what a PASS line looks like.
+count_expectation_discriminating() {
+    python3 - "$1" "$2" <<'PYEOF'
+import re
+import sys
+
+
+def passing(path):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+    except OSError:
+        return set()
+    return {int(m.group(1)) for m in re.finditer(r"^(\d+)\.\s*PASS", text, re.M | re.I)}
+
+
+print(len(passing(sys.argv[2]) - passing(sys.argv[1])))
+PYEOF
+}
+
 # Count PASS lines in a grader output file
 count_expectation_passes() {
     local grader_file="$1"
@@ -240,9 +310,13 @@ TOTAL_CHECKS=0
 TOTAL_EXP_WITHOUT=0
 TOTAL_EXP_WITH=0
 TOTAL_EXPECTATIONS=0
+TOTAL_DISCRIMINATING=0
+EVALS_WITHOUT_DELTA=()
 
 for i in $(seq 0 $((EVAL_COUNT - 1))); do
     name=$(get_eval_name "$i")
+    eval_disc=0
+    eval_graded=0
 
     without_file="$RESULTS_DIR/${name}_without.txt"
     with_file="$RESULTS_DIR/${name}_with.txt"
@@ -255,14 +329,20 @@ evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 print(len(evals[$i].get('assertions', [])))
 ")
     if [[ "$assertion_count" -gt 0 ]]; then
-        pass_w=0; pass_s=0; total=0
+        pass_w=0; pass_s=0; total=0; disc=0
         while IFS= read -r pattern; do
             [[ -z "$pattern" ]] && continue
             # Strip PCRE inline flags (e.g. (?i)) — grep -i already handles case
             pattern="${pattern#'(?i)'}"
             ((total++)) || true
-            grep -qiE "$pattern" "$without_file" 2>/dev/null && ((pass_w++)) || true
-            grep -qiE "$pattern" "$with_file" 2>/dev/null && ((pass_s++)) || true
+            hit_w=0; hit_s=0
+            grep -qiE "$pattern" "$without_file" 2>/dev/null && hit_w=1 || true
+            grep -qiE "$pattern" "$with_file" 2>/dev/null && hit_s=1 || true
+            ((pass_w += hit_w)) || true
+            ((pass_s += hit_s)) || true
+            # Discriminating: the baseline misses it and the skill run hits it.
+            # An assertion both runs pass measures boilerplate, not the skill.
+            if [[ "$hit_w" -eq 0 && "$hit_s" -eq 1 ]]; then ((disc++)) || true; fi
         done <<< "$(python3 -c "
 import json
 raw = json.load(open('$EVALS_FILE'))
@@ -278,8 +358,12 @@ for a in evals[$i].get('assertions', []):
         TOTAL_WITH=$((TOTAL_WITH + pass_s))
         TOTAL_CHECKS=$((TOTAL_CHECKS + total))
 
+        eval_disc=$((eval_disc + disc))
+        eval_graded=$((eval_graded + total))
+        TOTAL_DISCRIMINATING=$((TOTAL_DISCRIMINATING + disc))
+
         echo "| $((i+1)) | $name | regex | $pass_w/$total | $pass_s/$total | $ds |" >> "$SUMMARY_FILE"
-        echo "  $name [regex]: without=$pass_w/$total with=$pass_s/$total ($ds)"
+        echo "  $name [regex]: without=$pass_w/$total with=$pass_s/$total ($ds) discriminating=$disc/$total"
     fi
 
     # Check LLM-graded expectations
@@ -296,6 +380,9 @@ print(len(evals[$i].get('expectations', [])))
         else
             exp_pass_w=$(count_expectation_passes "$RESULTS_DIR/${name}_without_expectations.txt")
             exp_pass_s=$(count_expectation_passes "$RESULTS_DIR/${name}_with_expectations.txt")
+            exp_disc=$(count_expectation_discriminating \
+                "$RESULTS_DIR/${name}_without_expectations.txt" \
+                "$RESULTS_DIR/${name}_with_expectations.txt")
 
             exp_delta=$((exp_pass_s - exp_pass_w))
             [[ $exp_delta -gt 0 ]] && exp_ds="+$exp_delta" || exp_ds="$exp_delta"
@@ -303,10 +390,19 @@ print(len(evals[$i].get('expectations', [])))
             TOTAL_EXP_WITHOUT=$((TOTAL_EXP_WITHOUT + exp_pass_w))
             TOTAL_EXP_WITH=$((TOTAL_EXP_WITH + exp_pass_s))
             TOTAL_EXPECTATIONS=$((TOTAL_EXPECTATIONS + exp_count))
+            eval_disc=$((eval_disc + exp_disc))
+            eval_graded=$((eval_graded + exp_count))
+            TOTAL_DISCRIMINATING=$((TOTAL_DISCRIMINATING + exp_disc))
 
             echo "| $((i+1)) | $name | llm | $exp_pass_w/$exp_count | $exp_pass_s/$exp_count | $exp_ds |" >> "$SUMMARY_FILE"
-            echo "  $name [llm]: without=$exp_pass_w/$exp_count with=$exp_pass_s/$exp_count ($exp_ds)"
+            echo "  $name [llm]: without=$exp_pass_w/$exp_count with=$exp_pass_s/$exp_count ($exp_ds) discriminating=$exp_disc/$exp_count"
         fi
+    fi
+
+    # An eval nothing graded (only expectations, run with --no-llm) says
+    # nothing either way and is not reported as evidence-free.
+    if [[ "$eval_graded" -gt 0 && "$eval_disc" -eq 0 ]]; then
+        EVALS_WITHOUT_DELTA+=("$name")
     fi
 done
 
@@ -335,38 +431,103 @@ cat "$SUMMARY_FILE"
 SKILL_REPO_SHA=$(git -C "$(dirname "$SKILL_FILE")" rev-parse HEAD 2>/dev/null || echo "unknown")
 RUNNER_REPO_SHA=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo "unknown")
 RUNNER_SCRIPT_SHA=$(git hash-object "$0" 2>/dev/null || echo "unknown")
+# Content id of the eval set: two runs quoting the same delta must be able to
+# show they graded the same questions, and a path alone cannot.
+EVALS_SHA=$(git hash-object "$EVALS_FILE" 2>/dev/null || echo "unknown")
 RUN_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-python3 - "$RESULTS_DIR/ab-results.json" \
-    "$RUN_DATE" \
-    "$EVAL_MODEL" \
-    "$GRADER_MODEL" \
-    "$SKILL_REPO_SHA" \
-    "$RUNNER_REPO_SHA" \
-    "$RUNNER_SCRIPT_SHA" \
-    "$EVAL_COUNT" \
-    "$TOTAL_WITHOUT" "$TOTAL_WITH" "$TOTAL_CHECKS" \
-    "$TOTAL_EXP_WITHOUT" "$TOTAL_EXP_WITH" "$TOTAL_EXPECTATIONS" \
-    "$COMBINED_WITHOUT" "$COMBINED_WITH" "$COMBINED_TOTAL" <<'PYEOF'
-import json, sys
 
-with open(sys.argv[1], "w") as f:
+if [[ "$NO_LLM" == "true" ]]; then AB_GRADED_LLM_VALUE=false; else AB_GRADED_LLM_VALUE=true; fi
+AB_NO_DELTA_VALUE=$(printf '%s\n' "${EVALS_WITHOUT_DELTA[@]+"${EVALS_WITHOUT_DELTA[@]}"}")
+
+export AB_OUT="$RESULTS_DIR/ab-results.json" \
+    AB_RUN_DATE="$RUN_DATE" \
+    AB_MODEL="$EVAL_MODEL" \
+    AB_GRADER_MODEL="$GRADER_MODEL" \
+    AB_HARNESS="$HARNESS_VERSION" \
+    AB_SKILL_VERSION="$SKILL_VERSION" \
+    AB_SKILL_FILE="$SKILL_FILE" \
+    AB_SKILL_REPO_SHA="$SKILL_REPO_SHA" \
+    AB_RUNNER_REPO_SHA="$RUNNER_REPO_SHA" \
+    AB_RUNNER_SCRIPT_SHA="$RUNNER_SCRIPT_SHA" \
+    AB_EVALS_FILE="$EVALS_FILE" \
+    AB_EVALS_SHA="$EVALS_SHA" \
+    AB_EVAL_COUNT="$EVAL_COUNT" \
+    AB_GRADED_LLM="$AB_GRADED_LLM_VALUE" \
+    AB_REGEX_WITHOUT="$TOTAL_WITHOUT" AB_REGEX_WITH="$TOTAL_WITH" AB_REGEX_CHECKS="$TOTAL_CHECKS" \
+    AB_LLM_WITHOUT="$TOTAL_EXP_WITHOUT" AB_LLM_WITH="$TOTAL_EXP_WITH" AB_LLM_CHECKS="$TOTAL_EXPECTATIONS" \
+    AB_COMBINED_WITHOUT="$COMBINED_WITHOUT" AB_COMBINED_WITH="$COMBINED_WITH" AB_COMBINED_CHECKS="$COMBINED_TOTAL" \
+    AB_DISCRIMINATING="$TOTAL_DISCRIMINATING" \
+    AB_NO_DELTA="$AB_NO_DELTA_VALUE"
+
+python3 <<'PYEOF'
+import json
+import os
+
+no_delta = [line for line in os.environ["AB_NO_DELTA"].splitlines() if line]
+
+with open(os.environ["AB_OUT"], "w") as f:
     json.dump({
+        # The actor tuple a delta belongs to. Reporting a number without it
+        # states a property of the skill, which is not what was measured.
         "provenance": {
-            "run_date": sys.argv[2],
-            "model": sys.argv[3],
-            "grader_model": sys.argv[4],
-            "skill_repo_commit": sys.argv[5],
-            "runner_commit": sys.argv[6],
-            "runner_script_sha": sys.argv[7],
+            "run_date": os.environ["AB_RUN_DATE"],
+            "model": os.environ["AB_MODEL"],
+            "grader_model": os.environ["AB_GRADER_MODEL"],
+            "harness": os.environ["AB_HARNESS"],
+            "skill_version": os.environ["AB_SKILL_VERSION"],
+            "skill_file": os.environ["AB_SKILL_FILE"],
+            "skill_repo_commit": os.environ["AB_SKILL_REPO_SHA"],
+            "runner_commit": os.environ["AB_RUNNER_REPO_SHA"],
+            "runner_script_sha": os.environ["AB_RUNNER_SCRIPT_SHA"],
+            "eval_set": {
+                "path": os.environ["AB_EVALS_FILE"],
+                "sha": os.environ["AB_EVALS_SHA"],
+                "count": int(os.environ["AB_EVAL_COUNT"]),
+            },
+            "llm_grading": os.environ["AB_GRADED_LLM"] == "true",
         },
-        "eval_count": int(sys.argv[8]),
+        "eval_count": int(os.environ["AB_EVAL_COUNT"]),
         "totals": {
-            "regex": {"without": int(sys.argv[9]), "with": int(sys.argv[10]), "checks": int(sys.argv[11])},
-            "llm": {"without": int(sys.argv[12]), "with": int(sys.argv[13]), "checks": int(sys.argv[14])},
-            "combined": {"without": int(sys.argv[15]), "with": int(sys.argv[16]), "checks": int(sys.argv[17])},
+            "regex": {
+                "without": int(os.environ["AB_REGEX_WITHOUT"]),
+                "with": int(os.environ["AB_REGEX_WITH"]),
+                "checks": int(os.environ["AB_REGEX_CHECKS"]),
+            },
+            "llm": {
+                "without": int(os.environ["AB_LLM_WITHOUT"]),
+                "with": int(os.environ["AB_LLM_WITH"]),
+                "checks": int(os.environ["AB_LLM_CHECKS"]),
+            },
+            "combined": {
+                "without": int(os.environ["AB_COMBINED_WITHOUT"]),
+                "with": int(os.environ["AB_COMBINED_WITH"]),
+                "checks": int(os.environ["AB_COMBINED_CHECKS"]),
+            },
         },
+        # Checks the baseline fails and the skill run passes. An eval with
+        # none of them cannot support a claim that the skill changed anything.
+        "discriminating_checks": int(os.environ["AB_DISCRIMINATING"]),
+        "evals_without_delta": no_delta,
     }, f, indent=2)
     f.write("\n")
 PYEOF
+
+echo ""
+echo "Measured: $(basename "$(dirname "$SKILL_FILE")")@${SKILL_VERSION} · ${HARNESS_VERSION} · model ${EVAL_MODEL} (judge ${GRADER_MODEL}) · eval-set $(basename "$EVALS_FILE")@${EVALS_SHA:0:8} (${EVAL_COUNT} evals)"
+echo "Discriminating checks (baseline fails, skill passes): $TOTAL_DISCRIMINATING"
+echo "Quote the delta with that tuple, not on its own."
+
+if [[ ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
+    echo ""
+    echo "${#EVALS_WITHOUT_DELTA[@]} eval(s) with no discriminating check — the baseline"
+    echo "answered them as well as the skill run, so they are not evidence for the skill:"
+    printf '  - %s\n' "${EVALS_WITHOUT_DELTA[@]}"
+fi
+
 echo ""
 echo "Results JSON: $RESULTS_DIR/ab-results.json"
+
+if [[ "$REQUIRE_DELTA" == "true" && ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
+    echo "::error::--require-delta: ${#EVALS_WITHOUT_DELTA[@]} eval(s) have no assertion the no-skill baseline fails"
+    exit 1
+fi

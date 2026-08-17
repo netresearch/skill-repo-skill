@@ -27,7 +27,49 @@ Size rules bound how MUCH a skill costs; this rubric bounds WHAT KIND of content
 Two protections when applying the rubric:
 
 - Categories 3 and 5 are **first-class even when they read as prose**. Reducing wrong or unnecessary inference counts as value although the model "knows" the underlying facts — a skill that surfaces the right rule at the right moment saves the retry tokens the guess would have cost. Do not cut a failure pattern or a never-guess rule because it "looks like advice".
-- A claimed activation/recall benefit ("the model knows this but forgets") is an eval claim: back it with an A/B delta (repo-root `scripts/run-ab-evals.sh`) rather than asserting it.
+- A claimed activation/recall benefit ("the model knows this but forgets") is an eval claim: back it with an A/B delta (repo-root `scripts/run-ab-evals.sh`) rather than asserting it. See "Eval evidence" below for what that delta does and does not say.
+
+## Eval evidence
+
+Whether an eval can carry evidence at all — every eval needs at least one
+assertion a no-skill baseline fails — is specified in
+[`materialization-contract.md`](materialization-contract.md) ("Quality rule:
+every eval needs a delta-discriminating assertion"), together with the
+`samples` self-check. What follows is the other half: how to report a number
+once you have one.
+
+### A delta belongs to an actor, not to a skill
+
+```text
+delta = f(skill version, model, agent harness, task, tool environment)
+```
+
+So `docker-development has +23%` is not a statement anyone can check. The
+reportable form names the tuple:
+
+```text
+docker-development@2.4.0 · claude-code 2.0.31 · model sonnet
+· eval-set evals.json@09cc52ef (24 evals) → +23% over the no-skill baseline
+```
+
+Every run prints that line and stores the same fields under `provenance` in
+`ab-results.json`, so a published number can be traced to the text, the actor
+and the questions that produced it. Quote them together — in a PR that
+justifies skill content, in the dashboard, in a release note.
+
+Two consequences worth stating, because they cut in opposite directions:
+
+- **A stronger actor can erase a delta.** If a later model derives the same
+  content unaided, the skill stops buying behaviour and only costs context.
+  That is a reason to re-measure on the current actor before defending a
+  passage, not a reason to keep the old number.
+- **A weaker delta is not always a weaker skill.** A harness that is bad at
+  skill discovery scores the skill poorly although the skill is fine. The
+  per-skill A/B eval assumes the skill is already loaded, so it cannot see
+  that failure at all — that is what the system-level evals in
+  [`netresearch/agent-system-evals`](https://github.com/netresearch/agent-system-evals)
+  measure, by giving the agent a realistic underspecified request that names
+  no skill, tool or method.
 
 ### Fact and trigger ownership
 
@@ -181,3 +223,4 @@ Pattern 2 detection is heuristic: a reference file counts as P2 when its stem ma
 - Anthropic published skills: <https://github.com/anthropics/skills>
 - Settings schema: `skillListingBudgetFraction`, `skillListingMaxDescChars` (Claude Code settings.json)
 - Den Odell, "The Great Agent Skills Land Grab": <https://denodell.com/blog/the-great-agent-skills-land-grab> — the generate-it-with-a-prompt test and the eval-evidence bar for activation/recall claims
+- Xiong et al., "How Memory Management Impacts LLM Agents: An Empirical Study of Experience-Following Behavior", ACL 2026: <https://aclanthology.org/2026.acl-long.27/> — inaccurate past experience compounds into later runs, and executions that look correct can still be misleading as experience; the paper's proposal is to use later task outcomes as quality labels, which is what `/retro outcome` does
