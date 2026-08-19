@@ -23,6 +23,20 @@ on:
         required: false
         type: string
         default: "tests/**/*.py"
+      php_glob:
+        description: >-
+          Glob for PHP test entrypoints, relative to the repo root. Every match
+          is executed, so a repo keeping fixtures under tests/ narrows this to
+          the entrypoints (for example "tests/run.php") rather than letting the
+          default sweep tests/fixtures/ as well.
+        required: false
+        type: string
+        default: "tests/**/*.php"
+      php_version:
+        description: "PHP version used when PHP tests are present."
+        required: false
+        type: string
+        default: "8.3"
       require_tests:
         description: >-
           Fail when the repo ships scripts under skills/*/scripts/ but matches
@@ -101,6 +115,56 @@ jobs:
           done
           exit $rc
 
+      # PHP needs a toolchain, so the glob is resolved first and the setup runs
+      # only when there is something to run. Detection is pure bash and costs
+      # nothing on the repos that ship none.
+      - name: Detect PHP tests
+        id: detect_php
+        if: always()
+        env:
+          PHP_GLOB: ${{ inputs.php_glob }}
+        run: |
+          shopt -s nullglob globstar
+          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
+          files=(${PHP_GLOB})
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No PHP tests matched ${PHP_GLOB}"
+          fi
+
+      - name: Set up PHP
+        if: always() && steps.detect_php.outputs.count != '0'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php_version }}
+          coverage: none
+
+      # --no-plugins on purpose: a skill repo requires
+      # netresearch/composer-agent-skill-plugin, and a root install that has not
+      # declared it under config.allow-plugins aborts non-interactively. Running
+      # the tests never needs the plugin, so the gate stays independent of each
+      # repo's allow-plugins state and adoption cannot break on it.
+      - name: Install PHP dependencies
+        if: always() && steps.detect_php.outputs.count != '0' && hashFiles('composer.json') != ''
+        run: composer install --no-interaction --no-progress --no-plugins
+
+      - name: PHP tests
+        id: php
+        if: always() && steps.detect_php.outputs.count != '0'
+        env:
+          PHP_GLOB: ${{ inputs.php_glob }}
+        run: |
+          shopt -s nullglob globstar
+          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
+          files=(${PHP_GLOB})
+          rc=0
+          for t in "${files[@]}"; do
+            echo "::group::$t"
+            php "$t" || { echo "::error file=$t::test failed"; rc=1; }
+            echo "::endgroup::"
+          done
+          exit $rc
+
       # A repo that ships executable surface and matched zero tests is the
       # state this workflow exists to surface. Reported always; fatal only when
       # the caller asks for it, so adoption is never a breaking change.
@@ -109,6 +173,7 @@ jobs:
         env:
           SHELL_COUNT: ${{ steps.shell.outputs.count }}
           PYTHON_COUNT: ${{ steps.python.outputs.count }}
+          PHP_COUNT: ${{ steps.detect_php.outputs.count }}
           REQUIRE_TESTS: ${{ inputs.require_tests }}
         run: |
           shopt -s nullglob globstar
@@ -116,7 +181,7 @@ jobs:
           # Defaulted because `if: always()` can reach this step while an
           # earlier one never wrote its `count=`. Bash reads an empty variable
           # as 0 here, so this is explicitness, not a crash guard.
-          total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} ))
+          total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} + ${PHP_COUNT:-0} ))
           echo "shipped scripts: ${#scripts[@]} | test files run: $total"
           if [ ${#scripts[@]} -gt 0 ] && [ "$total" -eq 0 ]; then
             msg="repo ships ${#scripts[@]} script(s) under skills/*/scripts/ but no test file was run"
