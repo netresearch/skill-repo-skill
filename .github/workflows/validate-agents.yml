@@ -21,6 +21,7 @@ jobs:
   test-generator:
     name: Test Generator (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       matrix:
         os: ${{ fromJson(inputs['os-matrix']) }}
@@ -36,7 +37,26 @@ jobs:
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y jq
+        run: |
+          # apt applies no timeout to package acquisition, so a mirror that
+          # accepts the connection and then stops responding blocks forever
+          # instead of failing (#245). The bound goes into apt's own config so
+          # any child process inherits it.
+          sudo tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'CONF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          CONF
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get update && timeout 180 sudo apt-get install -y jq; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::apt could not install jq in three attempts"
+              exit 1
+            fi
+            echo "::warning::apt attempt ${attempt} did not complete within 180s"
+          done
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
@@ -108,6 +128,7 @@ jobs:
   validate:
     name: Validate Structure
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0

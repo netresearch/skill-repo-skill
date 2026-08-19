@@ -10,6 +10,7 @@ jobs:
   validate:
     name: Skill Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -192,7 +193,28 @@ jobs:
           fi
           COUNT=$(echo "$SCRIPTS" | wc -l)
           echo "Found $COUNT shell script(s)"
-          sudo apt-get update -qq > /dev/null 2>&1 && sudo apt-get install -y -qq shellcheck > /dev/null 2>&1
+          # apt applies no timeout to package acquisition, so a mirror that accepts the
+          # connection and then stops responding blocks forever instead of failing. That
+          # stalled this step for 37 minutes on 2026-08-19 (#245). The bound goes into
+          # apt's own config so any child process inherits it.
+          sudo tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'CONF'
+          Acquire::Retries "3";
+          Acquire::http::Timeout "30";
+          Acquire::https::Timeout "30";
+          CONF
+          # Output is deliberately not discarded: a stalled fetch is
+          # indistinguishable from a step doing nothing once -qq and
+          # >/dev/null have swallowed it.
+          for attempt in 1 2 3; do
+            if timeout 180 sudo apt-get update && timeout 180 sudo apt-get install -y shellcheck; then
+              break
+            fi
+            if [[ $attempt -eq 3 ]]; then
+              echo "::error::apt could not install shellcheck in three attempts"
+              exit 1
+            fi
+            echo "::warning::apt attempt ${attempt} did not complete within 180s"
+          done
           FAILED=0
           while IFS= read -r script; do
             [[ -z "$script" ]] && continue
