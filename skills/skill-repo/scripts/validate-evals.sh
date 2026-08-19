@@ -110,12 +110,33 @@ for arg in "$@"; do
 done
 
 if [[ -z "$EVALS_FILE" ]]; then
+  # Every candidate, not the first: a repo shipping several skills ships several
+  # evals.json, and stopping at the first left the rest unchecked — six repos in
+  # the fleet carry more than one, matrix-skill three. Same hole the skill
+  # validator had (issue #214).
+  EVALS_FILES=()
   for candidate in skills/*/evals/evals.json evals/evals.json; do
-    if [[ -f "$candidate" ]]; then
-      EVALS_FILE="$candidate"
-      break
-    fi
+    [[ -f "$candidate" ]] && EVALS_FILES+=("$candidate")
   done
+
+  if [[ ${#EVALS_FILES[@]} -gt 1 ]]; then
+    # One run per file so each gets its own counters and summary, with the exit
+    # code covering all of them.
+    MULTI_RC=0
+    for candidate in "${EVALS_FILES[@]}"; do
+      echo "=============================================="
+      bash "$0" "$candidate" || MULTI_RC=1
+      echo ""
+    done
+    if [[ "$MULTI_RC" -ne 0 ]]; then
+      echo "::error::at least one evals.json failed validation"
+    else
+      echo "All ${#EVALS_FILES[@]} evals.json files validate"
+    fi
+    exit "$MULTI_RC"
+  fi
+
+  EVALS_FILE="${EVALS_FILES[0]:-}"
 fi
 
 if [[ -z "$EVALS_FILE" ]] || [[ ! -f "$EVALS_FILE" ]]; then

@@ -211,6 +211,34 @@ EOF
 bash "$SCRIPT" "$WORK/no-samples.json" >/dev/null 2>&1
 check "an eval without samples still passes" 0 "$?"
 
+# --- every evals.json is validated, not the first one found (#214 class) -----
+# A repo shipping several skills ships several evals.json; discovery used to
+# stop at the first, so a defect in any later one was invisible. The good file
+# sorts FIRST and is padded to pass on its own, so the run can only fail because
+# the later, broken one was reached.
+MULTI="$WORK/multi"
+rm -rf "$MULTI"
+mkdir -p "$MULTI/skills/aaa-good/evals" "$MULTI/skills/zzz-broken/evals"
+suite "$MULTI/skills/aaa-good/evals/evals.json" <<'EOF'
+{ "name": "good", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "(?i)anything"},
+                 {"type": "content", "pattern": "(?i)thing"}] }
+EOF
+suite "$MULTI/skills/zzz-broken/evals/evals.json" <<'EOF'
+{ "name": "no-grading", "prompt": "Anything." }
+EOF
+
+# The good one alone must pass, or the check below would fail for the wrong reason.
+bash "$SCRIPT" "$MULTI/skills/aaa-good/evals/evals.json" >/dev/null 2>&1
+check "the padded good fixture passes on its own" 0 "$?"
+
+out="$(cd "$MULTI" && bash "$SCRIPT" 2>&1)"; rc=$?
+check "a defect in a later evals.json fails the run" 1 "$rc"
+case "$out" in
+    *aaa-good*zzz-broken*) check "both files are reported, in order" 0 0 ;;
+    *) check "both files are reported, in order" 0 1 ;;
+esac
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All validate-evals tests passed"
