@@ -61,11 +61,13 @@ done
 # Record the isolation flags so the test can assert they are still passed; a
 # future edit that drops them would otherwise silently let the operator's MCP
 # servers back into the measurement.
-{
-    printf 'CALL'
-    for a in "$@"; do case "$a" in --strict-mcp-config|--mcp-config|--tools) printf ' %s' "$a" ;; esac; done
-    printf '\n'
-} >> "${STUB_CALL_LOG:-/dev/null}"
+# One write, not three: the runner starts several stubs in parallel and they
+# all append to this file. Three separate printf calls interleave, which
+# produced a line carrying a flag without its CALL prefix and a count that
+# disagreed with itself between two runs.
+record="CALL"
+for a in "$@"; do case "$a" in --strict-mcp-config|--mcp-config|--tools) record="$record $a" ;; esac; done
+printf '%s\n' "$record" >> "${STUB_CALL_LOG:-/dev/null}"
 
 prompt="${*: -1}"
 # STUB_LIMIT=1 makes the stub answer like a CLI that hit its session limit:
