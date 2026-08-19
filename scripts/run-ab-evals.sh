@@ -356,7 +356,7 @@ for i in $(seq 0 $((EVAL_COUNT - 1))); do
 
     if is_non_answer "$RESULTS_DIR/${name}_without.txt" || is_non_answer "$RESULTS_DIR/${name}_with.txt"; then
         EVALS_UNMEASURED+=("$name")
-        echo "  $name: NOT MEASURED — an arm carries no answer (limit, API error or empty response)"
+        echo "  $name: NOT MEASURED — an arm carries no answer (limit, API error or empty response)" >&2
         echo "| $((i+1)) | $name | — | not measured | not measured | -- |" >> "$SUMMARY_FILE"
         continue
     fi
@@ -606,11 +606,11 @@ if [[ "$REQUIRE_DELTA" == "true" ]]; then
     # entirely limit-blocked run reports zero evidence-free evals and exits 0.
     measured=$((EVAL_COUNT - ${#EVALS_UNMEASURED[@]}))
     if [[ "$measured" -le 0 ]]; then
-        echo "::error::--require-delta: nothing was measured — every eval pair carried a non-answer"
+        echo "::error::--require-delta: nothing was measured — every eval pair carried a non-answer" >&2
         exit 1
     fi
     if [[ ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
-        echo "::error::--require-delta: ${#EVALS_WITHOUT_DELTA[@]} of ${measured} measured eval(s) have no assertion the no-skill baseline fails"
+        echo "::error::--require-delta: ${#EVALS_WITHOUT_DELTA[@]} of ${measured} measured eval(s) have no assertion the no-skill baseline fails" >&2
         exit 1
     fi
 fi
