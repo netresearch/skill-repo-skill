@@ -87,6 +87,31 @@ jobs:
         with:
           fail-on-error: true
 
+      # Only plugin.json was ever parsed, so a broken composer.json or
+      # hooks/*.json reached main and failed wherever it was first read
+      # (issue #181). This mirrors the check-json pre-commit hook, which most
+      # repos do not install.
+      - name: JSON syntax
+        run: |
+          FAILED=0
+          COUNT=0
+          while IFS= read -r -d '' f; do
+            case "$f" in
+              vendor/*|*/vendor/*|node_modules/*|*/node_modules/*) continue ;;
+            esac
+            COUNT=$((COUNT + 1))
+            # json.tool writes the reformatted document to the second argument;
+            # /dev/null keeps the check quiet and the diagnostic on stderr.
+            if ! ERR=$(python3 -m json.tool "$f" /dev/null 2>&1); then
+              echo "::error file=${f}::invalid JSON: ${ERR}"
+              FAILED=1
+            fi
+          done < <(git ls-files -z '*.json')
+          if [[ "$FAILED" -eq 1 ]]; then
+            exit 1
+          fi
+          echo "${COUNT} tracked JSON file(s) parse"
+
       - name: Validate plugin version format
         run: |
           PLUGIN_FILE=".claude-plugin/plugin.json"
