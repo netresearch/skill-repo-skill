@@ -73,10 +73,11 @@ Two consequences worth stating, because they cut in opposite directions:
 
 ### Where the gate lives, and where it must not
 
-`run-ab-evals.sh --require-delta` is a **local, pre-merge** instrument: run it
-in the repo you are editing, before opening the PR that adds the eval. It calls
-the model twice per eval, so it cannot run on every pull request, and it is
-deliberately **not** wired into the scheduled sweep either. The sweep's job is
+`run-ab-evals.sh --samples=3 --require-delta` is a **local, pre-merge**
+instrument: run it in the repo you are editing, before opening the PR that adds
+the eval. It calls the model `2 × N` times per eval, so it cannot run on every
+pull request, and it is deliberately **not** wired into the scheduled sweep
+either. The sweep's job is
 to publish numbers; a gate there would abort a skill's merge step, and a skill
 with one weak eval would quietly stop being refreshed on the dashboard while
 looking merely unchanged. The sweep therefore *reports* the evidence-free evals
@@ -87,25 +88,31 @@ the assertions accept a correct answer and reject a wrong one, which is the
 mechanical half of "this eval discriminates". Prefer adding `samples` over
 adding a CI job that spends tokens.
 
-### One sample per arm: a signal, not a verdict
+### Sample each arm more than once
 
-Each arm is a single completion, so per-eval discrimination is noisy. Measured
-on this repo's own suite, two consecutive runs of the *same* eval text:
+A single completion per arm is not a verdict. Measured on this repo's own
+suite, two consecutive runs of the *same* eval text:
 
 | eval | run 1 | run 2 |
 |---|---|---|
 | `migrate_single_license` | 2 discriminating checks | 0 |
 | `release_workflow_setup` | 1 | 0 |
 
-Nothing about those evals changed between the runs. `--require-delta` would
-have failed them on one day and passed them on the other, which is why it is
-an opt-in local signal — read the list, look at the two arms, decide — and not
-a hard gate. Making it a gate would need repeated sampling per arm, at a
-multiple of the token cost, and that is a budget decision rather than a flag.
+Nothing about those evals changed between the runs. `--samples=N` therefore
+runs N completions per arm and decides every assertion by **majority over the
+samples**; `must_not` inverts each sample before the vote, and samples that
+carry no answer are dropped rather than counted as failures. The sweep uses
+3 by default, and `ab-results.json` records `samples_per_arm` so a quoted
+number always says how firm it is.
 
-What survives the noise is the aggregate and the pattern: a suite where half
-the evals never discriminate is telling you something real even if the exact
-membership of the list moves.
+`--require-delta` refuses to run below `--samples=2` — gating on a coin flip
+is the failure mode the flag exists to prevent, one level up.
+
+The cost is linear and real: `2 × N` completions per eval, so the default
+triples what a single-sample sweep costs. Use `--samples=1` for a cheap
+indicative run whose *aggregate* is still informative — a suite where half the
+evals never discriminate is telling you something either way — but do not
+quote a per-eval verdict from it.
 
 ### Read the arms before believing the delta
 

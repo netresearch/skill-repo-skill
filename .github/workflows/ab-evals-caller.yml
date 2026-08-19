@@ -38,6 +38,13 @@ on:
         description: "Run the full catalog instead of the rotation subset (several hours)"
         type: boolean
         default: false
+      samples:
+        description: >-
+          Completions per arm (default 3). A verdict from one completion flips
+          between runs on unchanged evals, so 3 is the number the per-eval
+          results are quoted from; the run costs 2xN completions per eval.
+        type: number
+        default: 3
 
 permissions: {}
 
@@ -56,5 +63,6 @@ jobs:
     with:
       skills: ${{ inputs.skills || '' }}
       full: ${{ inputs.full || false }}
+      samples: ${{ inputs.samples || 3 }}
     secrets:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

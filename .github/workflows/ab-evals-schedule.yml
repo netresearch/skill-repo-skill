@@ -32,6 +32,16 @@ on:
         required: false
         type: string
         default: ""
+      samples:
+        description: >-
+          Completions per arm. 3 is the default because a verdict from a single
+          completion flips between runs on unchanged evals (issue #236); the run
+          costs 2xN completions per eval, so 3 triples the token bill against
+          the old behaviour. Lower it to 1 only for a cheap indicative run whose
+          per-eval verdicts must not be quoted.
+        required: false
+        type: number
+        default: 3
       full:
         description: "Run the full catalog instead of the rotation subset (several hours)"
         required: false
@@ -151,6 +161,7 @@ jobs:
       - name: Run A/B evals per skill (fail-soft)
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SAMPLES_PER_ARM: ${{ inputs.samples }}
         run: |
           mkdir -p /tmp/ab-out
           : > /tmp/ab-out/pr-lines.md
@@ -181,7 +192,8 @@ jobs:
               failed+=("$name"); echo "::endgroup::"; continue
             fi
             rm -rf scripts/ab-results
-            if ! bash scripts/run-ab-evals.sh --evals="$evals" --skill="$skill" < /dev/null; then
+            if ! bash scripts/run-ab-evals.sh --evals="$evals" --skill="$skill" \
+                 --samples="${SAMPLES_PER_ARM}" < /dev/null; then
               echo "::warning::${name}: eval run failed, skipping"
               failed+=("$name"); echo "::endgroup::"; continue
             fi
@@ -240,6 +252,7 @@ jobs:
       - name: Open PR with refreshed dashboard data
         env:
           GH_TOKEN: ${{ github.token }}
+          SAMPLES_PER_ARM: ${{ inputs.samples }}
         run: |
           if git diff --quiet -- docs/dashboard/data/results.json; then
             echo "No changes to dashboard data; skipping PR."
@@ -262,6 +275,8 @@ jobs:
             echo ""
             if [[ -s /tmp/ab-out/no-delta.md ]]; then
               echo "## Evals with no discriminating check"
+              echo ""
+              echo "Verdicts are a majority over ${SAMPLES_PER_ARM} completions per arm."
               echo ""
               echo "The baseline answered these as well as the skill run, so they are not"
               echo "evidence for the skill. That does not make them wrong — a regression"

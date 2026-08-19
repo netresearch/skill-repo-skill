@@ -162,7 +162,8 @@ baseline fails it and the with-skill run passes it, prints
 under a "no discriminating check" heading at the end. `ab-results.json` carries the same
 information as `discriminating_checks` and `evals_without_delta`. `--require-delta`
 turns that list into exit 1 — use it in a repo whose evals are already clean, so the
-next eval cannot arrive without evidence.
+next eval cannot arrive without evidence. Note the cost: `2 × N` completions per eval,
+so a sampled run over a 20-eval suite is 120 model calls.
 
 Zero discriminating checks does not make an eval wrong: a regression guard both arms
 pass today is doing its job. It makes it unusable as evidence *for the skill*, which is
