@@ -157,7 +157,12 @@ jobs:
           # makes an unavailable version fail with its own message instead of
           # surfacing inside the caller's test command.
           uv python install "$PYTHON_VERSION"
-          RESOLVED=$(uv run --no-project python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
+          # --no-project: resolve the interpreter the way a caller's plain
+          #   `uv run` does, without touching the repo's dependencies.
+          # --no-build: no source distribution is built, so no setup script runs
+          #   (SonarCloud). Nothing is installed here in the first place -- there
+          #   is no --with and no project, so there is nothing to lock either.
+          RESOLVED=$(uv run --no-project --no-build python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
           echo "matrix version : $PYTHON_VERSION"
           echo "uv resolves to : $RESOLVED"
           case "$RESOLVED" in
