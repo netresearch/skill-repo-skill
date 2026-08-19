@@ -73,6 +73,25 @@ prompt="${*: -1}"
 # STUB_LIMIT=1 makes the stub answer like a CLI that hit its session limit:
 # the refusal goes to stdout and thus into the answer file, exactly as the real
 # one does.
+# STUB_FLAKY=1 models the run-to-run variance that motivated sampling: exactly
+# ONE with-arm sample misses the second assertion. Which of the parallel calls
+# draws it is arbitrary, but that exactly one does is not -- the index comes
+# from an atomic mkdir ticket, so the test asserts a property rather than a
+# race. One sample is then a coin flip; three samples are a majority.
+# Ticket dispenser for STUB_FLAKY, drawn ONLY by the with-skill arm -- a ticket
+# consumed by the baseline call would shift which sample draws number 1 and
+# make the test depend on scheduling.
+draw_flaky_ticket() {
+    flaky_ticket=0
+    [ -n "${STUB_FLAKY:-}" ] && [ -n "${STUB_TICKET_DIR:-}" ] || return 0
+    mkdir -p "$STUB_TICKET_DIR" 2>/dev/null
+    i=1
+    while [ "$i" -le 99 ]; do
+        if mkdir "$STUB_TICKET_DIR/t$i" 2>/dev/null; then flaky_ticket=$i; return 0; fi
+        i=$((i + 1))
+    done
+}
+
 if [ -n "${STUB_LIMIT:-}" ]; then
     case "$prompt" in
         *"You are grading"*) ;;
@@ -89,7 +108,12 @@ case "$prompt" in
         ;;
     *)
         if [ -n "$with_skill" ]; then
-            echo "Use alpine and add a nonroot USER."
+            draw_flaky_ticket
+            if [ "${flaky_ticket:-0}" = "1" ]; then
+                echo "Use alpine."      # the one sample that misses the USER line
+            else
+                echo "Use alpine and add a nonroot USER."
+            fi
         else
             echo "Use alpine."
         fi
@@ -153,7 +177,8 @@ run_runner() { # run_runner <evals-file> [extra-flags...]
     (
         cd "$WORK/repo" || exit 99
         PATH="$WORK/bin:$PATH" STUB_CALL_LOG="$WORK/calls.log" \
-        STUB_LIMIT="${STUB_LIMIT:-}" bash scripts/run-ab-evals.sh \
+        STUB_LIMIT="${STUB_LIMIT:-}" STUB_FLAKY="${STUB_FLAKY:-}" \
+        STUB_TICKET_DIR="$WORK/tickets" bash scripts/run-ab-evals.sh \
             --evals="$WORK/repo/skills/demo/evals/$evals" \
             --skill="$WORK/repo/skills/demo/SKILL.md" \
             2 "$@" 2>&1
@@ -192,10 +217,10 @@ check "discriminating checks are counted" "1" \
     "$(results_json "['discriminating_checks']")"
 
 # --- --require-delta --------------------------------------------------------
-run_runner mixed.json --no-llm --require-delta >/dev/null 2>&1
+run_runner mixed.json --no-llm --require-delta --samples=2 >/dev/null 2>&1
 check "--require-delta fails on an eval without a discriminating check" 1 "$?"
 
-run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
+run_runner clean.json --no-llm --require-delta --samples=2 >/dev/null 2>&1
 check "--require-delta passes when every eval discriminates" 0 "$?"
 
 # --- The measurement is isolated from the operator's environment -------------
@@ -239,8 +264,44 @@ check "it is kept out of the evidence-free list" "[]" \
 check "its checks are kept out of the totals" "0" \
     "$(results_json "['totals']['combined']['checks']")"
 
-STUB_LIMIT=1 run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
+STUB_LIMIT=1 run_runner clean.json --no-llm --require-delta --samples=3 >/dev/null 2>&1
 check "--require-delta fails when nothing could be measured" 1 "$?"
+
+# --- Sampling ----------------------------------------------------------------
+# The reason this exists: with one completion per arm a flaky answer decides the
+# verdict. With three, the majority does. The stub alternates the with-arm
+# answer, so a single sample is a coin flip and three samples are not.
+out=$(run_runner clean.json --no-llm --samples=3)
+contains "each arm is sampled the requested number of times" \
+    "3 sample(s) per arm" "$out"
+check "the sample count is recorded in provenance" "3" \
+    "$(results_json "['provenance']['samples_per_arm']")"
+check "per-arm samples are written to their own files" "yes" \
+    "$([[ -f "$WORK/repo/scripts/ab-results/discriminates_with_s3.txt" ]] && echo yes || echo no)"
+check "the first sample keeps the historical filename" "yes" \
+    "$([[ -f "$WORK/repo/scripts/ab-results/discriminates_with.txt" ]] && echo yes || echo no)"
+
+# One flaky sample decides the verdict at N=1 ...
+rm -rf "$WORK/tickets"
+STUB_FLAKY=1 run_runner clean.json --no-llm >/dev/null 2>&1
+check "a single sample lets one flaky answer decide the verdict" "['discriminates']" \
+    "$(results_json "$NO_DELTA_PATH")"
+
+# ... and does not at N=3, which is the whole point of the flag.
+rm -rf "$WORK/tickets"
+out=$(STUB_FLAKY=1 run_runner clean.json --no-llm --samples=3)
+contains "a majority over three samples outvotes the flaky one" \
+    "discriminating=1/2" "$out"
+check "the flaky eval counts as evidence when sampled" "[]" \
+    "$(results_json "$NO_DELTA_PATH")"
+
+# --- The gate refuses to run on a single sample ------------------------------
+run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
+check "--require-delta refuses --samples=1" 2 "$?"
+run_runner clean.json --no-llm --require-delta --samples=3 >/dev/null 2>&1
+check "--require-delta accepts a sampled run" 0 "$?"
+run_runner mixed.json --no-llm --require-delta --samples=3 >/dev/null 2>&1
+check "--require-delta still fails on an evidence-free eval when sampled" 1 "$?"
 
 echo ""
 if [ "$fail" -eq 0 ]; then

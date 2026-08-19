@@ -1,8 +1,11 @@
 #!/bin/bash
 # run-ab-evals.sh - A/B test evals WITHOUT vs WITH skill context
-# Usage: ./scripts/run-ab-evals.sh [--no-llm] [--require-delta] [concurrency]
+# Usage: ./scripts/run-ab-evals.sh [--no-llm] [--samples=N] [--require-delta] [concurrency]
 # Default concurrency: 4 (parallel eval pairs)
 # --no-llm: Skip LLM-based grading of expectations (regex assertions only)
+# --samples=N: completions per arm (default 1). Every per-assertion verdict is
+#   then a majority over the samples. --require-delta demands N>=2, because a
+#   verdict from a single completion flips between runs on unchanged evals.
 # --require-delta: exit 1 if any eval has no discriminating assertion, i.e. no
 #   assertion that the no-skill baseline fails and the with-skill run passes.
 #   Such an eval measures boilerplate the model produces either way; it cannot
@@ -23,6 +26,10 @@ REPO_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # Parse flags and positional args
 NO_LLM=false
 REQUIRE_DELTA=false
+# Completions per arm. One is the historical behaviour and the cheapest run,
+# but a single sample cannot support a gate: unchanged evals were measured
+# flipping between discriminating and not on consecutive runs (issue #236).
+SAMPLES=1
 CONCURRENCY=4
 EVALS_FILE=""
 SKILL_FILE=""
@@ -30,6 +37,7 @@ for arg in "$@"; do
     case "$arg" in
         --no-llm) NO_LLM=true ;;
         --require-delta) REQUIRE_DELTA=true ;;
+        --samples=*) SAMPLES="${arg#--samples=}" ;;
         --evals=*) EVALS_FILE="${arg#--evals=}" ;;
         --skill=*) SKILL_FILE="${arg#--skill=}" ;;
         [0-9]*) CONCURRENCY="$arg" ;;
@@ -37,6 +45,15 @@ for arg in "$@"; do
 done
 
 # Defaults if not provided
+if ! [[ "$SAMPLES" =~ ^[1-9][0-9]*$ ]]; then
+    echo "--samples must be a positive integer, got '$SAMPLES'" >&2
+    exit 2
+fi
+if [[ "$REQUIRE_DELTA" == "true" && "$SAMPLES" -lt 2 ]]; then
+    echo "::error::--require-delta needs --samples=2 or more: a verdict from a single completion per arm flips between runs on unchanged evals, which is the configuration issue #236 rejected" >&2
+    exit 2
+fi
+
 EVALS_FILE="${EVALS_FILE:-$REPO_DIR/skills/skill-repo/evals/evals.json}"
 SKILL_FILE="${SKILL_FILE:-$REPO_DIR/skills/skill-repo/SKILL.md}"
 RESULTS_DIR="${REPO_DIR}/scripts/ab-results"
@@ -120,14 +137,25 @@ print(evals[$1].get('$2', ''))
 "
 }
 
+# Answer file for one sample. Sample 1 keeps the historical name so existing
+# tooling and eyeballs still find it; further samples get a suffix.
+sample_file() { # sample_file <name> <mode> <sample-index>
+    if [[ "$3" -le 1 ]]; then
+        echo "$RESULTS_DIR/${1}_${2}.txt"
+    else
+        echo "$RESULTS_DIR/${1}_${2}_s${3}.txt"
+    fi
+}
+
 run_single() {
     local idx="$1"
     local mode="$2"
+    local sample="${3:-1}"
     local name prompt output_file
 
     name=$(get_eval_name "$idx")
     prompt=$(get_eval_field "$idx" "prompt")
-    output_file="$RESULTS_DIR/${name}_${mode}.txt"
+    output_file="$(sample_file "$name" "$mode" "$sample")"
 
     # Two isolation steps, both added after a run showed the arms differing in
     # something other than the skill:
@@ -166,28 +194,40 @@ $NO_TOOLS_NOTE"
 
 run_pair() {
     local idx="$1"
-    local name
+    local name sample
+    local -a pids=()
     name=$(get_eval_name "$idx")
-    echo "  Starting eval $idx: $name"
-    run_single "$idx" "without" &
-    local pid1=$!
-    run_single "$idx" "with" &
-    local pid2=$!
-    wait "$pid1" "$pid2" 2>/dev/null || true
+    echo "  Starting eval $idx: $name ($SAMPLES sample(s) per arm)"
+    for ((sample = 1; sample <= SAMPLES; sample++)); do
+        run_single "$idx" "without" "$sample" &
+        pids+=("$!")
+        run_single "$idx" "with" "$sample" &
+        pids+=("$!")
+    done
+    wait "${pids[@]}" 2>/dev/null || true
     echo "  Finished eval $idx: $name"
 }
 
 # Grade expectations via LLM judge
 # Writes results to $RESULTS_DIR/${name}_${mode}_expectations.txt
+grader_file_for() { # grader_file_for <name> <mode> <sample-index>
+    if [[ "$3" -le 1 ]]; then
+        echo "$RESULTS_DIR/${1}_${2}_expectations.txt"
+    else
+        echo "$RESULTS_DIR/${1}_${2}_s${3}_expectations.txt"
+    fi
+}
+
 grade_expectations() {
     local idx="$1"
     local mode="$2"
+    local sample="${3:-1}"
     local name prompt output_file expectations_count grader_file
 
     name=$(get_eval_name "$idx")
     prompt=$(get_eval_field "$idx" "prompt")
-    output_file="$RESULTS_DIR/${name}_${mode}.txt"
-    grader_file="$RESULTS_DIR/${name}_${mode}_expectations.txt"
+    output_file="$(sample_file "$name" "$mode" "$sample")"
+    grader_file="$(grader_file_for "$name" "$mode" "$sample")"
 
     # Get expectations as numbered list
     expectations_count=$(python3 -c "
@@ -251,11 +291,32 @@ is_non_answer() {
     return 1
 }
 
-# Expectations the with-skill run passes and the baseline does not. Same
-# anchor as count_expectation_passes below, so the two cannot disagree about
-# what a PASS line looks like.
-count_expectation_discriminating() {
-    python3 - "$1" "$2" <<'PYEOF'
+# Does an assertion pass in MORE THAN HALF the usable samples of one arm?
+# A single completion is not a verdict -- unchanged evals were measured
+# flipping between runs -- so every per-assertion decision is a majority over
+# the samples, and `must_not` inverts each sample before the vote.
+majority_pass() { # majority_pass <kind> <pattern> <file...>
+    local kind="$1" pattern="$2"
+    shift 2
+    local hits=0 total=0 hit file
+    for file in "$@"; do
+        total=$((total + 1))
+        if grep -qiE "$pattern" "$file" 2>/dev/null; then hit=1; else hit=0; fi
+        [[ "$kind" == "must_not" ]] && hit=$((1 - hit))
+        hits=$((hits + hit))
+    done
+    [[ $((hits * 2)) -gt "$total" ]]
+}
+
+# Majority verdict over LLM-graded expectations, the counterpart of
+# majority_pass for the assertion path. Prints three numbers:
+#   <expectations the baseline passes> <the skill run passes> <discriminating>
+# An expectation counts as passed in an arm when more than half that arm's
+# usable grader files mark it PASS. Grader files that are missing or empty --
+# a sample whose completion never happened -- are dropped rather than counted
+# as failures, for the same reason a non-answer is not a refutation.
+expectation_majority() { # expectation_majority <n-without> <without...> <with...>
+    python3 - "$@" <<'PYEOF'
 import re
 import sys
 
@@ -265,22 +326,32 @@ def passing(path):
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
     except OSError:
-        return set()
+        return None
+    if not text.strip():
+        return None
     return {int(m.group(1)) for m in re.finditer(r"^(\d+)\.\s*PASS", text, re.M | re.I)}
 
 
-print(len(passing(sys.argv[2]) - passing(sys.argv[1])))
-PYEOF
-}
+n_without = int(sys.argv[1])
+files = sys.argv[2:]
+arms = [
+    [s for s in (passing(p) for p in files[:n_without]) if s is not None],
+    [s for s in (passing(p) for p in files[n_without:]) if s is not None],
+]
 
-# Count PASS lines in a grader output file
-count_expectation_passes() {
-    local grader_file="$1"
-    if [[ ! -f "$grader_file" ]]; then
-        echo 0
-        return
-    fi
-    grep -ciE '^[0-9]+\.\s*PASS' "$grader_file" 2>/dev/null || echo 0
+
+def majority(samples, number):
+    if not samples:
+        return False
+    return sum(1 for s in samples if number in s) * 2 > len(samples)
+
+
+numbers = sorted({n for arm in arms for s in arm for n in s})
+pass_w = sum(1 for n in numbers if majority(arms[0], n))
+pass_s = sum(1 for n in numbers if majority(arms[1], n))
+disc = sum(1 for n in numbers if majority(arms[1], n) and not majority(arms[0], n))
+print(f"{pass_w} {pass_s} {disc}")
+PYEOF
 }
 
 # Run evals in batches
@@ -319,8 +390,10 @@ evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 print(len(evals[$i].get('expectations', [])))
 ")
                 if [[ "$exp_count" -gt 0 ]]; then
-                    grade_expectations "$i" "without" &
-                    grade_expectations "$i" "with" &
+                    for ((sample = 1; sample <= SAMPLES; sample++)); do
+                        grade_expectations "$i" "without" "$sample" &
+                        grade_expectations "$i" "with" "$sample" &
+                    done
                 fi
             done
             wait
@@ -354,15 +427,25 @@ for i in $(seq 0 $((EVAL_COUNT - 1))); do
     eval_disc=0
     eval_graded=0
 
-    if is_non_answer "$RESULTS_DIR/${name}_without.txt" || is_non_answer "$RESULTS_DIR/${name}_with.txt"; then
+    # Drop samples that carry no answer; an arm with none left leaves the eval
+    # unmeasured rather than counted as evidence-free.
+    usable_w=(); usable_s=(); sample=0
+    for ((sample = 1; sample <= SAMPLES; sample++)); do
+        f=$(sample_file "$name" "without" "$sample")
+        is_non_answer "$f" || usable_w+=("$f")
+        f=$(sample_file "$name" "with" "$sample")
+        is_non_answer "$f" || usable_s+=("$f")
+    done
+    if [[ ${#usable_w[@]} -eq 0 || ${#usable_s[@]} -eq 0 ]]; then
         EVALS_UNMEASURED+=("$name")
-        echo "  $name: NOT MEASURED — an arm carries no answer (limit, API error or empty response)" >&2
+        echo "  $name: NOT MEASURED — an arm carries no answer in any sample (limit, API error or empty response)" >&2
         echo "| $((i+1)) | $name | — | not measured | not measured | -- |" >> "$SUMMARY_FILE"
         continue
     fi
-
-    without_file="$RESULTS_DIR/${name}_without.txt"
-    with_file="$RESULTS_DIR/${name}_with.txt"
+    dropped=$(( (SAMPLES - ${#usable_w[@]}) + (SAMPLES - ${#usable_s[@]}) ))
+    if [[ "$dropped" -gt 0 ]]; then
+        echo "  $name: $dropped of $((SAMPLES * 2)) samples carried no answer and were dropped" >&2
+    fi
 
     # Check regex assertions
     assertion_count=$(python3 -c "
@@ -381,17 +464,11 @@ print(len(evals[$i].get('assertions', [])))
             # Strip PCRE inline flags (e.g. (?i)) — grep -i already handles case
             pattern="${pattern#'(?i)'}"
             ((total++)) || true
-            hit_w=0; hit_s=0
-            grep -qiE "$pattern" "$without_file" 2>/dev/null && hit_w=1 || true
-            grep -qiE "$pattern" "$with_file" 2>/dev/null && hit_s=1 || true
-            # A must_not assertion passes when the pattern is ABSENT. Grading it
-            # like a positive one credits the arm that gives the forbidden
-            # answer, which is the opposite of what the eval states.
-            if [[ "$kind" == "must_not" ]]; then
-                ok_w=$((1 - hit_w)); ok_s=$((1 - hit_s))
-            else
-                ok_w="$hit_w"; ok_s="$hit_s"
-            fi
+            # A must_not assertion passes when the pattern is ABSENT; the
+            # inversion happens per sample inside majority_pass, before the vote.
+            ok_w=0; ok_s=0
+            majority_pass "$kind" "$pattern" "${usable_w[@]}" && ok_w=1
+            majority_pass "$kind" "$pattern" "${usable_s[@]}" && ok_s=1
             ((pass_w += ok_w)) || true
             ((pass_s += ok_s)) || true
             # Discriminating: the baseline fails the assertion and the skill run
@@ -438,11 +515,14 @@ print(len(evals[$i].get('expectations', [])))
             echo "| $((i+1)) | $name | llm | skipped | skipped | -- |" >> "$SUMMARY_FILE"
             echo "  $name [llm]: skipped (--no-llm)"
         else
-            exp_pass_w=$(count_expectation_passes "$RESULTS_DIR/${name}_without_expectations.txt")
-            exp_pass_s=$(count_expectation_passes "$RESULTS_DIR/${name}_with_expectations.txt")
-            exp_disc=$(count_expectation_discriminating \
-                "$RESULTS_DIR/${name}_without_expectations.txt" \
-                "$RESULTS_DIR/${name}_with_expectations.txt")
+            graders_w=(); graders_s=()
+            for ((sample = 1; sample <= SAMPLES; sample++)); do
+                graders_w+=("$(grader_file_for "$name" "without" "$sample")")
+                graders_s+=("$(grader_file_for "$name" "with" "$sample")")
+            done
+            read -r exp_pass_w exp_pass_s exp_disc < <(
+                expectation_majority "${#graders_w[@]}" "${graders_w[@]}" "${graders_s[@]}"
+            )
 
             exp_delta=$((exp_pass_s - exp_pass_w))
             [[ $exp_delta -gt 0 ]] && exp_ds="+$exp_delta" || exp_ds="$exp_delta"
@@ -513,6 +593,7 @@ export AB_OUT="$RESULTS_DIR/ab-results.json" \
     AB_EVALS_FILE="$EVALS_FILE" \
     AB_EVALS_SHA="$EVALS_SHA" \
     AB_EVAL_COUNT="$EVAL_COUNT" \
+    AB_SAMPLES="$SAMPLES" \
     AB_GRADED_LLM="$AB_GRADED_LLM_VALUE" \
     AB_REGEX_WITHOUT="$TOTAL_WITHOUT" AB_REGEX_WITH="$TOTAL_WITH" AB_REGEX_CHECKS="$TOTAL_CHECKS" \
     AB_LLM_WITHOUT="$TOTAL_EXP_WITHOUT" AB_LLM_WITH="$TOTAL_EXP_WITH" AB_LLM_CHECKS="$TOTAL_EXPECTATIONS" \
@@ -548,6 +629,9 @@ with open(os.environ["AB_OUT"], "w") as f:
                 "count": int(os.environ["AB_EVAL_COUNT"]),
             },
             "llm_grading": os.environ["AB_GRADED_LLM"] == "true",
+            # Completions per arm. A verdict from one sample flips between
+            # runs on unchanged evals, so the number belongs next to the delta.
+            "samples_per_arm": int(os.environ["AB_SAMPLES"]),
         },
         "eval_count": int(os.environ["AB_EVAL_COUNT"]),
         "totals": {
@@ -579,7 +663,7 @@ with open(os.environ["AB_OUT"], "w") as f:
 PYEOF
 
 echo ""
-echo "Measured: $(basename "$(dirname "$SKILL_FILE")")@${SKILL_VERSION} · ${HARNESS_VERSION} · model ${EVAL_MODEL} (judge ${GRADER_MODEL}) · eval-set $(basename "$EVALS_FILE")@${EVALS_SHA:0:8} (${EVAL_COUNT} evals)"
+echo "Measured: $(basename "$(dirname "$SKILL_FILE")")@${SKILL_VERSION} · ${HARNESS_VERSION} · model ${EVAL_MODEL} (judge ${GRADER_MODEL}) · eval-set $(basename "$EVALS_FILE")@${EVALS_SHA:0:8} (${EVAL_COUNT} evals, ${SAMPLES} sample(s)/arm)"
 echo "Discriminating checks (baseline fails, skill passes): $TOTAL_DISCRIMINATING"
 echo "Quote the delta with that tuple, not on its own."
 
