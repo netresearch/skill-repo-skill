@@ -100,6 +100,17 @@ cat > "$WORK/repo/skills/demo/evals/clean.json" <<'EOF'
                   {"type": "content", "pattern": "USER"}]}
 ]}
 EOF
+# A negative expectation. The baseline answer says "Use alpine." and the
+# with-skill answer adds the USER line, so a must_not on `USER` must FAIL the
+# with-skill arm and PASS the baseline — the mirror image of a positive
+# assertion, and the case that was graded backwards until the type was read.
+cat > "$WORK/repo/skills/demo/evals/negative.json" <<'EOF'
+{"skill_name": "demo", "evals": [
+  {"name": "forbids_user_line", "prompt": "Write a Dockerfile.",
+   "assertions": [{"type": "content", "pattern": "alpine"},
+                  {"type": "must_not", "pattern": "USER"}]}
+]}
+EOF
 # LLM-graded expectations: the grader passes the second one only for the
 # with-skill answer.
 cat > "$WORK/repo/skills/demo/evals/graded.json" <<'EOF'
@@ -156,6 +167,15 @@ check "--require-delta fails on an eval without a discriminating check" 1 "$?"
 
 run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
 check "--require-delta passes when every eval discriminates" 0 "$?"
+
+# --- must_not is graded inverted --------------------------------------------
+out=$(run_runner negative.json --no-llm)
+contains "a must_not assertion passes the arm that lacks the pattern" \
+    "forbids_user_line [regex]: without=2/2 with=1/2 (-1) discriminating=0/2" "$out"
+check "an eval whose only movement is a must_not violation is not counted as evidence" \
+    "['forbids_user_line']" "$(results_json "['evals_without_delta']")"
+check "no discriminating check is credited when the skill run violates the must_not" "0" \
+    "$(results_json "['discriminating_checks']")"
 
 # --- LLM-graded expectations ------------------------------------------------
 out=$(run_runner graded.json)

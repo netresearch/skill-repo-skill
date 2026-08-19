@@ -330,7 +330,10 @@ print(len(evals[$i].get('assertions', [])))
 ")
     if [[ "$assertion_count" -gt 0 ]]; then
         pass_w=0; pass_s=0; total=0; disc=0
-        while IFS= read -r pattern; do
+        # Each line is "<kind><TAB><pattern>", kind being must_not or positive.
+        # The kind is emitted first and is never empty, so IFS cannot collapse
+        # it into the pattern field.
+        while IFS=$'\t' read -r kind pattern; do
             [[ -z "$pattern" ]] && continue
             # Strip PCRE inline flags (e.g. (?i)) — grep -i already handles case
             pattern="${pattern#'(?i)'}"
@@ -338,17 +341,31 @@ print(len(evals[$i].get('assertions', [])))
             hit_w=0; hit_s=0
             grep -qiE "$pattern" "$without_file" 2>/dev/null && hit_w=1 || true
             grep -qiE "$pattern" "$with_file" 2>/dev/null && hit_s=1 || true
-            ((pass_w += hit_w)) || true
-            ((pass_s += hit_s)) || true
-            # Discriminating: the baseline misses it and the skill run hits it.
-            # An assertion both runs pass measures boilerplate, not the skill.
-            if [[ "$hit_w" -eq 0 && "$hit_s" -eq 1 ]]; then ((disc++)) || true; fi
+            # A must_not assertion passes when the pattern is ABSENT. Grading it
+            # like a positive one credits the arm that gives the forbidden
+            # answer, which is the opposite of what the eval states.
+            if [[ "$kind" == "must_not" ]]; then
+                ok_w=$((1 - hit_w)); ok_s=$((1 - hit_s))
+            else
+                ok_w="$hit_w"; ok_s="$hit_s"
+            fi
+            ((pass_w += ok_w)) || true
+            ((pass_s += ok_s)) || true
+            # Discriminating: the baseline fails the assertion and the skill run
+            # passes it. An assertion both arms pass measures boilerplate, not
+            # the skill.
+            if [[ "$ok_w" -eq 0 && "$ok_s" -eq 1 ]]; then ((disc++)) || true; fi
         done <<< "$(python3 -c "
 import json
 raw = json.load(open('$EVALS_FILE'))
 evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
 for a in evals[$i].get('assertions', []):
-    print(a.get('value') or a.get('pattern') or '')
+    if isinstance(a, dict):
+        pattern = a.get('value') or a.get('pattern') or ''
+        kind = 'must_not' if 'must_not' in str(a.get('type') or '') else 'positive'
+    else:
+        pattern, kind = str(a), 'positive'
+    print(kind + '\t' + pattern)
 ")"
 
         delta=$((pass_s - pass_w))
