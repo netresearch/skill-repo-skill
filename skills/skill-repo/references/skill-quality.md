@@ -87,6 +87,26 @@ the assertions accept a correct answer and reject a wrong one, which is the
 mechanical half of "this eval discriminates". Prefer adding `samples` over
 adding a CI job that spends tokens.
 
+### One sample per arm: a signal, not a verdict
+
+Each arm is a single completion, so per-eval discrimination is noisy. Measured
+on this repo's own suite, two consecutive runs of the *same* eval text:
+
+| eval | run 1 | run 2 |
+|---|---|---|
+| `migrate_single_license` | 2 discriminating checks | 0 |
+| `release_workflow_setup` | 1 | 0 |
+
+Nothing about those evals changed between the runs. `--require-delta` would
+have failed them on one day and passed them on the other, which is why it is
+an opt-in local signal — read the list, look at the two arms, decide — and not
+a hard gate. Making it a gate would need repeated sampling per arm, at a
+multiple of the token cost, and that is a budget decision rather than a flag.
+
+What survives the noise is the aggregate and the pattern: a suite where half
+the evals never discriminate is telling you something real even if the exact
+membership of the list moves.
+
 ### Read the arms before believing the delta
 
 A measured delta is only as good as the two answers behind it, and the first

@@ -3,191 +3,531 @@
     "name": "create_new_skill_repo",
     "prompt": "Create a new skill repo from scratch called 'my-awesome-skill' with proper Netresearch structure",
     "assertions": [
-      { "type": "content", "pattern": "\\.claude-plugin/plugin\\.json" },
-      { "type": "content", "pattern": "SKILL\\.md" },
-      { "type": "content", "pattern": "LICENSE-MIT" },
-      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
-      { "type": "content", "pattern": "composer\\.json" },
-      { "type": "content", "pattern": "release\\.yml" }
+      {
+        "type": "content",
+        "pattern": "\\.claude-plugin/plugin\\.json"
+      },
+      {
+        "type": "content",
+        "pattern": "SKILL\\.md"
+      },
+      {
+        "type": "content",
+        "pattern": "LICENSE-MIT"
+      },
+      {
+        "type": "content",
+        "pattern": "LICENSE-CC-BY-SA-4\\.0"
+      },
+      {
+        "type": "content",
+        "pattern": "composer\\.json"
+      },
+      {
+        "type": "content",
+        "pattern": "release\\.yml"
+      }
     ]
   },
   {
     "name": "validate_skill_repo_structure",
-    "prompt": "Validate this skill repo structure and tell me what's missing or wrong",
+    "prompt": "Our skill repo has SKILL.md, plugin.json, composer.json, README.md and a single LICENSE file. Validate the structure and tell me what is wrong.",
     "assertions": [
-      { "type": "tool_use", "tool": "Bash", "pattern": "validate-skill" },
-      { "type": "content", "pattern": "(plugin\\.json|SKILL\\.md|LICENSE)" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "validate-skill\\.sh",
+        "description": "Points at the repo's own validator rather than eyeballing the tree"
+      },
+      {
+        "type": "content_regex",
+        "value": "LICENSE-MIT",
+        "description": "Names the code half of the split licence"
+      },
+      {
+        "type": "content_regex",
+        "value": "LICENSE-CC-BY-SA-4\\.0",
+        "description": "Names the content half — a single LICENSE file is the actual defect here"
+      },
+      {
+        "type": "content_regex",
+        "value": "ai-agent-skill",
+        "description": "Names the composer type the validator requires"
+      }
+    ],
+    "samples": {
+      "passing": "Run scripts/validate-skill.sh. The single LICENSE file is the defect: Netresearch skill repos ship LICENSE-MIT for code and LICENSE-CC-BY-SA-4.0 for content, and the validator warns while both exist. It also checks that composer.json has type ai-agent-skill and that plugin.json and composer.json agree on the version.",
+      "failing": [
+        "The structure looks complete — SKILL.md, plugin.json, composer.json, README.md and LICENSE are all present, so there is nothing to fix.",
+        "Add a CONTRIBUTING.md and a CHANGELOG.md; those are the usual missing pieces."
+      ]
+    }
   },
   {
     "name": "split_licensing_setup",
     "prompt": "What license files does a Netresearch skill repo need and what SPDX expression goes in composer.json?",
     "assertions": [
-      { "type": "content", "pattern": "LICENSE-MIT" },
-      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
-      { "type": "content", "pattern": "\\(MIT AND CC-BY-SA-4\\.0\\)" },
-      { "type": "content", "pattern": "Netresearch DTT GmbH" }
+      {
+        "type": "content",
+        "pattern": "LICENSE-MIT"
+      },
+      {
+        "type": "content",
+        "pattern": "LICENSE-CC-BY-SA-4\\.0"
+      },
+      {
+        "type": "content",
+        "pattern": "\\(MIT AND CC-BY-SA-4\\.0\\)"
+      },
+      {
+        "type": "content",
+        "pattern": "Netresearch DTT GmbH"
+      }
     ]
   },
   {
     "name": "migrate_single_license",
     "prompt": "This repo has a single LICENSE file. Migrate it to the split licensing model required by Netresearch skill repos.",
     "assertions": [
-      { "type": "content", "pattern": "LICENSE-MIT" },
-      { "type": "content", "pattern": "LICENSE-CC-BY-SA-4\\.0" },
-      { "type": "content", "pattern": "(remove|delete|old).*LICENSE" }
+      {
+        "type": "content",
+        "pattern": "LICENSE-MIT"
+      },
+      {
+        "type": "content",
+        "pattern": "LICENSE-CC-BY-SA-4\\.0"
+      },
+      {
+        "type": "content",
+        "pattern": "(remove|delete|old).*LICENSE"
+      }
     ]
   },
   {
     "name": "composer_json_setup",
     "prompt": "Set up composer.json for a skill repo called 'netresearch/typo3-testing-skill'. What fields are required?",
     "assertions": [
-      { "type": "content", "pattern": "ai-agent-skill" },
-      { "type": "content", "pattern": "composer-agent-skill-plugin" },
-      { "type": "content", "pattern": "netresearch/typo3-testing-skill" },
-      { "type": "content", "pattern": "SKILL\\.md" }
+      {
+        "type": "content",
+        "pattern": "ai-agent-skill"
+      },
+      {
+        "type": "content",
+        "pattern": "composer-agent-skill-plugin"
+      },
+      {
+        "type": "content",
+        "pattern": "netresearch/typo3-testing-skill"
+      },
+      {
+        "type": "content",
+        "pattern": "SKILL\\.md"
+      }
     ]
   },
   {
     "name": "composer_no_version_field",
-    "prompt": "Should composer.json in a skill repo have a version field? Why or why not?",
+    "prompt": "Should composer.json in a Netresearch skill repo carry a version field?",
     "assertions": [
-      { "type": "content", "pattern": "(no|not|never|omit|should not|must not)" },
-      { "type": "content", "pattern": "(git tag|derive|tag)" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "(?i)(no|never|omit|must not|should not)",
+        "description": "Rejects the field"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(tag|packagist)",
+        "description": "Names where the version comes from instead"
+      },
+      {
+        "type": "content_regex",
+        "value": "plugin\\.json",
+        "description": "Names the manifest that DOES carry the version, which is the part that surprises people"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(parity|match|in sync|check-plugin-version)",
+        "description": "Names the parity requirement between that manifest and the tag"
+      }
+    ],
+    "samples": {
+      "passing": "No. Packagist derives the version from the git tag, so a version field in composer.json only goes stale. The version lives in plugin.json instead, and it must match the tag — Build/Scripts/check-plugin-version.sh enforces that parity, so a release with a mismatched plugin.json fails before it ships.",
+      "failing": [
+        "No — Composer packages should never declare a version; it is derived from the tag. Nothing else to say.",
+        "Yes, set it and bump it on every release so consumers can see the version in composer.json."
+      ]
+    }
   },
   {
     "name": "composer_no_lock_file",
-    "prompt": "Should a skill repo commit composer.lock?",
+    "prompt": "Should a Netresearch skill repo commit composer.lock?",
     "assertions": [
-      { "type": "content", "pattern": "(no|never|must not|should not)" },
-      { "type": "content", "pattern": "(librar|skill|package)" }
+      {
+        "type": "content_regex",
+        "value": "(?i)(no|never|must not|should not)",
+        "description": "Rejects committing it"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(librar|package|not an application|application)",
+        "description": "Gives the reason: locks belong to applications, and a skill repo is a package"
+      },
+      {
+        "type": "content_regex",
+        "value": "\\.gitignore",
+        "description": "Names where it is kept out, rather than leaving it as advice"
+      },
+      {
+        "type": "content_regex",
+        "value": "vendor/",
+        "description": "Names the second artefact that must not be committed either"
+      }
     ]
   },
   {
     "name": "plugin_json_structure",
     "prompt": "Create a valid plugin.json for a skill called 'security-audit' in .claude-plugin/",
     "assertions": [
-      { "type": "content", "pattern": "\"name\"" },
-      { "type": "content", "pattern": "\"version\"" },
-      { "type": "content", "pattern": "\"skills\"" },
-      { "type": "content", "pattern": "\\./skills/" },
-      { "type": "content", "pattern": "netresearch\\.de" }
+      {
+        "type": "content",
+        "pattern": "\"name\""
+      },
+      {
+        "type": "content",
+        "pattern": "\"version\""
+      },
+      {
+        "type": "content",
+        "pattern": "\"skills\""
+      },
+      {
+        "type": "content",
+        "pattern": "\\./skills/"
+      },
+      {
+        "type": "content",
+        "pattern": "netresearch\\.de"
+      }
     ]
   },
   {
     "name": "skillmd_frontmatter_format",
-    "prompt": "Write valid SKILL.md frontmatter for a skill named 'docker-development'",
+    "prompt": "Write valid SKILL.md frontmatter for a skill named 'docker-development'.",
     "assertions": [
-      { "type": "content", "pattern": "^---" },
-      { "type": "content", "pattern": "name: docker-development" },
-      { "type": "content", "pattern": "description: \"Use when" }
+      {
+        "type": "content_regex",
+        "value": "name: docker-development",
+        "description": "Sets the name to the skill's directory name"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)description:.{0,40}use when",
+        "description": "Follows the convention that the description opens with the trigger"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(1,?536|300 char|100.{0,5}300)",
+        "description": "Knows the description budget rather than writing an arbitrary blurb"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(license|metadata|version)",
+        "description": "Includes the metadata block Netresearch skill repos require"
+      }
     ]
   },
   {
     "name": "skillmd_word_limit",
-    "prompt": "What is the word limit for SKILL.md and where should extended content go?",
+    "prompt": "What is the word limit for SKILL.md, how is it counted, and where does the rest of the content go?",
     "assertions": [
-      { "type": "content", "pattern": "500" },
-      { "type": "content", "pattern": "references/" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "500",
+        "description": "Names the limit"
+      },
+      {
+        "type": "content_regex",
+        "value": "references/",
+        "description": "Sends the overflow to reference files"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(whole file|entire file|including|frontmatter)",
+        "description": "Knows the count covers the whole file including frontmatter, which is what makes an added table row overflow it"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(validate-skill|audit-skills)",
+        "description": "Names the script that enforces it, rather than describing it as a guideline"
+      }
+    ],
+    "samples": {
+      "passing": "500 words, counted by validate-skill.sh over the whole file including the frontmatter — which is why adding one references-table row can push a passing SKILL.md over. Extended content goes to references/*.md, and every reference must be reachable from SKILL.md or audit-skills.sh reports it as an orphan.",
+      "failing": [
+        "Keep SKILL.md under 500 words of body text and move anything longer into references/.",
+        "There is no hard limit, but shorter is better — aim for a page or two."
+      ]
+    }
   },
   {
     "name": "reusable_workflow_caller",
-    "prompt": "Create a caller workflow for validate.yml that uses the reusable workflow from skill-repo-skill",
+    "prompt": "Create a caller workflow for validate.yml that uses the reusable workflow from skill-repo-skill.",
     "assertions": [
-      { "type": "content", "pattern": "netresearch/skill-repo-skill/\\.github/workflows/validate\\.yml@main" },
-      { "type": "content", "pattern": "uses:" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "netresearch/skill-repo-skill/\\.github/workflows/validate\\.yml@main",
+        "description": "Uses the org reusable at @main"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(@main|not.{0,20}pin|sha)",
+        "description": "Addresses the ref explicitly rather than silently SHA-pinning an org-owned reusable"
+      },
+      {
+        "type": "content_regex",
+        "value": "permissions:",
+        "description": "Declares the permissions the called workflow needs, without which the run fails at startup"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(pull_request|push)",
+        "description": "Wires the triggers"
+      }
+    ],
+    "samples": {
+      "passing": "jobs: validate: uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main with permissions: contents: read, triggered on push and pull_request. Netresearch-owned reusables stay on @main on purpose so upstream fixes propagate — the SHA-pin rule applies to third-party actions, not to these.",
+      "failing": [
+        "Pin it to a commit SHA like netresearch/skill-repo-skill/.github/workflows/validate.yml@a1b2c3d for supply-chain safety.",
+        "Copy the jobs from validate.yml into your own workflow file so the repo is self-contained."
+      ]
+    }
   },
   {
     "name": "release_workflow_setup",
     "prompt": "What release workflow does a skill repo need and how is it triggered?",
     "assertions": [
-      { "type": "content", "pattern": "release\\.yml" },
-      { "type": "content", "pattern": "(tag|v\\*|push)" },
-      { "type": "content", "pattern": "plugin\\.json" }
+      {
+        "type": "content",
+        "pattern": "release\\.yml"
+      },
+      {
+        "type": "content",
+        "pattern": "(tag|v\\*|push)"
+      },
+      {
+        "type": "content",
+        "pattern": "plugin\\.json"
+      }
     ]
   },
   {
     "name": "release_process_steps",
-    "prompt": "Walk me through the release process for a Netresearch skill repo at version 2.1.0",
+    "prompt": "Walk me through releasing version 2.1.0 of a Netresearch skill repo.",
     "assertions": [
-      { "type": "content", "pattern": "plugin\\.json" },
-      { "type": "content", "pattern": "git tag" },
-      { "type": "content", "pattern": "v2\\.1\\.0" },
-      { "type": "content", "pattern": "git push" }
+      {
+        "type": "content_regex",
+        "value": "plugin\\.json",
+        "description": "Bumps the manifest that carries the version"
+      },
+      {
+        "type": "content_regex",
+        "value": "v2\\.1\\.0",
+        "description": "Tags with the v prefix"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(parity|match|check-plugin-version|same version)",
+        "description": "Names the parity between manifest and tag, which is what the release gate checks"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(-s\\b|sign-off|signed-off|DCO)",
+        "description": "Keeps the sign-off requirement, which the repo's CI enforces"
+      }
     ]
   },
   {
     "name": "installation_methods",
     "prompt": "What are the three ways to install a Netresearch skill?",
     "assertions": [
-      { "type": "content", "pattern": "(marketplace|Marketplace)" },
-      { "type": "content", "pattern": "(composer|Composer)" },
-      { "type": "content", "pattern": "(release|download|Release)" }
+      {
+        "type": "content",
+        "pattern": "(marketplace|Marketplace)"
+      },
+      {
+        "type": "content",
+        "pattern": "(composer|Composer)"
+      },
+      {
+        "type": "content",
+        "pattern": "(release|download|Release)"
+      }
     ]
   },
   {
     "name": "multi_skill_package",
-    "prompt": "How do I set up composer.json and plugin.json for a repo containing two skills: jira-communication and jira-syntax?",
+    "prompt": "How do I set up composer.json and plugin.json for one repo containing two skills, jira-communication and jira-syntax?",
     "assertions": [
-      { "type": "content", "pattern": "jira-communication" },
-      { "type": "content", "pattern": "jira-syntax" },
-      { "type": "content", "pattern": "(array|\\[)" }
+      {
+        "type": "content_regex",
+        "value": "skills/jira-communication|skills/jira-syntax",
+        "description": "Uses one directory per skill under skills/"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)\"skills\"\\s*:\\s*\\[|skills.{0,15}array",
+        "description": "Lists both in the plugin manifest's skills array"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(one|single) (composer )?package|one repo|single package",
+        "description": "Keeps it a single Composer package rather than splitting it"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(extra|ai-agent-skill)",
+        "description": "Names the composer extra that points at the skill paths"
+      }
     ]
   },
   {
     "name": "cross_platform_scripts",
-    "prompt": "What cross-platform rules must scripts in a skill repo follow?",
+    "prompt": "What portability rules must shell scripts in a skill repo follow, and why?",
     "assertions": [
-      { "type": "content", "pattern": "grep -E" },
-      { "type": "content", "pattern": "(macOS|BSD|darwin)" },
-      { "type": "content", "pattern": "(-P|Perl)" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "sed -i",
+        "description": "Names the trap that actually bites"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(BSD|macOS)",
+        "description": "Names the platform the CI matrix adds"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(matrix|runs-on|CI)",
+        "description": "Ties the rule to the matrix rather than to general good practice"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(perl -i|temp file|tmp file|'' )",
+        "description": "Names a portable replacement instead of only forbidding the GNU form"
+      }
+    ],
+    "samples": {
+      "passing": "The CI matrix runs on macOS as well as Linux, so every shipped script has to be BSD-portable, not just GNU-portable. The classic trap is sed -i: GNU takes sed -i 's/a/b/' file, BSD requires sed -i '' 's/a/b/' file, and each form fails on the other platform. Write to a temp file and move it, or use perl -i -pe.",
+      "failing": [
+        "Use POSIX sh, avoid bashisms, and quote your variables.",
+        "Prefix GNU tools with g (gsed, ggrep) so macOS behaves like Linux."
+      ]
+    }
   },
   {
     "name": "license_path_mapping",
     "prompt": "Which license applies to scripts/*.sh files and which applies to references/*.md files in a skill repo?",
     "assertions": [
-      { "type": "content", "pattern": "MIT" },
-      { "type": "content", "pattern": "CC-BY-SA" }
+      {
+        "type": "content",
+        "pattern": "MIT"
+      },
+      {
+        "type": "content",
+        "pattern": "CC-BY-SA"
+      }
     ]
   },
   {
     "name": "fix_validation_errors",
-    "prompt": "validate-skill.sh reports: ERROR: composer.json type must be 'ai-agent-skill' and ERROR: plugin.json author.url must be https://www.netresearch.de. Fix these issues.",
+    "prompt": "validate-skill.sh reports: ERROR: composer.json type must be 'ai-agent-skill' and ERROR: plugin.json version does not match composer.json. Fix both.",
     "assertions": [
-      { "type": "content", "pattern": "ai-agent-skill" },
-      { "type": "content", "pattern": "netresearch\\.de" }
+      {
+        "type": "content_regex",
+        "value": "\"type\"\\s*:\\s*\"ai-agent-skill\"|type.{0,15}ai-agent-skill",
+        "description": "Sets the composer type to the required value"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(plugin\\.json).{0,80}(version)|version.{0,40}plugin\\.json",
+        "description": "Fixes the version on the manifest side rather than guessing which file is authoritative"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(re-?run|again|verify).{0,30}(validate|script)|validate-skill\\.sh",
+        "description": "Re-runs the validator instead of declaring it fixed"
+      }
     ]
   },
   {
     "name": "readme_requirements",
-    "prompt": "What sections and content must a Netresearch skill repo README.md include?",
+    "prompt": "What sections must a Netresearch skill repo README.md contain?",
     "assertions": [
-      { "type": "content", "pattern": "(Installation|installation)" },
-      { "type": "content", "pattern": "(License|license)" },
-      { "type": "content", "pattern": "Netresearch" }
-    ]
+      {
+        "type": "content_regex",
+        "value": "## What this skill solves",
+        "description": "Uses the exact level-2 heading agents grep for"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)model delta",
+        "description": "Includes the section that justifies the skill against the base model"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)example prompts",
+        "description": "Includes the example-prompts section"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(three|3)\\b",
+        "description": "Knows the minimum number of example prompts"
+      }
+    ],
+    "samples": {
+      "passing": "Exact level-2 headings so agents can grep them: ## What this skill solves, ## Why this is a skill (model delta) — one sentence on what the model gets wrong without it plus a pointer to eval evidence — ## Use when, ## Expected outputs, ## Context requirements, and ## Example prompts with a minimum of three distinct realistic prompts.",
+      "failing": [
+        "Installation, Usage, Configuration, Contributing and License — the standard open-source README sections.",
+        "Anything that helps a reader; there is no fixed structure, just describe the skill and how to install it."
+      ]
+    }
   },
   {
     "name": "auto_merge_workflow",
     "prompt": "Set up the auto-merge workflow for dependency PRs in a skill repo",
     "assertions": [
-      { "type": "content", "pattern": "auto-merge-deps" },
-      { "type": "content", "pattern": "netresearch/skill-repo-skill" },
-      { "type": "content", "pattern": "(dependabot|renovate|pull_request)" }
+      {
+        "type": "content",
+        "pattern": "auto-merge-deps"
+      },
+      {
+        "type": "content",
+        "pattern": "netresearch/skill-repo-skill"
+      },
+      {
+        "type": "content",
+        "pattern": "(dependabot|renovate|pull_request)"
+      }
     ]
   },
   {
     "name": "retire_superseded_skill",
     "prompt": "The 'example-legacy' skill is superseded by automation and must be decommissioned. Walk through the retirement.",
     "assertions": [
-      { "type": "content", "pattern": "marketplace\\.json" },
-      { "type": "content", "pattern": "[Dd]eprecat" },
-      { "type": "content", "pattern": "archive" },
-      { "type": "content", "pattern": "plugin uninstall" }
+      {
+        "type": "content",
+        "pattern": "marketplace\\.json"
+      },
+      {
+        "type": "content",
+        "pattern": "[Dd]eprecat"
+      },
+      {
+        "type": "content",
+        "pattern": "archive"
+      },
+      {
+        "type": "content",
+        "pattern": "plugin uninstall"
+      }
     ]
   }
 ]
