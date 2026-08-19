@@ -71,6 +71,70 @@ Two consequences worth stating, because they cut in opposite directions:
   measure, by giving the agent a realistic underspecified request that names
   no skill, tool or method.
 
+### Where the gate lives, and where it must not
+
+`run-ab-evals.sh --require-delta` is a **local, pre-merge** instrument: run it
+in the repo you are editing, before opening the PR that adds the eval. It calls
+the model twice per eval, so it cannot run on every pull request, and it is
+deliberately **not** wired into the scheduled sweep either. The sweep's job is
+to publish numbers; a gate there would abort a skill's merge step, and a skill
+with one weak eval would quietly stop being refreshed on the dashboard while
+looking merely unchanged. The sweep therefore *reports* the evidence-free evals
+in the PR body it opens and leaves the decision to a person.
+
+What CI can decide without a model is the `samples` self-check: it proves that
+the assertions accept a correct answer and reject a wrong one, which is the
+mechanical half of "this eval discriminates". Prefer adding `samples` over
+adding a CI job that spends tokens.
+
+### One sample per arm: a signal, not a verdict
+
+Each arm is a single completion, so per-eval discrimination is noisy. Measured
+on this repo's own suite, two consecutive runs of the *same* eval text:
+
+| eval | run 1 | run 2 |
+|---|---|---|
+| `migrate_single_license` | 2 discriminating checks | 0 |
+| `release_workflow_setup` | 1 | 0 |
+
+Nothing about those evals changed between the runs. `--require-delta` would
+have failed them on one day and passed them on the other, which is why it is
+an opt-in local signal — read the list, look at the two arms, decide — and not
+a hard gate. Making it a gate would need repeated sampling per arm, at a
+multiple of the token cost, and that is a budget decision rather than a flag.
+
+What survives the noise is the aggregate and the pattern: a suite where half
+the evals never discriminate is telling you something real even if the exact
+membership of the list moves.
+
+### Read the arms before believing the delta
+
+A measured delta is only as good as the two answers behind it, and the first
+three runs of this instrument were each contaminated in a way the totals did
+not show:
+
+- **The operator's MCP servers were still attached.** `--tools ""` drops the
+  built-in tools and nothing else, so answers on a workstation with Gmail and
+  Drive servers configured discussed which tools existed — unequally between
+  the arms. Fixed by `--strict-mcp-config` with an empty `--mcp-config`.
+- **The model still expected tools.** With them gone, an action-shaped prompt
+  ("create a plugin.json") was answered with "I'll check the repo first" and a
+  tool call print mode cannot serve: three output tokens, nothing to grade, and
+  a *negative* delta on two evals because the with-skill arm spent its answer
+  explaining the convention. Fixed by telling both arms up front that there are
+  no tools.
+- **A call that never happened was graded as a wrong answer.** The CLI writes
+  a session-limit notice or an API error into the same file an answer would go
+  to, so an eval that was never measured scored 0 in both arms and appeared in
+  the evidence-free list. Such a pair is now reported as **not measured** and
+  excluded from the totals — unknown, never refuted — and `--require-delta`
+  skips them while failing outright if *nothing* could be measured.
+
+All three were found by opening `scripts/ab-results/<eval>_with.txt` after a run
+that looked plausible in aggregate. When a delta is negative, or an eval reports
+zero discriminating checks, read the two files before concluding anything about
+the skill — the instrument is the more likely defect.
+
 ### Fact and trigger ownership
 
 Each fact and each trigger phrase has ONE canonical owning skill in the catalog; every other skill cross-references instead of restating. Duplicated facts drift apart at the next release, and duplicated trigger phrases compete for the model's skill selection. (Example: TYPO3 v14 breaking-change facts are owned by `typo3-conformance`; upgrade-execution phrasing by `typo3-extension-upgrade`; siblings link, they do not repeat.) This is the content-level twin of the discovery-level Mirroring rule in [`repository-quality-rules.md`](repository-quality-rules.md) — one canonical surface per fact, links from everywhere else.

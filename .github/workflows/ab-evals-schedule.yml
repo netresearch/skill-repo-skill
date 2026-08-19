@@ -204,6 +204,13 @@ jobs:
                 > /tmp/ab-out/merge-line.txt 2>&1; then
               cat /tmp/ab-out/merge-line.txt >> /tmp/ab-out/pr-lines.md
               cat /tmp/ab-out/merge-line.txt
+              # Evals the run found no discriminating check for: the baseline
+              # answered them as well as the skill run, so they carry no
+              # evidence FOR the skill. Collected per skill and reported in the
+              # PR body -- this sweep publishes numbers and must not gate, or a
+              # skill with one weak eval would silently stop being refreshed.
+              python3 scripts/no-delta-line.py "/tmp/ab-out/${name}.json" "$name" \
+                >> /tmp/ab-out/no-delta.md || true
               ok=$((ok + 1))
             else
               cat /tmp/ab-out/merge-line.txt || true
@@ -253,6 +260,18 @@ jobs:
             echo ""
             sed 's/^/- /' /tmp/ab-out/pr-lines.md
             echo ""
+            if [[ -s /tmp/ab-out/no-delta.md ]]; then
+              echo "## Evals with no discriminating check"
+              echo ""
+              echo "The baseline answered these as well as the skill run, so they are not"
+              echo "evidence for the skill. That does not make them wrong — a regression"
+              echo "guard both arms pass is doing its job — but they must not be counted"
+              echo "when the skill's value is argued. Rework the assertion or record why"
+              echo "it stays; run-ab-evals.sh --require-delta fails locally on this list."
+              echo ""
+              cat /tmp/ab-out/no-delta.md
+              echo ""
+            fi
             echo "Raw eval outputs: \`ab-eval-results\` artifact on the run linked above."
             echo ""
             echo "Note: created with GITHUB_TOKEN, so PR CI does not start automatically — close and reopen this PR to trigger checks."
