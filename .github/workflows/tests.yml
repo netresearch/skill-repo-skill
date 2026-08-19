@@ -68,6 +68,40 @@ jobs:
           # only exposes it to later steps and artifacts.
           persist-credentials: false
 
+      # PHP first: the toolchain and dependencies are installed before any leg
+      # runs, so a shell test that shells out to php finds them too. A shell
+      # wrapper around a PHP suite otherwise reports green while the suite
+      # skips itself for a missing vendor/ — observed on php-ast-edit-skill.
+      # Detection is pure bash and costs nothing on repos shipping no PHP.
+      - name: Detect PHP tests
+        id: detect_php
+        env:
+          PHP_GLOB: ${{ inputs.php_glob }}
+        run: |
+          shopt -s nullglob globstar
+          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
+          files=(${PHP_GLOB})
+          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No PHP tests matched ${PHP_GLOB}"
+          fi
+
+      - name: Set up PHP
+        if: steps.detect_php.outputs.count != '0'
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: ${{ inputs.php_version }}
+          coverage: none
+
+      # --no-plugins on purpose: a skill repo requires
+      # netresearch/composer-agent-skill-plugin, and a root install that has not
+      # declared it under config.allow-plugins aborts non-interactively. Running
+      # the tests never needs the plugin, so the gate stays independent of each
+      # repo's allow-plugins state and adoption cannot break on it.
+      - name: Install PHP dependencies
+        if: steps.detect_php.outputs.count != '0' && hashFiles('composer.json') != ''
+        run: composer install --no-interaction --no-progress --no-plugins
+
       - name: Shell tests
         id: shell
         env:
@@ -114,39 +148,6 @@ jobs:
             echo "::endgroup::"
           done
           exit $rc
-
-      # PHP needs a toolchain, so the glob is resolved first and the setup runs
-      # only when there is something to run. Detection is pure bash and costs
-      # nothing on the repos that ship none.
-      - name: Detect PHP tests
-        id: detect_php
-        if: always()
-        env:
-          PHP_GLOB: ${{ inputs.php_glob }}
-        run: |
-          shopt -s nullglob globstar
-          # shellcheck disable=SC2206  # word splitting is the point: expand the glob
-          files=(${PHP_GLOB})
-          echo "count=${#files[@]}" >> "$GITHUB_OUTPUT"
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No PHP tests matched ${PHP_GLOB}"
-          fi
-
-      - name: Set up PHP
-        if: always() && steps.detect_php.outputs.count != '0'
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
-        with:
-          php-version: ${{ inputs.php_version }}
-          coverage: none
-
-      # --no-plugins on purpose: a skill repo requires
-      # netresearch/composer-agent-skill-plugin, and a root install that has not
-      # declared it under config.allow-plugins aborts non-interactively. Running
-      # the tests never needs the plugin, so the gate stays independent of each
-      # repo's allow-plugins state and adoption cannot break on it.
-      - name: Install PHP dependencies
-        if: always() && steps.detect_php.outputs.count != '0' && hashFiles('composer.json') != ''
-        run: composer install --no-interaction --no-progress --no-plugins
 
       - name: PHP tests
         id: php
