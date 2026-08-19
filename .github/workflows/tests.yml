@@ -102,8 +102,11 @@ jobs:
         if: steps.detect_php.outputs.count != '0' && hashFiles('composer.json') != ''
         run: composer install --no-interaction --no-progress --no-plugins
 
+      # always(), like the legs below: the PHP setup now runs first, and a failed
+      # composer install must not hide which shell tests pass.
       - name: Shell tests
         id: shell
+        if: always()
         env:
           SHELL_GLOB: ${{ inputs.shell_glob }}
         run: |
@@ -150,7 +153,6 @@ jobs:
           exit $rc
 
       - name: PHP tests
-        id: php
         if: always() && steps.detect_php.outputs.count != '0'
         env:
           PHP_GLOB: ${{ inputs.php_glob }}
