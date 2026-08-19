@@ -68,6 +68,16 @@ done
 } >> "${STUB_CALL_LOG:-/dev/null}"
 
 prompt="${*: -1}"
+# STUB_LIMIT=1 makes the stub answer like a CLI that hit its session limit:
+# the refusal goes to stdout and thus into the answer file, exactly as the real
+# one does.
+if [ -n "${STUB_LIMIT:-}" ]; then
+    case "$prompt" in
+        *"You are grading"*) ;;
+        *) echo "You've hit your session limit · resets 12:30pm (Europe/Berlin)"; exit 0 ;;
+    esac
+fi
+
 case "$prompt" in
     *"You are grading"*)
         case "$prompt" in
@@ -140,7 +150,8 @@ run_runner() { # run_runner <evals-file> [extra-flags...]
     local evals="$1"; shift
     (
         cd "$WORK/repo" || exit 99
-        PATH="$WORK/bin:$PATH" STUB_CALL_LOG="$WORK/calls.log" bash scripts/run-ab-evals.sh \
+        PATH="$WORK/bin:$PATH" STUB_CALL_LOG="$WORK/calls.log" \
+        STUB_LIMIT="${STUB_LIMIT:-}" bash scripts/run-ab-evals.sh \
             --evals="$WORK/repo/skills/demo/evals/$evals" \
             --skill="$WORK/repo/skills/demo/SKILL.md" \
             2 "$@" 2>&1
@@ -210,6 +221,23 @@ check "an LLM-only run is not reported as evidence-free" "[]" \
     "$(results_json "['evals_without_delta']")"
 check "llm grading is recorded in provenance" "True" \
     "$(results_json "['provenance']['llm_grading']")"
+
+# --- A non-answer is unknown, not evidence-free ------------------------------
+# The CLI writes a limit or API error into the same file an answer would go to.
+# Grading that text scores the eval as wrong for a reason that has nothing to
+# do with the eval, and --require-delta would then fail on it.
+out=$(STUB_LIMIT=1 run_runner clean.json --no-llm)
+contains "an eval whose arm carries no answer is reported as not measured" \
+    "discriminates: NOT MEASURED" "$out"
+check "it is listed as unmeasured, not as evidence-free" "['discriminates']" \
+    "$(results_json "['evals_unmeasured']")"
+check "it is kept out of the evidence-free list" "[]" \
+    "$(results_json "['evals_without_delta']")"
+check "its checks are kept out of the totals" "0" \
+    "$(results_json "['totals']['combined']['checks']")"
+
+STUB_LIMIT=1 run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
+check "--require-delta fails when nothing could be measured" 1 "$?"
 
 echo ""
 if [ "$fail" -eq 0 ]; then

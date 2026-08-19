@@ -238,6 +238,19 @@ Format: one line per expectation, e.g.:
         > "$grader_file" 2>/dev/null || true
 }
 
+# A completion that never happened. The CLI writes its refusal into the same
+# file an answer would go to -- a session/usage limit, an API error, an empty
+# body after a timeout -- and the grader then scores that text as a wrong
+# answer, lowering both arms for reasons that have nothing to do with the eval.
+# Such a pair is UNKNOWN and is excluded from the totals, never counted as
+# evidence-free.
+is_non_answer() {
+    local file="$1"
+    [[ -s "$file" ]] || return 0
+    grep -qiE "you'?ve hit your (session|usage) limit|session limit .{0,20}reset|credit balance is too low|^ *API Error|rate limit exceeded|invalid api key|overloaded_error" "$file" && return 0
+    return 1
+}
+
 # Expectations the with-skill run passes and the baseline does not. Same
 # anchor as count_expectation_passes below, so the two cannot disagree about
 # what a PASS line looks like.
@@ -334,11 +347,19 @@ TOTAL_EXP_WITH=0
 TOTAL_EXPECTATIONS=0
 TOTAL_DISCRIMINATING=0
 EVALS_WITHOUT_DELTA=()
+EVALS_UNMEASURED=()
 
 for i in $(seq 0 $((EVAL_COUNT - 1))); do
     name=$(get_eval_name "$i")
     eval_disc=0
     eval_graded=0
+
+    if is_non_answer "$RESULTS_DIR/${name}_without.txt" || is_non_answer "$RESULTS_DIR/${name}_with.txt"; then
+        EVALS_UNMEASURED+=("$name")
+        echo "  $name: NOT MEASURED — an arm carries no answer (limit, API error or empty response)"
+        echo "| $((i+1)) | $name | — | not measured | not measured | -- |" >> "$SUMMARY_FILE"
+        continue
+    fi
 
     without_file="$RESULTS_DIR/${name}_without.txt"
     with_file="$RESULTS_DIR/${name}_with.txt"
@@ -477,6 +498,7 @@ RUN_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 if [[ "$NO_LLM" == "true" ]]; then AB_GRADED_LLM_VALUE=false; else AB_GRADED_LLM_VALUE=true; fi
 AB_NO_DELTA_VALUE=$(printf '%s\n' "${EVALS_WITHOUT_DELTA[@]+"${EVALS_WITHOUT_DELTA[@]}"}")
+AB_UNMEASURED_VALUE=$(printf '%s\n' "${EVALS_UNMEASURED[@]+"${EVALS_UNMEASURED[@]}"}")
 
 export AB_OUT="$RESULTS_DIR/ab-results.json" \
     AB_RUN_DATE="$RUN_DATE" \
@@ -496,6 +518,7 @@ export AB_OUT="$RESULTS_DIR/ab-results.json" \
     AB_LLM_WITHOUT="$TOTAL_EXP_WITHOUT" AB_LLM_WITH="$TOTAL_EXP_WITH" AB_LLM_CHECKS="$TOTAL_EXPECTATIONS" \
     AB_COMBINED_WITHOUT="$COMBINED_WITHOUT" AB_COMBINED_WITH="$COMBINED_WITH" AB_COMBINED_CHECKS="$COMBINED_TOTAL" \
     AB_DISCRIMINATING="$TOTAL_DISCRIMINATING" \
+    AB_UNMEASURED="$AB_UNMEASURED_VALUE" \
     AB_NO_DELTA="$AB_NO_DELTA_VALUE"
 
 python3 <<'PYEOF'
@@ -503,6 +526,7 @@ import json
 import os
 
 no_delta = [line for line in os.environ["AB_NO_DELTA"].splitlines() if line]
+unmeasured = [line for line in os.environ["AB_UNMEASURED"].splitlines() if line]
 
 with open(os.environ["AB_OUT"], "w") as f:
     json.dump({
@@ -547,6 +571,9 @@ with open(os.environ["AB_OUT"], "w") as f:
         # none of them cannot support a claim that the skill changed anything.
         "discriminating_checks": int(os.environ["AB_DISCRIMINATING"]),
         "evals_without_delta": no_delta,
+        # Pairs where at least one arm carried no answer at all. Unknown, not
+        # evidence-free: excluded from the totals and from --require-delta.
+        "evals_unmeasured": unmeasured,
     }, f, indent=2)
     f.write("\n")
 PYEOF
@@ -555,6 +582,14 @@ echo ""
 echo "Measured: $(basename "$(dirname "$SKILL_FILE")")@${SKILL_VERSION} · ${HARNESS_VERSION} · model ${EVAL_MODEL} (judge ${GRADER_MODEL}) · eval-set $(basename "$EVALS_FILE")@${EVALS_SHA:0:8} (${EVAL_COUNT} evals)"
 echo "Discriminating checks (baseline fails, skill passes): $TOTAL_DISCRIMINATING"
 echo "Quote the delta with that tuple, not on its own."
+
+if [[ ${#EVALS_UNMEASURED[@]} -gt 0 ]]; then
+    echo ""
+    echo "${#EVALS_UNMEASURED[@]} eval(s) NOT MEASURED — an arm carried no answer, so they say"
+    echo "nothing in either direction and are excluded from the totals above:"
+    printf '  - %s\n' "${EVALS_UNMEASURED[@]}"
+    echo "Re-run these before quoting the delta as complete."
+fi
 
 if [[ ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
     echo ""
@@ -566,7 +601,16 @@ fi
 echo ""
 echo "Results JSON: $RESULTS_DIR/ab-results.json"
 
-if [[ "$REQUIRE_DELTA" == "true" && ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
-    echo "::error::--require-delta: ${#EVALS_WITHOUT_DELTA[@]} eval(s) have no assertion the no-skill baseline fails"
-    exit 1
+if [[ "$REQUIRE_DELTA" == "true" ]]; then
+    # A run that measured nothing must not pass the gate: without this floor an
+    # entirely limit-blocked run reports zero evidence-free evals and exits 0.
+    measured=$((EVAL_COUNT - ${#EVALS_UNMEASURED[@]}))
+    if [[ "$measured" -le 0 ]]; then
+        echo "::error::--require-delta: nothing was measured — every eval pair carried a non-answer"
+        exit 1
+    fi
+    if [[ ${#EVALS_WITHOUT_DELTA[@]} -gt 0 ]]; then
+        echo "::error::--require-delta: ${#EVALS_WITHOUT_DELTA[@]} of ${measured} measured eval(s) have no assertion the no-skill baseline fails"
+        exit 1
+    fi
 fi

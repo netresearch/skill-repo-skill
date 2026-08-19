@@ -90,8 +90,8 @@ adding a CI job that spends tokens.
 ### Read the arms before believing the delta
 
 A measured delta is only as good as the two answers behind it, and the first
-two runs of this instrument were both contaminated in ways the totals did not
-show:
+three runs of this instrument were each contaminated in a way the totals did
+not show:
 
 - **The operator's MCP servers were still attached.** `--tools ""` drops the
   built-in tools and nothing else, so answers on a workstation with Gmail and
@@ -103,9 +103,15 @@ show:
   a *negative* delta on two evals because the with-skill arm spent its answer
   explaining the convention. Fixed by telling both arms up front that there are
   no tools.
+- **A call that never happened was graded as a wrong answer.** The CLI writes
+  a session-limit notice or an API error into the same file an answer would go
+  to, so an eval that was never measured scored 0 in both arms and appeared in
+  the evidence-free list. Such a pair is now reported as **not measured** and
+  excluded from the totals — unknown, never refuted — and `--require-delta`
+  skips them while failing outright if *nothing* could be measured.
 
-Both were found by opening `scripts/ab-results/<eval>_with.txt` after a run
-that looked plausible in aggregate. When a delta is negative or an eval reports
+All three were found by opening `scripts/ab-results/<eval>_with.txt` after a run
+that looked plausible in aggregate. When a delta is negative, or an eval reports
 zero discriminating checks, read the two files before concluding anything about
 the skill — the instrument is the more likely defect.
 
