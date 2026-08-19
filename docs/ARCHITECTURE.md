@@ -23,6 +23,7 @@ Located in `.github/workflows/`, these are called by other skill repos via `uses
 - **`dependency-audit.yml`** -- Composer audit, SAST, dependency review.
 - **`npm-pack-smoke.yml`** -- Verifies the npm tarball ships the right files.
 - **`ci-python.yml`** -- Reusable Python lint/test pipeline.
+- **`tests.yml`** -- Runs a skill repo's own suite under `tests/`: shell, Python, and PHP (PHP toolchain and `composer install` only when the PHP glob matches). Reports whether a repo shipping `skills/*/scripts/` ran any test at all; fatal only when the caller sets `require_tests`.
 
 Auto-merge for Dependabot/Renovate PRs is delegated to `netresearch/.github/.github/workflows/auto-merge-deps.yml@main` via the local caller `auto-merge-deps-caller.yml`; it is **not** hosted in this repo.
 
