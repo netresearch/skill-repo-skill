@@ -303,6 +303,30 @@ check "--require-delta accepts a sampled run" 0 "$?"
 run_runner mixed.json --no-llm --require-delta --samples=3 >/dev/null 2>&1
 check "--require-delta still fails on an evidence-free eval when sampled" 1 "$?"
 
+# --- The aggregate gate ------------------------------------------------------
+# mixed.json holds one discriminating eval and one evidence-free one, so the
+# ratio is exactly 50%. That makes both sides of the floor testable without
+# depending on which evals happen to be marginal.
+out=$(run_runner mixed.json --no-llm --min-evidence-ratio=50)
+rc=$?
+check "a ratio at the floor passes" 0 "$rc"
+contains "the ratio is reported with its floor" \
+    "Evidence ratio: 1/2 measured evals carry a discriminating check (50%), floor 50%" "$out"
+check "the ratio lands in the results file" "50.0" \
+    "$(results_json "['evidence_ratio']")"
+
+run_runner mixed.json --no-llm --min-evidence-ratio=60 >/dev/null 2>&1
+check "a ratio below the floor fails" 1 "$?"
+
+run_runner clean.json --no-llm --min-evidence-ratio=100 >/dev/null 2>&1
+check "a suite where every eval discriminates clears a 100% floor" 0 "$?"
+
+STUB_LIMIT=1 run_runner clean.json --no-llm --min-evidence-ratio=50 >/dev/null 2>&1
+check "the ratio gate fails when nothing could be measured" 1 "$?"
+
+run_runner mixed.json --no-llm --min-evidence-ratio=abc >/dev/null 2>&1
+check "a non-numeric floor is rejected before any model call" 2 "$?"
+
 echo ""
 if [ "$fail" -eq 0 ]; then
     echo "All run-ab-evals tests passed"
