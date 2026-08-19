@@ -105,13 +105,43 @@ For packages containing multiple skills:
    ```
 
 2. Register on Packagist:
-   - Go to https://packagist.org/packages/submit
+   - Go to <https://packagist.org/packages/submit>
    - Enter repository URL
    - Submit
 
 3. Enable auto-update:
    - Configure GitHub webhook for Packagist
    - Or use GitHub Actions integration
+
+## Skill repos that ship their own PHP code
+
+A skill repo with its own `src/`, `bin/` and dependencies runs `composer install` in its own root, locally and in CI. That activates `netresearch/composer-agent-skill-plugin` on the skill repo itself, and the plugin registers the repo as a skill inside itself:
+
+- `extra.ai-agent-skill` is rewritten from the string path into an object (`{"skills": [...], "allow-skills": []}`). `validate-skill.sh` then fails with `composer.json extra.ai-agent-skill could not be parsed`.
+- A `<skills_system>` block is appended to `AGENTS.md`.
+- `composer.json.skill-trust.lock` appears next to `composer.json`.
+
+Deny the plugin in the repo's own config. The package is the skill and has nothing to install into itself. Consumers are unaffected — `allow-plugins` applies to the root package, so an installing project decides for itself:
+
+```json
+{
+  "config": {
+    "allow-plugins": {
+      "netresearch/composer-agent-skill-plugin": false
+    }
+  }
+}
+```
+
+The field is not optional once the repo has dependencies of its own: without an entry, a non-interactive `composer install` exits 1 with `blocked by your allow-plugins config` instead of prompting.
+
+Cover the artefacts in `.gitignore`:
+
+```gitignore
+/vendor/
+/composer.lock
+composer.json.skill-trust.lock
+```
 
 ## Files to NOT Include
 
@@ -170,6 +200,8 @@ Or pre-authorize in composer.json:
   }
 }
 ```
+
+This is the setting for a **consuming** project. A skill repo that ships its own PHP code sets it to `false` for itself — see [Skill repos that ship their own PHP code](#skill-repos-that-ship-their-own-php-code).
 
 ### "SKILL.md not found"
 
