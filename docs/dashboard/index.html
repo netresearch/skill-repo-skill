@@ -433,8 +433,14 @@ function releaseUrl(s) { return `https://github.com/${s.repo}/releases/tag/v${s.
 function measuredUnder(s) {
   const p = s.provenance || {};
   const evalSet = p.eval_set ? `${p.eval_set.count} evals @ ${String(p.eval_set.sha).slice(0, 8)}` : `${s.eval_count} evals`;
+  // How many completions each arm got. A number from one sample per arm is a
+  // coin flip per eval, so the tuple has to say which it is rather than let
+  // the reader assume the firmer one.
+  const samples = p.samples_per_arm
+    ? `${p.samples_per_arm} sample${p.samples_per_arm === 1 ? '' : 's'}/arm`
+    : 'sample count not recorded';
   return `${s.name}@${s.version || 'unknown'} · ${p.harness || 'harness not recorded'}`
-    + ` · model ${s.modelKey || 'unknown'} · ${evalSet}`
+    + ` · model ${s.modelKey || 'unknown'} · ${evalSet} · ${samples}`
     + (p.run_date ? ` · ${p.run_date.split('T')[0]}` : '');
 }
 function skillUrl(s) { return ghUrl(s, s.skill_path || `skills/${s.name}/SKILL.md`); }
@@ -465,7 +471,7 @@ document.getElementById('headerMeta').innerHTML =
   `<span><span class="num">${skills.length}</span> skills</span>` +
   `<span><span class="num">${totalEvals}</span> evals</span>` +
   `<span><span class="num">+${(avgDelta * 100).toFixed(0)}%</span> avg delta</span>` +
-  `<span title="A delta is measured for one skill version under one harness, model and eval set — it is not a property of the skill. Hover a delta for the tuple behind it.">` +
+  `<span title="A delta is measured for one skill version under one harness, model, eval set and sample count — it is not a property of the skill. Hover a delta for the tuple behind it.">` +
   `model ${tupleField(skills.map(s => s.modelKey), 'unknown')} · ` +
   `${tupleField(skills.map(s => (s.provenance || {}).harness), 'harness not recorded')}</span>` +
   `<span>${DATA.generated.split('T')[0]}</span>`;
