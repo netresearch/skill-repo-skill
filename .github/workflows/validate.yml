@@ -10,6 +10,7 @@ jobs:
   validate:
     name: Skill Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Harden Runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -192,7 +193,13 @@ jobs:
           fi
           COUNT=$(echo "$SCRIPTS" | wc -l)
           echo "Found $COUNT shell script(s)"
-          sudo apt-get update -qq > /dev/null 2>&1 && sudo apt-get install -y -qq shellcheck > /dev/null 2>&1
+          # Set apt timeouts to prevent indefinite hangs on slow mirrors
+          sudo mkdir -p /etc/apt/apt.conf.d
+          echo 'Acquire::Retries "3";' | sudo tee /etc/apt/apt.conf.d/99-timeouts > /dev/null
+          echo 'Acquire::http::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-timeouts > /dev/null
+          echo 'Acquire::https::Timeout "15";' | sudo tee -a /etc/apt/apt.conf.d/99-timeouts > /dev/null
+          timeout 60 sudo apt-get update -qq 2>&1 | tail -5 || echo "apt-get update completed or timed out"
+          timeout 60 sudo apt-get install -y -qq shellcheck 2>&1 | tail -5 || { echo "::error::Failed to install shellcheck within timeout"; exit 1; }
           FAILED=0
           while IFS= read -r script; do
             [[ -z "$script" ]] && continue
