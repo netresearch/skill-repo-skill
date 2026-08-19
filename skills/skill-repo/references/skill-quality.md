@@ -113,11 +113,19 @@ three-sample runs of this repo's own suite, nothing changed in between, still
 disagreed about four evals — all of them at the 0↔1 boundary, where a single
 marginal assertion decides the verdict. The aggregate held (24 vs 26
 discriminating checks, 8 vs 6 evidence-free); the membership of the list did
-not. So read a `--require-delta` failure as *"these evals were marginal in
-this run"*, not as *"these evals carry no evidence"*, and do not gate a merge
-on it yet. Tracked in
-[#238](https://github.com/netresearch/skill-repo-skill/issues/238), which
-weighs gating on the aggregate instead.
+not.
+
+So the two flags have different jobs:
+
+| flag | what it is for |
+|---|---|
+| `--require-delta` | a **reading** signal. Read a failure as "these evals were marginal in this run", open the two arms, decide. Do not block a merge on it. |
+| `--min-evidence-ratio=P` | the **gate**. Fails unless at least P percent of the *measured* evals carry a discriminating check — the quantity that held still across both runs. |
+
+Pick the floor from a measurement of the suite rather than from taste, and
+leave headroom for the boundary cases: this suite measured 62% and 71% on two
+consecutive runs, so a floor of 50% holds while a floor of 70% would fail
+every other time — which would be the same coin flip one level up.
 
 The cost is linear and real: `2 × N` completions per eval, so the default
 triples what a single-sample sweep costs. Use `--samples=1` for a cheap

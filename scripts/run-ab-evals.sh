@@ -1,11 +1,16 @@
 #!/bin/bash
 # run-ab-evals.sh - A/B test evals WITHOUT vs WITH skill context
-# Usage: ./scripts/run-ab-evals.sh [--no-llm] [--samples=N] [--require-delta] [concurrency]
+# Usage: ./scripts/run-ab-evals.sh [--no-llm] [--samples=N]
+#            [--min-evidence-ratio=P] [--require-delta] [concurrency]
 # Default concurrency: 4 (parallel eval pairs)
 # --no-llm: Skip LLM-based grading of expectations (regex assertions only)
 # --samples=N: completions per arm (default 1). Every per-assertion verdict is
 #   then a majority over the samples. --require-delta demands N>=2, because a
 #   verdict from a single completion flips between runs on unchanged evals.
+# --min-evidence-ratio=P: exit 1 unless at least P percent of the MEASURED evals
+#   carry a discriminating check. This is the gate the measurements support: at
+#   --samples=3 the per-eval membership still moves between runs, the ratio does
+#   not. Prefer it over --require-delta for anything that blocks a merge.
 # --require-delta: exit 1 if any eval has no discriminating assertion, i.e. no
 #   assertion that the no-skill baseline fails and the with-skill run passes.
 #   Such an eval measures boilerplate the model produces either way; it cannot
@@ -30,6 +35,11 @@ REQUIRE_DELTA=false
 # but a single sample cannot support a gate: unchanged evals were measured
 # flipping between discriminating and not on consecutive runs (issue #236).
 SAMPLES=1
+# Fraction of measured evals that must contribute at least one discriminating
+# check, as a percentage. Empty = not enforced. This is the gate that survives
+# the noise: per-eval membership moves between runs even at --samples=3, while
+# the ratio does not (issue #238).
+MIN_EVIDENCE_RATIO=""
 CONCURRENCY=4
 EVALS_FILE=""
 SKILL_FILE=""
@@ -38,6 +48,7 @@ for arg in "$@"; do
         --no-llm) NO_LLM=true ;;
         --require-delta) REQUIRE_DELTA=true ;;
         --samples=*) SAMPLES="${arg#--samples=}" ;;
+        --min-evidence-ratio=*) MIN_EVIDENCE_RATIO="${arg#--min-evidence-ratio=}" ;;
         --evals=*) EVALS_FILE="${arg#--evals=}" ;;
         --skill=*) SKILL_FILE="${arg#--skill=}" ;;
         [0-9]*) CONCURRENCY="$arg" ;;
@@ -47,6 +58,10 @@ done
 # Defaults if not provided
 if ! [[ "$SAMPLES" =~ ^[1-9][0-9]*$ ]]; then
     echo "--samples must be a positive integer, got '$SAMPLES'" >&2
+    exit 2
+fi
+if [[ -n "$MIN_EVIDENCE_RATIO" ]] && ! [[ "$MIN_EVIDENCE_RATIO" =~ ^[0-9]+$ ]]; then
+    echo "--min-evidence-ratio must be a whole percentage, got '$MIN_EVIDENCE_RATIO'" >&2
     exit 2
 fi
 if [[ "$REQUIRE_DELTA" == "true" && "$SAMPLES" -lt 2 ]]; then
@@ -654,6 +669,17 @@ with open(os.environ["AB_OUT"], "w") as f:
         # Checks the baseline fails and the skill run passes. An eval with
         # none of them cannot support a claim that the skill changed anything.
         "discriminating_checks": int(os.environ["AB_DISCRIMINATING"]),
+        # Share of measured evals carrying at least one discriminating check.
+        # Stable across runs where the per-eval membership is not, so this is
+        # the number to gate on and to quote.
+        "evidence_ratio": (
+            round(
+                (int(os.environ["AB_EVAL_COUNT"]) - len(unmeasured) - len(no_delta))
+                * 100.0
+                / max(1, int(os.environ["AB_EVAL_COUNT"]) - len(unmeasured)),
+                1,
+            )
+        ),
         "evals_without_delta": no_delta,
         # Pairs where at least one arm carried no answer at all. Unknown, not
         # evidence-free: excluded from the totals and from --require-delta.
@@ -684,6 +710,25 @@ fi
 
 echo ""
 echo "Results JSON: $RESULTS_DIR/ab-results.json"
+
+# The gate the two-run comparison actually supports. Per-eval membership moved
+# between two identical --samples=3 runs (24 vs 26 discriminating checks, but
+# four evals swapped sides); the RATIO of evals carrying evidence did not.
+if [[ -n "$MIN_EVIDENCE_RATIO" ]]; then
+    measured_evals=$((EVAL_COUNT - ${#EVALS_UNMEASURED[@]}))
+    if [[ "$measured_evals" -le 0 ]]; then
+        echo "::error::--min-evidence-ratio: nothing was measured — every eval pair carried a non-answer" >&2
+        exit 1
+    fi
+    with_evidence=$((measured_evals - ${#EVALS_WITHOUT_DELTA[@]}))
+    ratio=$(( with_evidence * 100 / measured_evals ))
+    echo ""
+    echo "Evidence ratio: ${with_evidence}/${measured_evals} measured evals carry a discriminating check (${ratio}%), floor ${MIN_EVIDENCE_RATIO}%"
+    if [[ "$ratio" -lt "$MIN_EVIDENCE_RATIO" ]]; then
+        echo "::error::--min-evidence-ratio: ${ratio}% of measured evals carry a discriminating check, below the ${MIN_EVIDENCE_RATIO}% floor" >&2
+        exit 1
+    fi
+fi
 
 if [[ "$REQUIRE_DELTA" == "true" ]]; then
     # A run that measured nothing must not pass the gate: without this floor an
