@@ -107,44 +107,54 @@ jobs:
           PLUGIN_FILE=".claude-plugin/plugin.json"
           PLUGIN_VERSION=$(python3 -c "import json; print(json.load(open('$PLUGIN_FILE'))['version'])")
 
-          # Find SKILL.md
-          SKILL_FILE=""
+          # Every SKILL.md, not just the first: a repo shipping several skills
+          # had the others' versions unchecked, the same first-match-wins hole
+          # the validator had (issue #214).
+          SKILL_FILES=()
           if [[ -f "SKILL.md" ]]; then
-            SKILL_FILE="SKILL.md"
-          else
-            for f in skills/*/SKILL.md; do
-              if [[ -f "$f" ]]; then
-                SKILL_FILE="$f"
-                break
-              fi
-            done
+            SKILL_FILES+=("SKILL.md")
           fi
+          for f in skills/*/SKILL.md; do
+            [[ -f "$f" ]] && SKILL_FILES+=("$f")
+          done
 
-          if [[ -z "${SKILL_FILE}" ]]; then
+          if [[ ${#SKILL_FILES[@]} -eq 0 ]]; then
             echo "No SKILL.md found, skipping"
             exit 0
           fi
 
-          # Extract version from YAML frontmatter
-          SKILL_VERSION=$(sed -n '/^---$/,/^---$/p' "${SKILL_FILE}" \
-            | grep -E '^\s*version:' \
-            | head -1 \
-            | sed 's/.*version:[[:space:]]*//' \
-            | tr -d '"'"'")
-
-          if [[ -z "${SKILL_VERSION}" ]]; then
-            echo "No metadata.version in ${SKILL_FILE} frontmatter, skipping"
-            exit 0
-          fi
-
           echo "plugin.json version: ${PLUGIN_VERSION}"
-          echo "SKILL.md version:    ${SKILL_VERSION}"
+          MISMATCH=0
+          CHECKED=0
+          for SKILL_FILE in "${SKILL_FILES[@]}"; do
+            # Extract version from YAML frontmatter
+            SKILL_VERSION=$(sed -n '/^---$/,/^---$/p' "${SKILL_FILE}" \
+              | grep -E '^\s*version:' \
+              | head -1 \
+              | sed 's/.*version:[[:space:]]*//' \
+              | tr -d '"'"'")
 
-          if [[ "${PLUGIN_VERSION}" != "${SKILL_VERSION}" ]]; then
-            echo "::error::Version mismatch — plugin.json (${PLUGIN_VERSION}) != SKILL.md metadata.version (${SKILL_VERSION})"
+            if [[ -z "${SKILL_VERSION}" ]]; then
+              echo "No metadata.version in ${SKILL_FILE} frontmatter, skipping"
+              continue
+            fi
+
+            CHECKED=$((CHECKED + 1))
+            echo "${SKILL_FILE} version: ${SKILL_VERSION}"
+            if [[ "${PLUGIN_VERSION}" != "${SKILL_VERSION}" ]]; then
+              echo "::error file=${SKILL_FILE}::Version mismatch — plugin.json (${PLUGIN_VERSION}) != ${SKILL_FILE} metadata.version (${SKILL_VERSION})"
+              MISMATCH=1
+            fi
+          done
+
+          if [[ "${MISMATCH}" -eq 1 ]]; then
             exit 1
           fi
-          echo "Versions match"
+          if [[ "${CHECKED}" -eq 0 ]]; then
+            echo "No SKILL.md declares metadata.version, nothing to compare"
+            exit 0
+          fi
+          echo "Versions match in ${CHECKED} SKILL.md file(s)"
 
       - name: ShellCheck scripts
         run: |

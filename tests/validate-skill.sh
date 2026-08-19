@@ -37,7 +37,9 @@ fi
 
 PASS=0
 FAIL=0
-ACCEPT_LINE="Description starts with 'Use when'"
+# Every per-skill message is prefixed with the file it is about, so the
+# assertion matches from the word after the path onwards.
+ACCEPT_LINE="description starts with 'Use when'"
 
 # fixture <name> <raw-content> -> echoes the created dir path
 fixture() {
@@ -131,6 +133,38 @@ if [[ ${#YAML_RUNNER[@]} -gt 0 ]]; then
 else
     echo "== PyYAML-authoritative path: SKIPPED (no yaml-capable python3 or uv) =="
 fi
+
+# #214: a repo shipping several skills must have every one of them validated.
+# Before this, discovery stopped at the first skills/*/SKILL.md, so a defect in
+# any later skill was invisible — matrix-skill carried a 1348-word SKILL.md
+# under a green "Skill Validation" for as long as the repo existed. The second
+# skill here is the one that is broken, so the check fails if discovery ever
+# goes back to first-match-wins.
+echo "== Multi-skill discovery (#214) =="
+multi="$TMP/fx_multi"
+rm -rf "$multi"
+mkdir -p "$multi/skills/aaa-good" "$multi/skills/zzz-broken" "$multi/skills/zzz-long"
+printf '%b' "${hdr}description: Use when doing X\n---\n# Good\n" > "$multi/skills/aaa-good/SKILL.md"
+printf '%b' "${hdr}description: 'Helps with X'\n---\n# Broken\n" > "$multi/skills/zzz-broken/SKILL.md"
+# Over the 500-word cap, in a skill that is not the first alphabetically.
+{
+    printf '%b' "${hdr}description: Use when doing Y\n---\n# Long\n"
+    for _ in $(seq 1 520); do printf 'word '; done
+} > "$multi/skills/zzz-long/SKILL.md"
+multi_out="$(run_validator fallback "$multi")"
+
+if grep -qF "skills/aaa-good/SKILL.md description starts with 'Use when'" <<<"$multi_out"; then ((PASS++)); else
+    echo "  FAIL [multi] first skill not validated"; ((FAIL++)); fi
+if grep -qF "skills/zzz-broken/SKILL.md description must start with 'Use when'" <<<"$multi_out"; then ((PASS++)); else
+    echo "  FAIL [multi] a later skill's bad description was not reported"; ((FAIL++)); fi
+if grep -qE "skills/zzz-long/SKILL.md is [0-9]+ words \(max 500\)" <<<"$multi_out"; then ((PASS++)); else
+    echo "  FAIL [multi] a later skill's word count was not reported"; ((FAIL++)); fi
+# Discovery itself, independent of any single verdict: all three are reported.
+# (Not asserted on the exit code — these fixtures lack composer.json and README,
+# so the run exits non-zero either way and the assertion could not fail.)
+found_count="$(grep -cF 'SKILL.md found:' <<<"$multi_out")"
+if [[ "$found_count" -eq 3 ]]; then ((PASS++)); else
+    echo "  FAIL [multi] expected 3 discovered skills, got $found_count"; ((FAIL++)); fi
 
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"

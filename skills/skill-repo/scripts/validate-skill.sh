@@ -32,31 +32,49 @@ fi
 echo "Validating skill repository: $REPO_DIR"
 echo "========================================"
 
-# --- Discover SKILL.md ---
-SKILL_FILE=""
+# --- Discover every SKILL.md ---
+# A repo may ship several skills. Validating only the first one meant the rest
+# had no frontmatter check, no "Use when" check and no word count: matrix-skill
+# reported a single 498-word line for skills/matrix-administration while
+# matrix-communication sat at 896 words, over the cap, for as long as the repo
+# existed (issue #214). Every skill found is validated and every finding counts
+# toward the exit code.
+SKILL_FILES=()
 if [[ -f "$REPO_DIR/SKILL.md" ]]; then
-    SKILL_FILE="$REPO_DIR/SKILL.md"
-else
-    for f in "$REPO_DIR"/skills/*/SKILL.md; do
-        if [[ -f "$f" ]]; then
-            SKILL_FILE="$f"
-            break
-        fi
-    done
+    SKILL_FILES+=("$REPO_DIR/SKILL.md")
 fi
+for f in "$REPO_DIR"/skills/*/SKILL.md; do
+    if [[ -f "$f" ]]; then
+        # A skills/<name>/SKILL.md that is the root file (symlink or hardlink)
+        # would otherwise be reported twice under two names.
+        if [[ ${#SKILL_FILES[@]} -gt 0 && "$f" -ef "${SKILL_FILES[0]}" ]]; then
+            continue
+        fi
+        SKILL_FILES+=("$f")
+    fi
+done
 
-# --- SKILL.md checks ---
-if [[ -n "$SKILL_FILE" ]]; then
-    success "SKILL.md found: ${SKILL_FILE#"$REPO_DIR"/}"
+# --- Per-skill checks ---
+# Every message names the file it is about, so a finding in a multi-skill repo
+# is attributable without counting output lines.
+validate_skill_md() {
+    local SKILL_FILE="$1"
+    local REL="${SKILL_FILE#"$REPO_DIR"/}"
+    local SKILL_NAME=""
+    # Declared local so nothing carries over from the previous skill in the loop.
+    local CLOSING_LINE FRONTMATTER EXTRA_FIELDS FIELD_NAMES DESC WORDS
+    local RELATIVE_PATHS COUNT SKILL_DIR SKILL_DIR_REL CHECKPOINTS_JUSTIFIED
+    local UNTESTED MISCLASSIFIED f s base
+    success "SKILL.md found: $REL"
 
     # Frontmatter delimiter
     if head -1 "$SKILL_FILE" | grep -q "^---$"; then
         # Verify closing --- delimiter exists (within first 30 lines)
         CLOSING_LINE=$(sed -n '2,30{/^---$/=}' "$SKILL_FILE" | head -1)
         if [[ -z "$CLOSING_LINE" ]]; then
-            error "SKILL.md frontmatter has opening --- but no closing --- delimiter"
+            error "$REL frontmatter has opening --- but no closing --- delimiter"
         else
-            success "SKILL.md has frontmatter"
+            success "$REL has frontmatter"
         fi
 
         # Extract frontmatter fields (between first two --- lines)
@@ -66,22 +84,28 @@ if [[ -n "$SKILL_FILE" ]]; then
         # Allowed: name, description, license, compatibility, metadata, allowed-tools
         EXTRA_FIELDS=$(echo "$FRONTMATTER" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description|license|compatibility|metadata|allowed-tools):" || true)
         if [[ -z "$EXTRA_FIELDS" ]]; then
-            success "Frontmatter fields are valid per Agent Skills spec"
+            success "$REL frontmatter fields are valid per Agent Skills spec"
         else
             FIELD_NAMES=$(echo "$EXTRA_FIELDS" | sed 's/:.*//' | tr '\n' ', ' | sed 's/,$//')
-            error "Frontmatter has non-spec fields: $FIELD_NAMES (allowed: name, description, license, compatibility, metadata, allowed-tools)"
+            error "$REL frontmatter has non-spec fields: $FIELD_NAMES (allowed: name, description, license, compatibility, metadata, allowed-tools)"
         fi
 
         # Check name field
         if echo "$FRONTMATTER" | grep -q "^name:"; then
-            NAME=$(echo "$FRONTMATTER" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
-            if [[ "$NAME" =~ ^[a-z0-9-]{1,64}$ ]]; then
-                success "SKILL.md name valid: $NAME"
+            SKILL_NAME=$(echo "$FRONTMATTER" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
+            # The plugin.json comparison further down uses one name. Single-skill
+            # repos keep the behaviour they had; multi-skill repos skip that
+            # comparison anyway, since plugin.json names the plugin, not a skill.
+            if [[ -z "$NAME" ]]; then
+                NAME="$SKILL_NAME"
+            fi
+            if [[ "$SKILL_NAME" =~ ^[a-z0-9-]{1,64}$ ]]; then
+                success "$REL name valid: $SKILL_NAME"
             else
-                error "SKILL.md name invalid (lowercase, hyphens, max 64): $NAME"
+                error "$REL name invalid (lowercase, hyphens, max 64): $SKILL_NAME"
             fi
         else
-            error "SKILL.md missing 'name' field"
+            error "$REL missing 'name' field"
         fi
 
         # Check description field and prefix
@@ -151,25 +175,25 @@ print(desc if desc is not None else "")
 PYEOF
 )
             if [[ "$DESC" == "__PARSE_ERROR__" ]]; then
-                error "SKILL.md frontmatter is not valid YAML (could not parse 'description')"
+                error "$REL frontmatter is not valid YAML (could not parse 'description')"
             elif [[ "$DESC" == Use\ when* ]]; then
-                success "Description starts with 'Use when'"
+                success "$REL description starts with 'Use when'"
             else
-                error "Description must start with 'Use when': ${DESC:0:60}..."
+                error "$REL description must start with 'Use when': ${DESC:0:60}..."
             fi
         else
-            error "SKILL.md missing 'description' field"
+            error "$REL missing 'description' field"
         fi
     else
-        error "SKILL.md missing frontmatter (must start with ---)"
+        error "$REL missing frontmatter (must start with ---)"
     fi
 
     # Word count check (max 500)
     WORDS=$(wc -w < "$SKILL_FILE")
     if [[ $WORDS -le 500 ]]; then
-        success "SKILL.md is $WORDS words (under 500 limit)"
+        success "$REL is $WORDS words (under 500 limit)"
     else
-        error "SKILL.md is $WORDS words (max 500)"
+        error "$REL is $WORDS words (max 500)"
     fi
     # Check for relative script paths that should use ${CLAUDE_SKILL_DIR}
     # Matches: uv run scripts/, python3 scripts/, python scripts/, bash scripts/, ./scripts/, sh scripts/
@@ -177,7 +201,7 @@ PYEOF
     RELATIVE_PATHS=$(grep -nE '(uv run|python3?|bash|sh|\./)([ ]+)scripts/' "$SKILL_FILE" | grep -v 'CLAUDE_SKILL_DIR' || true)
     if [[ -n "$RELATIVE_PATHS" ]]; then
         COUNT=$(echo "$RELATIVE_PATHS" | wc -l)
-        warning "SKILL.md has $COUNT script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
+        warning "$REL has $COUNT script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
     fi
 
     # checkpoints.yaml presence (warning only — many skills legitimately lack
@@ -228,43 +252,6 @@ PYEOF
         fi
     fi
 
-    # --- Shebang without the committed executable bit ---
-    # ruff's EXE001 covers the Python case, but it does not fire on every
-    # developer machine: the same pinned ruff, same command, same mode-0644
-    # file passes locally and fails on the runner (issue #235, mechanism
-    # unestablished). A local "clean" is therefore not evidence, and the first
-    # signal is a red CI job on someone else's push.
-    #
-    # This reads the INDEX rather than the working tree, so it answers the same
-    # everywhere regardless of what the filesystem reports. Severity follows
-    # what CI already enforces: an error for *.py, because ruff fails the build
-    # on exactly these; a warning for *.sh, where nothing fails today and a
-    # shebang on a file only ever invoked as `bash file` is merely decorative.
-    if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-        shebang_no_exec() { # shebang_no_exec <pathspec...>
-            git -C "$REPO_DIR" ls-files -s -- "$@" 2>/dev/null \
-                | awk '$1=="100644"{ sub(/^[0-9]+ [0-9a-f]+ [0-9]+\t/, ""); print }' \
-                | while IFS= read -r f; do
-                    [[ -n "$f" ]] || continue
-                    case "$(head -c 2 "$REPO_DIR/$f" 2>/dev/null)" in
-                        '#!') printf '%s ' "$f" ;;
-                    esac
-                done
-        }
-
-        PY_NOT_EXEC="$(shebang_no_exec '*.py')"; PY_NOT_EXEC="${PY_NOT_EXEC% }"
-        SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
-
-        if [[ -n "$PY_NOT_EXEC" ]]; then
-            error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
-        elif [[ -z "$SH_NOT_EXEC" ]]; then
-            success "every committed script with a shebang is mode 100755"
-        fi
-        if [[ -n "$SH_NOT_EXEC" ]]; then
-            warning "committed 100644 but carries a shebang: ${SH_NOT_EXEC} — either make it executable (chmod +x && git update-index --chmod=+x) or drop the shebang if it is only ever run as \`bash <file>\`"
-        fi
-    fi
-
     # --- LLM checkpoints that are mechanically verifiable ---
     # add-checkpoints reserves llm_reviews for "subjective requirements that
     # can't be mechanically verified". A prompt that opens a line with a
@@ -298,11 +285,56 @@ PYEOF
         ' "$SKILL_DIR/checkpoints.yaml")
         MISCLASSIFIED="${MISCLASSIFIED% }"
         if [[ -n "$MISCLASSIFIED" ]]; then
-            warning "llm_reviews checkpoint(s) contain a runnable command: ${MISCLASSIFIED} — if the command decides the outcome, move it to mechanical (type: command); keep the LLM entry only for the judgement the command cannot make"
+            warning "${SKILL_DIR_REL}/checkpoints.yaml: llm_reviews checkpoint(s) contain a runnable command: ${MISCLASSIFIED} — if the command decides the outcome, move it to mechanical (type: command); keep the LLM entry only for the judgement the command cannot make"
         fi
     fi
+}
+
+if [[ ${#SKILL_FILES[@]} -gt 0 ]]; then
+    for skill_file in "${SKILL_FILES[@]}"; do
+        validate_skill_md "$skill_file"
+    done
 else
     error "SKILL.md not found (checked root and skills/*/)"
+fi
+
+# --- Shebang without the committed executable bit ---
+# Repo-wide, so it runs once rather than once per skill.
+#
+# ruff's EXE001 covers the Python case, but it does not fire on every developer
+# machine: the same pinned ruff, same command, same mode-0644 file passes
+# locally and fails on the runner (issue #235, mechanism unestablished). A local
+# "clean" is therefore not evidence, and the first signal is a red CI job on
+# someone else's push.
+#
+# This reads the INDEX rather than the working tree, so it answers the same
+# everywhere regardless of what the filesystem reports. Severity follows what CI
+# already enforces: an error for *.py, because ruff fails the build on exactly
+# these; a warning for *.sh, where nothing fails today and a shebang on a file
+# only ever invoked as `bash file` is merely decorative.
+if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    shebang_no_exec() { # shebang_no_exec <pathspec...>
+        git -C "$REPO_DIR" ls-files -s -- "$@" 2>/dev/null \
+            | awk '$1=="100644"{ sub(/^[0-9]+ [0-9a-f]+ [0-9]+\t/, ""); print }' \
+            | while IFS= read -r f; do
+                [[ -n "$f" ]] || continue
+                case "$(head -c 2 "$REPO_DIR/$f" 2>/dev/null)" in
+                    '#!') printf '%s ' "$f" ;;
+                esac
+            done
+    }
+
+    PY_NOT_EXEC="$(shebang_no_exec '*.py')"; PY_NOT_EXEC="${PY_NOT_EXEC% }"
+    SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
+
+    if [[ -n "$PY_NOT_EXEC" ]]; then
+        error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
+    elif [[ -z "$SH_NOT_EXEC" ]]; then
+        success "every committed script with a shebang is mode 100755"
+    fi
+    if [[ -n "$SH_NOT_EXEC" ]]; then
+        warning "committed 100644 but carries a shebang: ${SH_NOT_EXEC} — either make it executable (chmod +x && git update-index --chmod=+x) or drop the shebang if it is only ever run as \`bash <file>\`"
+    fi
 fi
 
 # --- Required files ---
