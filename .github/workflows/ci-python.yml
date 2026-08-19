@@ -146,28 +146,31 @@ jobs:
             .github/workflows/*.yml
             .github/workflows/*.yaml
 
-      # The matrix is only a guarantee if the interpreter actually follows it.
-      # Asserted rather than printed: a version input that silently falls back
-      # to the runner's default would otherwise look like a passing matrix.
-      - name: Assert the matrix interpreter is the one uv resolves
+      # The matrix is only a guarantee if the interpreter actually follows it,
+      # and the failure mode is silent: a version input that does not take
+      # effect still produces N green jobs with N different names.
+      #
+      # Two things make it a guarantee, so both are asserted rather than
+      # assumed. UV_PYTHON is what steers `uv run` — measured directly:
+      # `UV_PYTHON=3.12 uv run --no-project python3 -V` answers 3.12.13 on a
+      # machine whose default is 3.14. setup-uv sets it from python-version;
+      # if a future version stops doing that, this step says so instead of the
+      # matrix quietly collapsing onto one interpreter.
+      - name: Assert the matrix interpreter is installed and selected
         env:
           PYTHON_VERSION: ${{ matrix.python }}
         run: |
-          # setup-uv's python-version only exports UV_PYTHON; installing it here
-          # makes an unavailable version fail with its own message instead of
-          # surfacing inside the caller's test command.
+          # Explicit install: an unavailable version fails here, with uv's own
+          # message, rather than inside the caller's test command.
           uv python install "$PYTHON_VERSION"
-          # --no-project: resolve the interpreter the way a caller's plain
-          #   `uv run` does, without touching the repo's dependencies.
-          # --no-build: no source distribution is built, so no setup script runs
-          #   (SonarCloud). Nothing is installed here in the first place -- there
-          #   is no --with and no project, so there is nothing to lock either.
-          RESOLVED=$(uv run --no-project --no-build python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
           echo "matrix version : $PYTHON_VERSION"
-          echo "uv resolves to : $RESOLVED"
-          case "$RESOLVED" in
+          echo "UV_PYTHON      : ${UV_PYTHON:-<unset>}"
+          if [[ -z "${UV_PYTHON:-}" ]]; then
+            echo "::error::UV_PYTHON is unset — setup-uv did not apply python-version, so uv run would pick the runner default and every matrix entry would test the same interpreter"; exit 1
+          fi
+          case "$UV_PYTHON" in
             "$PYTHON_VERSION"|"$PYTHON_VERSION".*) ;;
-            *) echo "::error::uv resolves to $RESOLVED, not the matrix version $PYTHON_VERSION — the matrix is not testing what it claims"; exit 1 ;;
+            *) echo "::error::UV_PYTHON is $UV_PYTHON, not the matrix version $PYTHON_VERSION — the matrix is not testing what it claims"; exit 1 ;;
           esac
 
       - name: Run tests
