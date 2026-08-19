@@ -108,6 +108,17 @@ number always says how firm it is.
 `--require-delta` refuses to run below `--samples=2` — gating on a coin flip
 is the failure mode the flag exists to prevent, one level up.
 
+**Sampling reduces the noise; it does not remove it.** Two consecutive
+three-sample runs of this repo's own suite, nothing changed in between, still
+disagreed about four evals — all of them at the 0↔1 boundary, where a single
+marginal assertion decides the verdict. The aggregate held (24 vs 26
+discriminating checks, 8 vs 6 evidence-free); the membership of the list did
+not. So read a `--require-delta` failure as *"these evals were marginal in
+this run"*, not as *"these evals carry no evidence"*, and do not gate a merge
+on it yet. Tracked in
+[#238](https://github.com/netresearch/skill-repo-skill/issues/238), which
+weighs gating on the aggregate instead.
+
 The cost is linear and real: `2 × N` completions per eval, so the default
 triples what a single-sample sweep costs. Use `--samples=1` for a cheap
 indicative run whose *aggregate* is still informative — a suite where half the
