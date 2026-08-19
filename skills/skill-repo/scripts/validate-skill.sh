@@ -32,60 +32,84 @@ fi
 echo "Validating skill repository: $REPO_DIR"
 echo "========================================"
 
-# --- Discover SKILL.md ---
-SKILL_FILE=""
+# --- Discover every SKILL.md ---
+# A repo may ship several skills. Validating only the first one meant the rest
+# had no frontmatter check, no "Use when" check and no word count: matrix-skill
+# reported a single 498-word line for skills/matrix-administration while
+# matrix-communication sat at 896 words, over the cap, for as long as the repo
+# existed (issue #214). Every skill found is validated and every finding counts
+# toward the exit code.
+SKILL_FILES=()
 if [[ -f "$REPO_DIR/SKILL.md" ]]; then
-    SKILL_FILE="$REPO_DIR/SKILL.md"
-else
-    for f in "$REPO_DIR"/skills/*/SKILL.md; do
-        if [[ -f "$f" ]]; then
-            SKILL_FILE="$f"
-            break
-        fi
-    done
+    SKILL_FILES+=("$REPO_DIR/SKILL.md")
 fi
+for f in "$REPO_DIR"/skills/*/SKILL.md; do
+    if [[ -f "$f" ]]; then
+        # A skills/<name>/SKILL.md that is the root file (symlink or hardlink)
+        # would otherwise be reported twice under two names.
+        if [[ ${#SKILL_FILES[@]} -gt 0 && "$f" -ef "${SKILL_FILES[0]}" ]]; then
+            continue
+        fi
+        SKILL_FILES+=("$f")
+    fi
+done
 
-# --- SKILL.md checks ---
-if [[ -n "$SKILL_FILE" ]]; then
-    success "SKILL.md found: ${SKILL_FILE#"$REPO_DIR"/}"
+# --- Per-skill checks ---
+# Every message names the file it is about, so a finding in a multi-skill repo
+# is attributable without counting output lines.
+validate_skill_md() {
+    local skill_file="$1"
+    local rel="${skill_file#"$REPO_DIR"/}"
+    local skill_name=""
+    # Declared local so nothing carries over from the previous skill in the loop.
+    local closing_line frontmatter extra_fields field_names desc words
+    local relative_paths count skill_dir skill_dir_rel checkpoints_justified
+    local untested misclassified f s base
+    success "SKILL.md found: $rel"
 
     # Frontmatter delimiter
-    if head -1 "$SKILL_FILE" | grep -q "^---$"; then
+    if head -1 "$skill_file" | grep -q "^---$"; then
         # Verify closing --- delimiter exists (within first 30 lines)
-        CLOSING_LINE=$(sed -n '2,30{/^---$/=}' "$SKILL_FILE" | head -1)
-        if [[ -z "$CLOSING_LINE" ]]; then
-            error "SKILL.md frontmatter has opening --- but no closing --- delimiter"
+        closing_line=$(sed -n '2,30{/^---$/=}' "$skill_file" | head -1)
+        if [[ -z "$closing_line" ]]; then
+            error "$rel frontmatter has opening --- but no closing --- delimiter"
         else
-            success "SKILL.md has frontmatter"
+            success "$rel has frontmatter"
         fi
 
         # Extract frontmatter fields (between first two --- lines)
-        FRONTMATTER=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$SKILL_FILE")
+        frontmatter=$(sed -n '2,/^---$/{ /^---$/d; p; }' "$skill_file")
 
         # Check frontmatter fields match Agent Skills spec
         # Allowed: name, description, license, compatibility, metadata, allowed-tools
-        EXTRA_FIELDS=$(echo "$FRONTMATTER" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description|license|compatibility|metadata|allowed-tools):" || true)
-        if [[ -z "$EXTRA_FIELDS" ]]; then
-            success "Frontmatter fields are valid per Agent Skills spec"
+        extra_fields=$(echo "$frontmatter" | grep -E "^[a-z_-]+:" | grep -vE "^(name|description|license|compatibility|metadata|allowed-tools):" || true)
+        if [[ -z "$extra_fields" ]]; then
+            success "$rel frontmatter fields are valid per Agent Skills spec"
         else
-            FIELD_NAMES=$(echo "$EXTRA_FIELDS" | sed 's/:.*//' | tr '\n' ', ' | sed 's/,$//')
-            error "Frontmatter has non-spec fields: $FIELD_NAMES (allowed: name, description, license, compatibility, metadata, allowed-tools)"
+            field_names=$(echo "$extra_fields" | sed 's/:.*//' | tr '\n' ', ' | sed 's/,$//')
+            error "$rel frontmatter has non-spec fields: $field_names (allowed: name, description, license, compatibility, metadata, allowed-tools)"
         fi
 
         # Check name field
-        if echo "$FRONTMATTER" | grep -q "^name:"; then
-            NAME=$(echo "$FRONTMATTER" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
-            if [[ "$NAME" =~ ^[a-z0-9-]{1,64}$ ]]; then
-                success "SKILL.md name valid: $NAME"
+        if echo "$frontmatter" | grep -q "^name:"; then
+            skill_name=$(echo "$frontmatter" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
+            # The plugin.json comparison further down uses one name. Single-skill
+            # repos keep the behaviour they had; multi-skill repos skip that
+            # comparison anyway, since plugin.json names the plugin, not a skill.
+            if [[ -z "$NAME" ]]; then
+                NAME="$skill_name"
+            fi
+            if [[ "$skill_name" =~ ^[a-z0-9-]{1,64}$ ]]; then
+                success "$rel name valid: $skill_name"
             else
-                error "SKILL.md name invalid (lowercase, hyphens, max 64): $NAME"
+                error "$rel name invalid (lowercase, hyphens, max 64): $skill_name"
             fi
         else
-            error "SKILL.md missing 'name' field"
+            error "$rel missing 'name' field"
         fi
 
         # Check description field and prefix
-        if echo "$FRONTMATTER" | grep -q "^description:"; then
+        if echo "$frontmatter" | grep -q "^description:"; then
             # Parse the *YAML value* of description so every valid scalar style
             # (plain, single/double-quoted, block) is accepted as long as the
             # parsed value starts with "Use when". Uses PyYAML when available,
@@ -95,7 +119,7 @@ if [[ -n "$SKILL_FILE" ]]; then
             # reported (sentinel __PARSE_ERROR__), not silently re-parsed by the
             # fallback. The stdlib-only fallback runs solely when PyYAML is
             # absent, so the script still works with just python3.
-            DESC=$(FRONTMATTER="$FRONTMATTER" python3 <<'PYEOF' 2>/dev/null || echo "__PARSE_ERROR__"
+            desc=$(FRONTMATTER="$frontmatter" python3 <<'PYEOF' 2>/dev/null || echo "__PARSE_ERROR__"
 import os, re, sys
 
 fm = os.environ["FRONTMATTER"]
@@ -150,56 +174,56 @@ for i, line in enumerate(lines):
 print(desc if desc is not None else "")
 PYEOF
 )
-            if [[ "$DESC" == "__PARSE_ERROR__" ]]; then
-                error "SKILL.md frontmatter is not valid YAML (could not parse 'description')"
-            elif [[ "$DESC" == Use\ when* ]]; then
-                success "Description starts with 'Use when'"
+            if [[ "$desc" == "__PARSE_ERROR__" ]]; then
+                error "$rel frontmatter is not valid YAML (could not parse 'description')"
+            elif [[ "$desc" == Use\ when* ]]; then
+                success "$rel description starts with 'Use when'"
             else
-                error "Description must start with 'Use when': ${DESC:0:60}..."
+                error "$rel description must start with 'Use when': ${desc:0:60}..."
             fi
         else
-            error "SKILL.md missing 'description' field"
+            error "$rel missing 'description' field"
         fi
     else
-        error "SKILL.md missing frontmatter (must start with ---)"
+        error "$rel missing frontmatter (must start with ---)"
     fi
 
     # Word count check (max 500)
-    WORDS=$(wc -w < "$SKILL_FILE")
-    if [[ $WORDS -le 500 ]]; then
-        success "SKILL.md is $WORDS words (under 500 limit)"
+    words=$(wc -w < "$skill_file")
+    if [[ $words -le 500 ]]; then
+        success "$rel is $words words (under 500 limit)"
     else
-        error "SKILL.md is $WORDS words (max 500)"
+        error "$rel is $words words (max 500)"
     fi
     # Check for relative script paths that should use ${CLAUDE_SKILL_DIR}
     # Matches: uv run scripts/, python3 scripts/, python scripts/, bash scripts/, ./scripts/, sh scripts/
     # But ignores lines already using ${CLAUDE_SKILL_DIR}
-    RELATIVE_PATHS=$(grep -nE '(uv run|python3?|bash|sh|\./)([ ]+)scripts/' "$SKILL_FILE" | grep -v 'CLAUDE_SKILL_DIR' || true)
-    if [[ -n "$RELATIVE_PATHS" ]]; then
-        COUNT=$(echo "$RELATIVE_PATHS" | wc -l)
-        warning "SKILL.md has $COUNT script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
+    relative_paths=$(grep -nE '(uv run|python3?|bash|sh|\./)([ ]+)scripts/' "$skill_file" | grep -v 'CLAUDE_SKILL_DIR' || true)
+    if [[ -n "$relative_paths" ]]; then
+        count=$(echo "$relative_paths" | wc -l)
+        warning "$rel has $count script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
     fi
 
     # checkpoints.yaml presence (warning only — many skills legitimately lack
     # one; a documented justification marker suppresses the warning per
     # add-checkpoints' suitability criteria, e.g. purely conceptual skills)
-    SKILL_DIR="$(dirname "$SKILL_FILE")"
-    SKILL_DIR_REL="${SKILL_DIR#"$REPO_DIR"}"
-    SKILL_DIR_REL="${SKILL_DIR_REL#/}"
-    SKILL_DIR_REL="${SKILL_DIR_REL:-.}"
-    CHECKPOINTS_JUSTIFIED=0
-    for f in "$SKILL_FILE" "$REPO_DIR/README.md"; do
+    skill_dir="$(dirname "$skill_file")"
+    skill_dir_rel="${skill_dir#"$REPO_DIR"}"
+    skill_dir_rel="${skill_dir_rel#/}"
+    skill_dir_rel="${skill_dir_rel:-.}"
+    checkpoints_justified=0
+    for f in "$skill_file" "$REPO_DIR/README.md"; do
         if [[ -f "$f" ]] && grep -qiE "^[[:space:]]*([*-][[:space:]]+)?checkpoints:[[:space:]]*none[[:space:]]*\(justified" "$f"; then
-            CHECKPOINTS_JUSTIFIED=1
+            checkpoints_justified=1
             break
         fi
     done
-    if [[ -f "$SKILL_DIR/checkpoints.yaml" ]]; then
+    if [[ -f "$skill_dir/checkpoints.yaml" ]]; then
         success "checkpoints.yaml exists"
-    elif [[ $CHECKPOINTS_JUSTIFIED -eq 1 ]]; then
+    elif [[ $checkpoints_justified -eq 1 ]]; then
         success "checkpoints.yaml absence is justified"
     else
-        warning "checkpoints.yaml not found in ${SKILL_DIR_REL} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
+        warning "checkpoints.yaml not found in ${skill_dir_rel} — add checkpoints (see add-checkpoints skill) or document opt-out with 'Checkpoints: none (justified — <reason>)' in SKILL.md or README.md"
     fi
 
     # --- Shipped scripts without a test ---
@@ -208,10 +232,10 @@ PYEOF
     # that ship scripts had no test file at all. Referenced-by-name is a coarse
     # signal on purpose — it costs nothing and catches the "no test whatsoever"
     # case, which is the one that actually occurs.
-    if [[ -d "$SKILL_DIR/scripts" ]]; then
-        UNTESTED=$(
+    if [[ -d "$skill_dir/scripts" ]]; then
+        untested=$(
             shopt -s nullglob
-            for s in "$SKILL_DIR"/scripts/*; do
+            for s in "$skill_dir"/scripts/*; do
                 [[ -f "$s" ]] || continue
                 base="$(basename "$s")"
                 if [[ -d "$REPO_DIR/tests" ]] && grep -rqF -- "$base" "$REPO_DIR/tests" 2>/dev/null; then
@@ -220,48 +244,11 @@ PYEOF
                 printf '%s ' "$base"
             done
         )
-        UNTESTED="${UNTESTED% }"
-        if [[ -z "$UNTESTED" ]]; then
-            success "every script under ${SKILL_DIR_REL}/scripts is referenced by a test"
+        untested="${untested% }"
+        if [[ -z "$untested" ]]; then
+            success "every script under ${skill_dir_rel}/scripts is referenced by a test"
         else
-            warning "no test references these script(s): ${UNTESTED} — add a test under tests/ (run by the tests.yml reusable) or the script ships unexercised"
-        fi
-    fi
-
-    # --- Shebang without the committed executable bit ---
-    # ruff's EXE001 covers the Python case, but it does not fire on every
-    # developer machine: the same pinned ruff, same command, same mode-0644
-    # file passes locally and fails on the runner (issue #235, mechanism
-    # unestablished). A local "clean" is therefore not evidence, and the first
-    # signal is a red CI job on someone else's push.
-    #
-    # This reads the INDEX rather than the working tree, so it answers the same
-    # everywhere regardless of what the filesystem reports. Severity follows
-    # what CI already enforces: an error for *.py, because ruff fails the build
-    # on exactly these; a warning for *.sh, where nothing fails today and a
-    # shebang on a file only ever invoked as `bash file` is merely decorative.
-    if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
-        shebang_no_exec() { # shebang_no_exec <pathspec...>
-            git -C "$REPO_DIR" ls-files -s -- "$@" 2>/dev/null \
-                | awk '$1=="100644"{ sub(/^[0-9]+ [0-9a-f]+ [0-9]+\t/, ""); print }' \
-                | while IFS= read -r f; do
-                    [[ -n "$f" ]] || continue
-                    case "$(head -c 2 "$REPO_DIR/$f" 2>/dev/null)" in
-                        '#!') printf '%s ' "$f" ;;
-                    esac
-                done
-        }
-
-        PY_NOT_EXEC="$(shebang_no_exec '*.py')"; PY_NOT_EXEC="${PY_NOT_EXEC% }"
-        SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
-
-        if [[ -n "$PY_NOT_EXEC" ]]; then
-            error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
-        elif [[ -z "$SH_NOT_EXEC" ]]; then
-            success "every committed script with a shebang is mode 100755"
-        fi
-        if [[ -n "$SH_NOT_EXEC" ]]; then
-            warning "committed 100644 but carries a shebang: ${SH_NOT_EXEC} — either make it executable (chmod +x && git update-index --chmod=+x) or drop the shebang if it is only ever run as \`bash <file>\`"
+            warning "no test references these script(s): ${untested} — add a test under tests/ (run by the tests.yml reusable) or the script ships unexercised"
         fi
     fi
 
@@ -278,8 +265,8 @@ PYEOF
     # the decidable part, an LLM prompt for the judgement — declares it with a
     # `# mechanical-counterpart: <ID>` comment anywhere in its block, and is
     # then exempt.
-    if [[ -f "$SKILL_DIR/checkpoints.yaml" ]]; then
-        MISCLASSIFIED=$(awk '
+    if [[ -f "$skill_dir/checkpoints.yaml" ]]; then
+        misclassified=$(awk '
             /^llm_reviews:/ { in_llm = 1; next }
             /^[a-z_]+:/     { in_llm = 0 }
             !in_llm         { next }
@@ -295,14 +282,59 @@ PYEOF
                   for (a = 0; a < n; a++) for (b = a + 1; b < n; b++)
                       if (ids[b] < ids[a]) { t = ids[a]; ids[a] = ids[b]; ids[b] = t }
                   for (a = 0; a < n; a++) printf "%s ", ids[a] }
-        ' "$SKILL_DIR/checkpoints.yaml")
-        MISCLASSIFIED="${MISCLASSIFIED% }"
-        if [[ -n "$MISCLASSIFIED" ]]; then
-            warning "llm_reviews checkpoint(s) contain a runnable command: ${MISCLASSIFIED} — if the command decides the outcome, move it to mechanical (type: command); keep the LLM entry only for the judgement the command cannot make"
+        ' "$skill_dir/checkpoints.yaml")
+        misclassified="${misclassified% }"
+        if [[ -n "$misclassified" ]]; then
+            warning "${skill_dir_rel}/checkpoints.yaml: llm_reviews checkpoint(s) contain a runnable command: ${misclassified} — if the command decides the outcome, move it to mechanical (type: command); keep the LLM entry only for the judgement the command cannot make"
         fi
     fi
+}
+
+if [[ ${#SKILL_FILES[@]} -gt 0 ]]; then
+    for skill_file in "${SKILL_FILES[@]}"; do
+        validate_skill_md "$skill_file"
+    done
 else
     error "SKILL.md not found (checked root and skills/*/)"
+fi
+
+# --- Shebang without the committed executable bit ---
+# Repo-wide, so it runs once rather than once per skill.
+#
+# ruff's EXE001 covers the Python case, but it does not fire on every developer
+# machine: the same pinned ruff, same command, same mode-0644 file passes
+# locally and fails on the runner (issue #235, mechanism unestablished). A local
+# "clean" is therefore not evidence, and the first signal is a red CI job on
+# someone else's push.
+#
+# This reads the INDEX rather than the working tree, so it answers the same
+# everywhere regardless of what the filesystem reports. Severity follows what CI
+# already enforces: an error for *.py, because ruff fails the build on exactly
+# these; a warning for *.sh, where nothing fails today and a shebang on a file
+# only ever invoked as `bash file` is merely decorative.
+if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    shebang_no_exec() { # shebang_no_exec <pathspec...>
+        git -C "$REPO_DIR" ls-files -s -- "$@" 2>/dev/null \
+            | awk '$1=="100644"{ sub(/^[0-9]+ [0-9a-f]+ [0-9]+\t/, ""); print }' \
+            | while IFS= read -r f; do
+                [[ -n "$f" ]] || continue
+                case "$(head -c 2 "$REPO_DIR/$f" 2>/dev/null)" in
+                    '#!') printf '%s ' "$f" ;;
+                esac
+            done
+    }
+
+    PY_NOT_EXEC="$(shebang_no_exec '*.py')"; PY_NOT_EXEC="${PY_NOT_EXEC% }"
+    SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
+
+    if [[ -n "$PY_NOT_EXEC" ]]; then
+        error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
+    elif [[ -z "$SH_NOT_EXEC" ]]; then
+        success "every committed script with a shebang is mode 100755"
+    fi
+    if [[ -n "$SH_NOT_EXEC" ]]; then
+        warning "committed 100644 but carries a shebang: ${SH_NOT_EXEC} — either make it executable (chmod +x && git update-index --chmod=+x) or drop the shebang if it is only ever run as \`bash <file>\`"
+    fi
 fi
 
 # --- Required files ---
