@@ -228,6 +228,43 @@ PYEOF
         fi
     fi
 
+    # --- Shebang without the committed executable bit ---
+    # ruff's EXE001 covers the Python case, but it does not fire on every
+    # developer machine: the same pinned ruff, same command, same mode-0644
+    # file passes locally and fails on the runner (issue #235, mechanism
+    # unestablished). A local "clean" is therefore not evidence, and the first
+    # signal is a red CI job on someone else's push.
+    #
+    # This reads the INDEX rather than the working tree, so it answers the same
+    # everywhere regardless of what the filesystem reports. Severity follows
+    # what CI already enforces: an error for *.py, because ruff fails the build
+    # on exactly these; a warning for *.sh, where nothing fails today and a
+    # shebang on a file only ever invoked as `bash file` is merely decorative.
+    if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+        shebang_no_exec() { # shebang_no_exec <pathspec...>
+            git -C "$REPO_DIR" ls-files -s -- "$@" 2>/dev/null \
+                | awk '$1=="100644"{ sub(/^[0-9]+ [0-9a-f]+ [0-9]+\t/, ""); print }' \
+                | while IFS= read -r f; do
+                    [[ -n "$f" ]] || continue
+                    case "$(head -c 2 "$REPO_DIR/$f" 2>/dev/null)" in
+                        '#!') printf '%s ' "$f" ;;
+                    esac
+                done
+        }
+
+        PY_NOT_EXEC="$(shebang_no_exec '*.py')"; PY_NOT_EXEC="${PY_NOT_EXEC% }"
+        SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
+
+        if [[ -n "$PY_NOT_EXEC" ]]; then
+            error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
+        elif [[ -z "$SH_NOT_EXEC" ]]; then
+            success "every committed script with a shebang is mode 100755"
+        fi
+        if [[ -n "$SH_NOT_EXEC" ]]; then
+            warning "committed 100644 but carries a shebang: ${SH_NOT_EXEC} — either make it executable (chmod +x && git update-index --chmod=+x) or drop the shebang if it is only ever run as \`bash <file>\`"
+        fi
+    fi
+
     # --- LLM checkpoints that are mechanically verifiable ---
     # add-checkpoints reserves llm_reviews for "subjective requirements that
     # can't be mechanically verified". A prompt that opens a line with a
