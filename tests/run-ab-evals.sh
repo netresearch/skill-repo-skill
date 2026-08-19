@@ -9,10 +9,10 @@
 #     eval without any of them into a non-zero exit
 #
 # The runner drives `claude -p` per eval, so the fixture puts a stub earlier on
-# PATH. The stub answers differently depending on whether the invocation
-# carries --append-system-prompt, which is exactly what separates the two arms,
-# and grades expectations by looking at the response embedded in the grading
-# prompt. No model is called.
+# PATH. The stub answers differently depending on whether the appended system
+# prompt carries the skill body -- both arms pass --append-system-prompt, since
+# the without arm still gets the no-tools note -- and grades expectations by
+# looking at the response embedded in the grading prompt. No model is called.
 
 set -uo pipefail
 
@@ -46,11 +46,27 @@ cat > "$WORK/bin/claude" <<'STUB'
 # Minimal claude stand-in. Without the skill the answer omits the gotcha; with
 # it, the answer contains it. Grading prompts are answered from the RESPONSE
 # section they carry.
+# Both arms pass --append-system-prompt now (the without arm carries the
+# no-tools note alone), so the flag no longer identifies the arm. What does is
+# whether the appended prompt contains the skill body.
 with_skill=""
+prev=""
 for arg in "$@"; do
     [ "$arg" = "--version" ] && { echo "9.9.9 (Claude Code test stub)"; exit 0; }
-    [ "$arg" = "--append-system-prompt" ] && with_skill=1
+    if [ "$prev" = "--append-system-prompt" ]; then
+        case "$arg" in *"nonroot USER"*) with_skill=1 ;; esac
+    fi
+    prev="$arg"
 done
+# Record the isolation flags so the test can assert they are still passed; a
+# future edit that drops them would otherwise silently let the operator's MCP
+# servers back into the measurement.
+{
+    printf 'CALL'
+    for a in "$@"; do case "$a" in --strict-mcp-config|--mcp-config|--tools) printf ' %s' "$a" ;; esac; done
+    printf '\n'
+} >> "${STUB_CALL_LOG:-/dev/null}"
+
 prompt="${*: -1}"
 case "$prompt" in
     *"You are grading"*)
@@ -124,7 +140,7 @@ run_runner() { # run_runner <evals-file> [extra-flags...]
     local evals="$1"; shift
     (
         cd "$WORK/repo" || exit 99
-        PATH="$WORK/bin:$PATH" bash scripts/run-ab-evals.sh \
+        PATH="$WORK/bin:$PATH" STUB_CALL_LOG="$WORK/calls.log" bash scripts/run-ab-evals.sh \
             --evals="$WORK/repo/skills/demo/evals/$evals" \
             --skill="$WORK/repo/skills/demo/SKILL.md" \
             2 "$@" 2>&1
@@ -167,6 +183,15 @@ check "--require-delta fails on an eval without a discriminating check" 1 "$?"
 
 run_runner clean.json --no-llm --require-delta >/dev/null 2>&1
 check "--require-delta passes when every eval discriminates" 0 "$?"
+
+# --- The measurement is isolated from the operator's environment -------------
+# Every completion call must carry the flags that keep configured MCP servers
+# out of the run; without them the two arms differ in more than the skill.
+total_calls=$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)
+isolated_calls=$(grep -c 'strict-mcp-config' "$WORK/calls.log" 2>/dev/null || echo 0)
+check "every completion call carries the MCP isolation flags" "$total_calls" "$isolated_calls"
+check "the run actually called the stub" "yes" \
+    "$([ "${total_calls:-0}" -gt 0 ] && echo yes || echo no)"
 
 # --- must_not is graded inverted --------------------------------------------
 out=$(run_runner negative.json --no-llm)

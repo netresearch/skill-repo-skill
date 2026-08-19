@@ -46,6 +46,11 @@ RESULTS_DIR="${REPO_DIR}/scripts/ab-results"
 EVAL_MODEL="sonnet"
 GRADER_MODEL="haiku"
 
+# Appended to the system prompt of BOTH arms. Print mode serves no tool calls,
+# and without being told, the model answers an action-shaped prompt by
+# announcing a tool call instead of producing the content the assertions grade.
+NO_TOOLS_NOTE="You have no tools in this session and cannot read or write files. Answer with the content or explanation itself, in the response text."
+
 # The rest of the actor tuple. The harness is the agent runtime that has to
 # discover and apply the skill -- a different one can be worse at that with an
 # unchanged skill -- and the skill version says which text was measured. Both
@@ -124,24 +129,39 @@ run_single() {
     prompt=$(get_eval_field "$idx" "prompt")
     output_file="$RESULTS_DIR/${name}_${mode}.txt"
 
+    # Two isolation steps, both added after a run showed the arms differing in
+    # something other than the skill:
+    #
+    #   * --tools "" drops the built-in tools but NOT the MCP servers the
+    #     operator happens to have configured. On a workstation with
+    #     Gmail/Drive servers attached, answers were about which tools existed
+    #     rather than about the question -- unequally between the arms.
+    #     --strict-mcp-config with an empty --mcp-config removes them.
+    #   * With the tools gone the model still expects to have them: an
+    #     action-shaped prompt ("create a plugin.json") produced "I'll check the
+    #     repo first" and a tool call that print mode cannot serve, i.e. three
+    #     output tokens and no content to grade. NO_TOOLS_NOTE says so up
+    #     front. It is appended to BOTH arms, so the two still differ only in
+    #     the skill.
+    local system_prompt
     if [[ "$mode" == "without" ]]; then
-        timeout 90 claude -p \
-            --no-session-persistence \
-            --disable-slash-commands \
-            --tools "" \
-            --model "$EVAL_MODEL" \
-            "$prompt" \
-            > "$output_file" 2>/dev/null || true
+        system_prompt="$NO_TOOLS_NOTE"
     else
-        timeout 90 claude -p \
-            --no-session-persistence \
-            --disable-slash-commands \
-            --tools "" \
-            --model "$EVAL_MODEL" \
-            --append-system-prompt "$(cat "$SKILL_FILE")" \
-            "$prompt" \
-            > "$output_file" 2>/dev/null || true
+        system_prompt="$(cat "$SKILL_FILE")
+
+$NO_TOOLS_NOTE"
     fi
+
+    timeout 90 claude -p \
+        --no-session-persistence \
+        --disable-slash-commands \
+        --tools "" \
+        --mcp-config '{"mcpServers":{}}' \
+        --strict-mcp-config \
+        --model "$EVAL_MODEL" \
+        --append-system-prompt "$system_prompt" \
+        "$prompt" \
+        > "$output_file" 2>/dev/null || true
 }
 
 run_pair() {
@@ -211,6 +231,8 @@ Format: one line per expectation, e.g.:
         --no-session-persistence \
         --disable-slash-commands \
         --tools "" \
+        --mcp-config '{"mcpServers":{}}' \
+        --strict-mcp-config \
         --model "$GRADER_MODEL" \
         "$grading_prompt" \
         > "$grader_file" 2>/dev/null || true
