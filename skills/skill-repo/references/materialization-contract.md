@@ -201,13 +201,20 @@ without the skill — a straw man that shares no vocabulary with a correct answe
 the check while proving nothing.
 
 **Matching uses the grader's instrument, not a similar one.** `run-ab-evals.sh` grades
-with `grep -qiE` after stripping a leading `(?i)`: case-insensitive POSIX ERE, with no
-type filter — it takes `value or pattern` from *every* assertion. The validator calls the
+with `grep -qiE` after stripping a leading `(?i)`: case-insensitive POSIX ERE, over
+`value or pattern` from *every* assertion whatever its type. The validator calls the
 same binary with the same flags, because Python's `re` disagrees with ERE in ways that
 decide real cases (`[^\n]` excludes the letter `n` in ERE, and `re` is case-sensitive),
 and a self-check measuring with a different engine certifies evals the grader would fail.
-For the same reason a pattern under `tool_use` or `content_regex` is validated too. An
-assertion typed `must_not` is checked inverted: it must NOT match `passing`.
+For the same reason a pattern under `tool_use` or `content_regex` is validated too.
+
+**A `must_not` assertion is inverted in both instruments.** The validator requires that it
+does NOT match `samples.passing`; the grader counts the arm in which the pattern is
+**absent** as the passing one, and a discriminating check accordingly means the baseline
+produced the forbidden answer and the skill run did not. Until August 2026 the grader
+ignored the type and credited whichever arm *contained* the pattern, so a negative
+expectation could not be stated as an assertion at all and had to live in
+`samples.failing`. Both directions are now pinned in `tests/run-ab-evals.sh`.
 
 Two things change for evals **without** a samples block: patterns are now checked to be
 parseable by `grep -E`, and an unparseable one fails — except under a `*_contains` type,

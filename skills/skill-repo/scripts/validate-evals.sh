@@ -14,8 +14,8 @@
 # Patterns are checked with `grep -E` and matched with `grep -qiE`, the same
 # binary and flags run-ab-evals.sh grades with, so the check cannot certify an
 # eval the grader would fail. Every assertion carrying value/pattern counts,
-# whatever its type, because the grader has no type filter either; `must_not`
-# is checked inverted.
+# whatever its type, because the grader greps every one of them; `must_not` is
+# checked inverted here and graded inverted there.
 #
 # Usage: bash validate-evals.sh [path-to-evals.json] [--require-evals]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
@@ -308,10 +308,12 @@ for i, ev in enumerate(evals):
             # A pattern only had to be a non-empty string until now, so an
             # unbalanced group passed validation and first misbehaved wherever
             # the eval was actually graded. Which assertions count is decided by
-            # the grader, not by a type name: run-ab-evals.sh takes
-            # `value or pattern` from EVERY assertion with no type filter, so a
-            # broken pattern under type "tool_use", "content_regex" or any other
-            # label is graded and must be validated the same way.
+            # the grader, not by a type name: run-ab-evals.sh greps
+            # `value or pattern` from EVERY assertion, so a broken pattern under
+            # type "tool_use", "content_regex" or any other label is graded and
+            # must be validated the same way. The type decides only the
+            # DIRECTION of the verdict -- `must_not` passes when the pattern is
+            # absent -- not whether the assertion is graded at all.
             patterns = []
             for j, a in enumerate(assertions):
                 if not isinstance(a, dict):

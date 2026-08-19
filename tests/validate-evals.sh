@@ -171,8 +171,9 @@ bash "$SCRIPT" "$WORK/samples-case.json" >/dev/null 2>&1
 check "case-insensitive like the grader" 0 "$?"
 
 # --- every graded assertion is validated, whatever its type is ---------------
-# The grader takes value-or-pattern from EVERY assertion with no type filter,
-# so a broken pattern under tool_use is graded and must be caught.
+# The grader greps value-or-pattern from EVERY assertion, whatever its type,
+# so a broken pattern under tool_use is graded and must be caught. (The type
+# decides the direction of the verdict, not whether it is graded.)
 suite "$WORK/tooluse-pattern.json" <<'EOF'
 { "name": "broken_pattern_under_tool_use", "prompt": "Anything.",
   "assertions": [{"type": "tool_use", "tool": "Bash", "pattern": "(unclosed group"},
