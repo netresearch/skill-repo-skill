@@ -1,3 +1,9 @@
+# Python tests and an optional Bandit scan for skill repos that ship Python.
+#
+# Scope: Python only. Shell linting is NOT here -- validate.yml already runs
+# ShellCheck over every repo, and a second gate in a workflow only Python repos
+# call would leave shell scripts unchecked wherever ci-python.yml is not used
+# (issue #180).
 name: Python CI
 
 on:
@@ -8,7 +14,11 @@ on:
         type: string
         default: '["3.12", "3.13"]'
       test-command:
-        description: Command to run for testing (receives PYTHON_VERSION env var)
+        description: >-
+          Command to run for testing. The matrix interpreter is installed and
+          exported as both PYTHON_VERSION and UV_PYTHON, so a plain `uv run
+          pytest` already uses it; anything invoking python directly should use
+          `uv run --python "$PYTHON_VERSION" ...` so the matrix is real.
         type: string
         required: true
       run-bandit:
@@ -117,6 +127,11 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
         with:
           enable-cache: true
+          # Installs this interpreter and sets UV_PYTHON to it. Without it the
+          # matrix only exported a version string, so a caller writing plain
+          # `uv run pytest` tested the runner's default interpreter N times and
+          # the matrix silently guaranteed nothing (issue #179).
+          python-version: ${{ matrix.python }}
           # Default glob plus workflow files: callers without Python dependency
           # files (standalone scripts, uv run --with) otherwise get a
           # "No file matched" warning annotation on every run.
@@ -130,6 +145,25 @@ jobs:
             **/*.py.lock
             .github/workflows/*.yml
             .github/workflows/*.yaml
+
+      # The matrix is only a guarantee if the interpreter actually follows it.
+      # Asserted rather than printed: a version input that silently falls back
+      # to the runner's default would otherwise look like a passing matrix.
+      - name: Assert the matrix interpreter is the one uv resolves
+        env:
+          PYTHON_VERSION: ${{ matrix.python }}
+        run: |
+          # setup-uv's python-version only exports UV_PYTHON; installing it here
+          # makes an unavailable version fail with its own message instead of
+          # surfacing inside the caller's test command.
+          uv python install "$PYTHON_VERSION"
+          RESOLVED=$(uv run --no-project python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')
+          echo "matrix version : $PYTHON_VERSION"
+          echo "uv resolves to : $RESOLVED"
+          case "$RESOLVED" in
+            "$PYTHON_VERSION"|"$PYTHON_VERSION".*) ;;
+            *) echo "::error::uv resolves to $RESOLVED, not the matrix version $PYTHON_VERSION — the matrix is not testing what it claims"; exit 1 ;;
+          esac
 
       - name: Run tests
         env:
