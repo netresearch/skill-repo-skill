@@ -43,3 +43,16 @@ jobs:
 
       - name: Version parity
         run: bash skills/skill-repo/scripts/check-version-parity.sh
+
+  # The shellcheck step lives in validate.yml, and lint.yml calls that file from
+  # `main` — so a change to it is not gated by the PR that makes it. Calling the
+  # PR's own copy closes that hole, and pins this repo to the severity its
+  # pre-commit hook already enforces: all 21 scripts here are clean at `style`,
+  # so hook and CI agree by construction instead of by claim.
+  validate-self:
+    name: Skill Validation (this PR's validator)
+    uses: ./.github/workflows/validate.yml
+    permissions:
+      contents: read
+    with:
+      shellcheck-severity: style

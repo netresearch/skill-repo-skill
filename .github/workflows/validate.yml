@@ -2,6 +2,21 @@ name: Validate Skill
 
 on:
   workflow_call:
+    inputs:
+      shellcheck-severity:
+        description: >-
+          Minimum shellcheck severity that fails the job: error (default),
+          warning, info or style. It exists so a repository can hold its
+          pre-commit hook and this job to the SAME level — the hook runs
+          shellcheck at its own default (style) unless given `args`, and a
+          repository whose scripts are clean at that level should say so here
+          rather than let the two gates disagree. Raise it only once the tree
+          passes: a repository carrying a vendored script it does not own
+          (a TYPO3 Core runTests.sh, say) stays on `error` and pins the same
+          value in its hook's `args`.
+        required: false
+        type: string
+        default: error
 
 permissions:
   contents: read
@@ -183,6 +198,11 @@ jobs:
           echo "Versions match in ${CHECKED} SKILL.md file(s)"
 
       - name: ShellCheck scripts
+        env:
+          SEVERITY: ${{ inputs.shellcheck-severity }}
+          # renovate: datasource=github-releases depName=koalaman/shellcheck
+          SHELLCHECK_VERSION: '0.11.0'
+          SHELLCHECK_SHA256: '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198'
         run: |
           # Auto-discover shell scripts in skill directories and root scripts/
           SCRIPTS=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
@@ -193,33 +213,29 @@ jobs:
           fi
           COUNT=$(echo "$SCRIPTS" | wc -l)
           echo "Found $COUNT shell script(s)"
-          # apt applies no timeout to package acquisition, so a mirror that accepts the
-          # connection and then stops responding blocks forever instead of failing. That
-          # stalled this step for 37 minutes on 2026-08-19 (#245). The bound goes into
-          # apt's own config so any child process inherits it.
-          sudo tee /etc/apt/apt.conf.d/99-ci-timeouts >/dev/null <<'CONF'
-          Acquire::Retries "3";
-          Acquire::http::Timeout "30";
-          Acquire::https::Timeout "30";
-          CONF
-          # Output is deliberately not discarded: a stalled fetch is
-          # indistinguishable from a step doing nothing once -qq and
-          # >/dev/null have swallowed it.
-          for attempt in 1 2 3; do
-            if timeout 180 sudo apt-get update && timeout 180 sudo apt-get install -y shellcheck; then
-              break
-            fi
-            if [[ $attempt -eq 3 ]]; then
-              echo "::error::apt could not install shellcheck in three attempts"
-              exit 1
-            fi
-            echo "::warning::apt attempt ${attempt} did not complete within 180s"
-          done
+          # The binary comes from its own release, pinned, NOT from apt: the
+          # pre-commit hook pins shellcheck-py 0.11.0.x while Ubuntu 24.04
+          # ships 0.9.0, and the two disagree — 0.9.0 reports SC2317 on code
+          # 0.11 accepts. At `-S error` that difference was invisible; at any
+          # stricter severity it makes hook and CI contradict each other over
+          # the same file, which is the divergence this input exists to end.
+          # It also removes the apt stall that #245 had to bound: a pinned
+          # tarball with a checksum cannot hang for 37 minutes on a mirror.
+          # --proto/--proto-redir pin the scheme for the request AND for the
+          # redirect GitHub answers with, so -L cannot be walked onto http
+          # (githubactions:S6506).
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            -fsSL --max-time 120 -o /tmp/shellcheck.tar.xz \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c
+          tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
+          sudo install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
           FAILED=0
           while IFS= read -r script; do
             [[ -z "$script" ]] && continue
             echo "Checking: $script"
-            if ! shellcheck -x -S error "$script"; then
+            if ! shellcheck -x -S "$SEVERITY" "$script"; then
               FAILED=1
             fi
           done <<< "$SCRIPTS"
@@ -227,7 +243,7 @@ jobs:
             echo "::error::ShellCheck found errors"
             exit 1
           fi
-          echo "All $COUNT scripts passed ShellCheck"
+          echo "All $COUNT scripts passed ShellCheck at severity $SEVERITY"
 
       - name: Python lint
         run: |

@@ -5,6 +5,15 @@
 # a small drift window between a Renovate bump in CI and the local config
 # catching up; this is the standard pre-commit pattern.
 #
+# "Also runs in CI" means the same check, not merely the same tool: same
+# flags AND same version. shellcheck is the one that drifted on all three —
+# the hook ran at its default severity without `-x` while CI passed
+# `-S error -x`, and CI's binary came from apt (Ubuntu 24.04 ships 0.9.0)
+# while the hook pins 0.11.0.x. A file CI accepted could therefore be
+# uncommittable, and 0.9.0 reports findings 0.11 does not. Both sides now run
+# 0.11.0 with `-x` at `style` (see the shellcheck block below and
+# validate.yml's pinned download plus its `shellcheck-severity` input).
+#
 # This repo dogfoods its own hooks (validate-skill, check-version-parity from
 # skill-repo-skill itself).
 #
@@ -63,4 +72,13 @@ repos:
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
+      # `-x` mirrors CI, which passes it: without it a `source`d file is not
+      # followed, so the two gates would analyse the same script differently
+      # even at equal severity and version. The severity itself is
+      # shellcheck's default (style) here, and validate.yml is called with
+      # `shellcheck-severity: style` to match. The `rev` below and the version
+      # validate.yml downloads are one pair — bump them together, or CI starts
+      # reporting what the hook does not. A repo whose tree is not clean at
+      # `style` pins the SAME lower severity on both sides, not on one.
       - id: shellcheck
+        args: [-x]
