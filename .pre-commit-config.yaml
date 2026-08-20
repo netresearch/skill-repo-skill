@@ -5,6 +5,13 @@
 # a small drift window between a Renovate bump in CI and the local config
 # catching up; this is the standard pre-commit pattern.
 #
+# "Also runs in CI" means the same check, not merely the same tool: where a
+# hook takes `args`, they mirror CI's invocation. shellcheck is the one that
+# drifted — the hook ran at its default severity while CI passed `-S error`,
+# so a file CI accepted could not be committed, and the answer was to bypass
+# the hook. Both sides are now `-x` at `style` (see the shellcheck block and
+# validate.yml's `shellcheck-severity` input).
+#
 # This repo dogfoods its own hooks (validate-skill, check-version-parity from
 # skill-repo-skill itself).
 #
@@ -63,4 +70,11 @@ repos:
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: v0.11.0.1
     hooks:
+      # `-x` mirrors CI, which passes it: without it a `source`d file is not
+      # followed, so the two gates would analyse the same script differently
+      # even at equal severity. The severity itself is shellcheck's default
+      # (style) here, and validate.yml is called with `shellcheck-severity:
+      # style` to match. A repo whose tree is not clean at that level pins the
+      # SAME lower value on both sides rather than only on one.
       - id: shellcheck
+        args: [-x]

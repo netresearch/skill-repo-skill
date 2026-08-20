@@ -2,6 +2,21 @@ name: Validate Skill
 
 on:
   workflow_call:
+    inputs:
+      shellcheck-severity:
+        description: >-
+          Minimum shellcheck severity that fails the job: error (default),
+          warning, info or style. It exists so a repository can hold its
+          pre-commit hook and this job to the SAME level — the hook runs
+          shellcheck at its own default (style) unless given `args`, and a
+          repository whose scripts are clean at that level should say so here
+          rather than let the two gates disagree. Raise it only once the tree
+          passes: a repository carrying a vendored script it does not own
+          (a TYPO3 Core runTests.sh, say) stays on `error` and pins the same
+          value in its hook's `args`.
+        required: false
+        type: string
+        default: error
 
 permissions:
   contents: read
@@ -183,6 +198,8 @@ jobs:
           echo "Versions match in ${CHECKED} SKILL.md file(s)"
 
       - name: ShellCheck scripts
+        env:
+          SEVERITY: ${{ inputs.shellcheck-severity }}
         run: |
           # Auto-discover shell scripts in skill directories and root scripts/
           SCRIPTS=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
@@ -219,7 +236,7 @@ jobs:
           while IFS= read -r script; do
             [[ -z "$script" ]] && continue
             echo "Checking: $script"
-            if ! shellcheck -x -S error "$script"; then
+            if ! shellcheck -x -S "$SEVERITY" "$script"; then
               FAILED=1
             fi
           done <<< "$SCRIPTS"
@@ -227,7 +244,7 @@ jobs:
             echo "::error::ShellCheck found errors"
             exit 1
           fi
-          echo "All $COUNT scripts passed ShellCheck"
+          echo "All $COUNT scripts passed ShellCheck at severity $SEVERITY"
 
       - name: Python lint
         run: |
