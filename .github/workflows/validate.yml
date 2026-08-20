@@ -221,7 +221,11 @@ jobs:
           # the same file, which is the divergence this input exists to end.
           # It also removes the apt stall that #245 had to bound: a pinned
           # tarball with a checksum cannot hang for 37 minutes on a mirror.
-          curl -fsSL --max-time 120 -o /tmp/shellcheck.tar.xz \
+          # --proto/--proto-redir pin the scheme for the request AND for the
+          # redirect GitHub answers with, so -L cannot be walked onto http
+          # (githubactions:S6506).
+          curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            -fsSL --max-time 120 -o /tmp/shellcheck.tar.xz \
             "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
           echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c
           tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
