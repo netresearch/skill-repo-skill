@@ -1,5 +1,14 @@
 # Authoring & CI Gotchas
 
+## Contents
+
+- Word-budget-first authoring
+- macOS / BSD portability for shell **and** test scripts
+- Lint without dirtying the worktree
+- "Skill Validation" can run more than once — wait for all of it
+- Installing the Claude Code CLI with `--ignore-scripts`
+- Generated YAML: exactly one trailing newline
+
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
 [`validation-checklist.md`](validation-checklist.md) (pre-completion checks).

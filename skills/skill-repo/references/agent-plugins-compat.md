@@ -1,5 +1,14 @@
 # Agent Plugins 1.0.0 compatibility
 
+## Contents
+
+- Why two files
+- The portable manifest
+- Generating the Claude manifest
+- Migrating a repo
+- What validation enforces
+- Out of scope
+
 Netresearch skill repos ship **two** manifests. This page says what each one is
 for, which is authoritative, and how to migrate a repo that has only the
 Claude Code one.

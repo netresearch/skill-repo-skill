@@ -146,10 +146,15 @@ rm -rf "$multi"
 mkdir -p "$multi/skills/aaa-good" "$multi/skills/zzz-broken" "$multi/skills/zzz-long"
 printf '%b' "${hdr}description: Use when doing X\n---\n# Good\n" > "$multi/skills/aaa-good/SKILL.md"
 printf '%b' "${hdr}description: 'Helps with X'\n---\n# Broken\n" > "$multi/skills/zzz-broken/SKILL.md"
-# Over the 500-word cap, in a skill that is not the first alphabetically.
+# Over the 500-LINE cap, in a skill that is not the first alphabetically.
+# Was 520 words on one line until the budget was corrected: the spec says
+# "Keep your main SKILL.md under 500 lines", and a word count over the whole
+# file is a different, much tighter rule that also charged the frontmatter to
+# the body. The point of this fixture is unchanged -- a violation in a LATER
+# skill must still be reported -- only the metric it violates.
 {
     printf '%b' "${hdr}description: Use when doing Y\n---\n# Long\n"
-    for _ in $(seq 1 520); do printf 'word '; done
+    for _ in $(seq 1 520); do printf 'line\n'; done
 } > "$multi/skills/zzz-long/SKILL.md"
 multi_out="$(run_validator fallback "$multi")"
 
@@ -157,8 +162,8 @@ if grep -qF "skills/aaa-good/SKILL.md description starts with 'Use when'" <<<"$m
     echo "  FAIL [multi] first skill not validated"; ((FAIL++)); fi
 if grep -qF "skills/zzz-broken/SKILL.md description must start with 'Use when'" <<<"$multi_out"; then ((PASS++)); else
     echo "  FAIL [multi] a later skill's bad description was not reported"; ((FAIL++)); fi
-if grep -qE "skills/zzz-long/SKILL.md is [0-9]+ words \(max 500\)" <<<"$multi_out"; then ((PASS++)); else
-    echo "  FAIL [multi] a later skill's word count was not reported"; ((FAIL++)); fi
+if grep -qE "skills/zzz-long/SKILL.md body is [0-9]+ lines \(spec recommends under 500\)" <<<"$multi_out"; then ((PASS++)); else
+    echo "  FAIL [multi] a later skill's body size was not reported"; ((FAIL++)); fi
 # Discovery itself, independent of any single verdict: all three are reported.
 # (Not asserted on the exit code — these fixtures lack composer.json and README,
 # so the run exits non-zero either way and the assertion could not fail.)

@@ -62,9 +62,18 @@ validate_skill_md() {
     local rel="${skill_file#"$REPO_DIR"/}"
     local skill_name=""
     # Declared local so nothing carries over from the previous skill in the loop.
-    local closing_line frontmatter extra_fields field_names desc words
+    local closing_line frontmatter extra_fields field_names desc compat
+    local desc_chars body_lines skill_body base unnamed linked_from ref_lines
     local relative_paths count skill_dir skill_dir_rel checkpoints_justified
     local untested misclassified f s base
+    # After the local declarations, not before them: `local skill_dir` resets a
+    # value assigned above it, so an earlier assignment silently becomes unset
+    # and `set -u` then aborts the run mid-way -- which prints no summary and
+    # reads as a repository that passed.
+    skill_dir="$(dirname "$skill_file")"
+    skill_dir_rel="${skill_dir#"$REPO_DIR"}"
+    skill_dir_rel="${skill_dir_rel#/}"
+    skill_dir_rel="${skill_dir_rel:-.}"
     success "SKILL.md found: $rel"
 
     # Frontmatter delimiter
@@ -99,10 +108,17 @@ validate_skill_md() {
             if [[ -z "$NAME" ]]; then
                 NAME="$skill_name"
             fi
-            if [[ "$skill_name" =~ ^[a-z0-9-]{1,64}$ ]]; then
-                success "$rel name valid: $skill_name"
-            else
+            # The spec forbids more than the character class does: no leading
+            # or trailing hyphen, and no consecutive hyphens. A name that only
+            # passes the class still fails a spec-conformant loader.
+            if [[ ! "$skill_name" =~ ^[a-z0-9-]{1,64}$ ]]; then
                 error "$rel name invalid (lowercase, hyphens, max 64): $skill_name"
+            elif [[ "$skill_name" == -* || "$skill_name" == *- ]]; then
+                error "$rel name must not start or end with a hyphen: $skill_name"
+            elif [[ "$skill_name" == *--* ]]; then
+                error "$rel name must not contain consecutive hyphens: $skill_name"
+            else
+                success "$rel name valid: $skill_name"
             fi
         else
             error "$rel missing 'name' field"
@@ -181,19 +197,64 @@ PYEOF
             else
                 error "$rel description must start with 'Use when': ${desc:0:60}..."
             fi
+
+            # The description is a ROUTER, not documentation. It is the only
+            # thing loaded at startup for every skill, so it decides whether
+            # this skill is ever consulted -- a gap here is the one failure
+            # that cannot be recovered later. The spec sets a hard 1024.
+            #
+            # The soft 500 is a nudge, not a defect: the official guidance is
+            # "a few sentences to a short paragraph" and explicitly says to
+            # err on the side of being pushy about listing contexts. Long is
+            # not automatically wrong; long AND full of workflow steps is.
+            if [[ "$desc" != "__PARSE_ERROR__" ]]; then
+                desc_chars=${#desc}
+                if (( desc_chars > 1024 )); then
+                    error "$rel description is $desc_chars chars (spec hard limit 1024) - cut process detail, keep capability and trigger"
+                elif (( desc_chars > 500 )); then
+                    warning "$rel description is $desc_chars chars - past 500 it is usually workflow narration; the description should say WHAT and WHEN, not HOW"
+                else
+                    success "$rel description is $desc_chars chars"
+                fi
+            fi
         else
             error "$rel missing 'description' field"
+        fi
+
+        # compatibility: spec caps it at 500 characters, and most skills should
+        # not carry the field at all.
+        if echo "$frontmatter" | grep -q "^compatibility:"; then
+            # Octal escapes for the two quote characters: a literal quote here
+            # would terminate the string it lives in (the same trap the awk
+            # programs in this file avoid the same way).
+            compat=$(echo "$frontmatter" | grep "^compatibility:" | head -1 \
+                     | sed 's/compatibility: *//' | tr -d '\42\47')
+            if (( ${#compat} > 500 )); then
+                error "$rel compatibility is ${#compat} chars (spec max 500)"
+            fi
         fi
     else
         error "$rel missing frontmatter (must start with ---)"
     fi
 
-    # Word count check (max 500)
-    words=$(wc -w < "$skill_file")
-    if [[ $words -le 500 ]]; then
-        success "$rel is $words words (under 500 limit)"
+    # Body size. The spec recommends "Keep your main SKILL.md under 500 lines"
+    # and "< 5000 tokens recommended" for the instructions loaded on activation.
+    # This used to count 500 WORDS over the WHOLE file -- a much tighter and
+    # differently shaped budget, and one that charged the frontmatter to the
+    # body. That inversion is the expensive part: the description is the
+    # routing surface, so making it compete with the instructions for one
+    # allowance buys a shorter description at the price of an undocumented
+    # capability. Lines, body only.
+    #
+    # 300 is the WARN, not the target: past it, ask which lines are control
+    # flow and which are reference material that belongs in references/.
+    body_lines=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2{print}' "$skill_file" | wc -l)
+    if (( body_lines > 500 )); then
+        error "$rel body is $body_lines lines (spec recommends under 500) - move reference material into references/"
+    elif (( body_lines > 300 )); then
+        warning "$rel body is $body_lines lines - past 300, split reference material out and keep SKILL.md the control plane"
     else
-        error "$rel is $words words (max 500)"
+        success "$rel body is $body_lines lines"
     fi
     # Check for relative script paths that should use ${CLAUDE_SKILL_DIR}
     # Matches: uv run scripts/, python3 scripts/, python scripts/, bash scripts/, ./scripts/, sh scripts/
@@ -204,13 +265,69 @@ PYEOF
         warning "$rel has $count script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
     fi
 
+    # --- Flat discovery ------------------------------------------------------
+    # Agent Skills spec: "Keep file references one level deep from SKILL.md.
+    # Avoid deeply nested reference chains." The rule exists because each hop is
+    # a decision the agent may not make. SKILL.md is read in full on activation;
+    # a reference is read only if SKILL.md said what it holds and when to open
+    # it. A file reachable only through a second hop sits behind an unmarked
+    # door. These are warnings, not errors: a chain is a smell, not a breach.
+    if [[ -n "$skill_dir" && -d "$skill_dir" ]]; then
+        skill_body=$(awk 'BEGIN{d=0} /^---$/{d++; next} d>=2{print}' "$skill_file")
+
+        # Scripts are executed, never loaded into context, so naming one costs a
+        # line and is the only chance the agent has of knowing it exists.
+        if [[ -d "$skill_dir/scripts" ]]; then
+            unnamed=""
+            for f in "$skill_dir"/scripts/*; do
+                [[ -f "$f" ]] || continue
+                base="$(basename "$f")"
+                case "$base" in *.md|*.txt|README*) continue ;; esac
+                # Non-executable files are sourced libraries, not capabilities
+                # the agent invokes; their caller is what belongs in SKILL.md.
+                [[ -x "$f" ]] || continue
+                grep -qF "$base" <<<"$skill_body" || unnamed="$unnamed $base"
+            done
+            if [[ -n "$unnamed" ]]; then
+                warning "${skill_dir_rel}: script(s) not named in SKILL.md:${unnamed} - a script reachable only through a reference is found only if that reference is opened"
+            fi
+        fi
+
+        if [[ -d "$skill_dir/references" ]]; then
+            for f in "$skill_dir"/references/*.md; do
+                [[ -f "$f" ]] || continue
+                base="$(basename "$f")"
+
+                if ! grep -qF "$base" <<<"$skill_body"; then
+                    linked_from=""
+                    for other in "$skill_dir"/references/*.md; do
+                        [[ -f "$other" && "$other" != "$f" ]] || continue
+                        if grep -qF "$base" "$other"; then
+                            linked_from="$(basename "$other")"
+                            break
+                        fi
+                    done
+                    if [[ -n "$linked_from" ]]; then
+                        warning "${skill_dir_rel}: references/${base} is reachable only via references/${linked_from} - the spec asks for one level; link it from SKILL.md too"
+                    else
+                        warning "${skill_dir_rel}: references/${base} is not named in SKILL.md - nothing tells the agent it exists or when to read it"
+                    fi
+                fi
+
+                # Agents preview long files rather than reading them whole, so a
+                # contents list is what makes the rest of a long reference
+                # visible at all.
+                ref_lines=$(grep -c "" "$f")
+                if (( ref_lines > 100 )) && ! grep -qiE '^#{1,3} +(contents|table of contents|overview|in this (file|document))' "$f"; then
+                    warning "${skill_dir_rel}: references/${base} is $ref_lines lines with no Contents section - agents preview long files; add one so the rest is discoverable"
+                fi
+            done
+        fi
+    fi
+
     # checkpoints.yaml presence (warning only — many skills legitimately lack
     # one; a documented justification marker suppresses the warning per
     # add-checkpoints' suitability criteria, e.g. purely conceptual skills)
-    skill_dir="$(dirname "$skill_file")"
-    skill_dir_rel="${skill_dir#"$REPO_DIR"}"
-    skill_dir_rel="${skill_dir_rel#/}"
-    skill_dir_rel="${skill_dir_rel:-.}"
     checkpoints_justified=0
     for f in "$skill_file" "$REPO_DIR/README.md"; do
         if [[ -f "$f" ]] && grep -qiE "^[[:space:]]*([*-][[:space:]]+)?checkpoints:[[:space:]]*none[[:space:]]*\(justified" "$f"; then

@@ -47,12 +47,14 @@ SPDX: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICE
 
 ```yaml
 ---
-name: skill-name          # lowercase, hyphens, max 64 chars
+name: skill-name
 description: "Use when <trigger conditions>"
 ---
 ```
 
-Body ≤500 words; description ≤1,536 chars (target 100–300, trigger first). Every `references/*.md` must be reachable from SKILL.md (no orphans). Audit: `scripts/audit-skills.sh`. Put discovery/catalog fields in README or optional YAML, not frontmatter.
+**Budgets** (spec): `name` ≤64, no doubled/edge hyphen, matches the directory. `description` ≤1024 (warn past 500) — a router, not documentation. Body ≤500 lines (warn at 300). `compatibility` ≤500, usually omit.
+
+**Flat discovery**: references one level deep; name every `references/*.md` and every `scripts/` executable in SKILL.md; `## Contents` past 100 lines. Why, and how to test triggering: [skill-architecture](references/skill-architecture.md). Audit: `scripts/audit-skills.sh`. Catalog fields belong in README, not frontmatter.
 
 ## Manifests
 
@@ -106,7 +108,9 @@ Bump root `plugin.json` → sync → PR → merge → pull main → verify parit
 
 ## Validation
 
-`scripts/validate-skill.sh` (layout, manifests). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
+`scripts/validate-skill.sh` (layout, manifests, budgets, flat discovery). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
+
+Other `scripts/` executables, named here because the control plane is where a script becomes findable: `bump-version.sh` (raise every version surface), `check-version-parity.sh` (assert they agree), `sync-plugin-manifest.sh` (regenerate the Claude manifest), `roll-changelog.py` (Unreleased → dated release), `fleet-release-github.sh` (release across the fleet), `migrate-licensing.sh` (dual-licence layout), `validate-evals.sh` (check `evals/`).
 
 ## References (`references/`)
 

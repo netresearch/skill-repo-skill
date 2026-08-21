@@ -1,5 +1,16 @@
 # SKILL.md Quality Rules — Detail and Examples
 
+## Contents
+
+- Why these rules exist
+- Content value rubric
+- Eval evidence
+- Description rules
+- Body rules
+- Reference patterns
+- Auditing
+- Sources
+
 Detailed guidance backing the summary in [`SKILL.md`](../SKILL.md) (§ SKILL.md Quality Rules).
 
 ## Why these rules exist

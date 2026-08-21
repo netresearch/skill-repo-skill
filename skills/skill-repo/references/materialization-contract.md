@@ -1,5 +1,20 @@
 # Materialization Contract
 
+## Contents
+
+- Scope
+- Failure-pattern schema
+- Rule 1: Patches target source repos, never local cache
+- Rule 2: Workspace preference order
+- Rule 3: Branch convention
+- Rule 4: Commit conventions
+- Rule 5: PR template
+- Rule 6: Target area mapping
+- Rule 7: Eval format (skill-repo convention)
+- Rule 8: Per-private-repo confirmation
+- Rule 9: New-skill scaffolding
+- See also
+
 How external tools (notably `retro-skill`) materialize **skill improvements** or **new skills** by submitting PRs to skill repositories that follow `skill-repo-skill` conventions.
 
 ## Scope

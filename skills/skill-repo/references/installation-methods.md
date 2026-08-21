@@ -1,5 +1,14 @@
 # Installation Methods
 
+## Contents
+
+- Method 1: Netresearch Marketplace (Recommended)
+- Method 2: Download Release
+- Method 3: Composer (PHP Projects)
+- Method 4: npm (Node Projects)
+- Choosing a Method
+- Directory Locations
+
 Four methods for installing Netresearch skills.
 
 ## Method 1: Netresearch Marketplace (Recommended)
