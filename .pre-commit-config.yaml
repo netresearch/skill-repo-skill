@@ -40,10 +40,25 @@ repos:
       - id: check-yaml
         args: [--allow-multiple-documents]
 
+  # validate-skill runs from the WORKING COPY, not from the pinned release.
+  # This repository ships that validator, so pinning it to the last tag means a
+  # change to it is never exercised by its own pre-commit until after it is
+  # published -- and a SKILL.md written against the new rules is rejected by the
+  # old ones, with no way out but weakening the content or bypassing the gate.
+  # check-version-parity stays pinned: it is not authored against itself.
+  - repo: local
+    hooks:
+      - id: validate-skill
+        name: Validate skill repo structure
+        description: Run validate-skill.sh against the repo when skill metadata changes.
+        entry: skills/skill-repo/scripts/validate-skill.sh
+        language: script
+        pass_filenames: false
+        files: (^skills/.+/SKILL\.md$|^SKILL\.md$|^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|^\.claude-plugin/plugin\.json$|^composer\.json$)
+        require_serial: true
   - repo: https://github.com/netresearch/skill-repo-skill
     rev: v1.22.0
     hooks:
-      - id: validate-skill
       - id: check-version-parity
 
   - repo: https://github.com/DavidAnson/markdownlint-cli2

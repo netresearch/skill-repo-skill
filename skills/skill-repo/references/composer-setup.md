@@ -1,5 +1,17 @@
 # Composer Setup for Skills
 
+## Contents
+
+- When to Add composer.json
+- composer.json Structure
+- Multi-Skill Packages
+- Publishing to Packagist
+- Skill repos that ship their own PHP code
+- Files to NOT Include
+- Validation
+- Integration with Plugin
+- Troubleshooting
+
 Guide for adding Composer distribution to Netresearch skills.
 
 ## When to Add composer.json

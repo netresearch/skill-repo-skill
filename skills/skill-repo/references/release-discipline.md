@@ -1,5 +1,20 @@
 # Release Discipline
 
+## Contents
+
+- Fleet sweeps: use the shipped driver, do not hand-write a new one
+- Canonical Order: Bump PR Merged → Tag Pushed
+- Pre-Release Version-Parity Check
+- Changelog Rollover in the Bump Commit
+- Cache Safety: Never Edit the Installed Copy
+- Multi-Skill-Repo Release Dry-Run
+- GitLab (`git.netresearch.de`) skill repos release on tag too
+- A pushed tag is not a release — check the pattern the release job matches
+- Immutable-Release Caveat
+- Tag Signing (Mandatory)
+- No `--latest` Drift for Non-Default Branches
+- Supply-Chain Attestation
+
 Every step that caused the "30 failed plugin releases" incident, codified as rules.
 
 ## Fleet sweeps: use the shipped driver, do not hand-write a new one

@@ -1,5 +1,17 @@
 # Repository Quality Rules (skill repositories)
 
+## Contents
+
+- Lizenz (Netresearch Split-Modell)
+- Mindestbestandteile eines Skill-Repos
+- Scripts-first (mechanisch prüfbare Regeln)
+- Pflicht für README-Oberfläche
+- SKILL.md vs. Discovery
+- Related Skills (Repo-Ebene)
+- Marketplace-Sync (Quelle bleibt Repo)
+- GitHub Repository SEO
+- GitHub Pages policy
+
 Prüfbare Regeln für **einzelne Skill-Repositories** (`netresearch/*-skill`).
 **Nicht** für das Marketplace-Repository — Discovery-Katalog- und SEO-Governance für den Hub liegen in **`netresearch/claude-code-marketplace`** (`AGENTS.md` dort).
 
