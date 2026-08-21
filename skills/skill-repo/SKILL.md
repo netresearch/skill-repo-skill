@@ -12,25 +12,23 @@ allowed-tools: Bash(bash:*) Bash(python3:*) Read Write Glob Grep
 
 # Skill Repository Structure Guide
 
-Standards for Netresearch skill repository layout and distribution.
-
 ## Repository Structure
 
 ```
 {repo-name}/
-├── plugin.json                  # portable manifest (required)
+├── plugin.json                  # portable manifest
 ├── .claude-plugin/plugin.json   # generated
-├── skills/{name}/SKILL.md       # AI instructions (required)
-├── README.md                    # Human docs (required)
-├── LICENSE-MIT                  # Code license (required)
-├── LICENSE-CC-BY-SA-4.0         # Content license (required)
-├── composer.json                # PHP distribution (required)
-├── references/                  # Extended docs for >500w content
-├── scripts/                     # Automation
+├── skills/{name}/SKILL.md       # the control plane
+├── README.md                    # human docs
+├── LICENSE-MIT                  # code
+├── LICENSE-CC-BY-SA-4.0         # content
+├── composer.json                # PHP distribution
+├── references/                  # detail, loaded on demand
+├── scripts/                     # executables, never loaded
 └── .github/workflows/
-    ├── release.yml              # Tag-triggered release
-    ├── validate.yml             # Caller for reusable validation
-    └── auto-merge-deps.yml      # Caller for dep auto-merge
+    ├── release.yml              # tag-triggered
+    ├── validate.yml             # validation caller
+    └── auto-merge-deps.yml      # dep auto-merge caller
 ```
 
 ## Licensing (Split Model)
@@ -52,9 +50,9 @@ description: "Use when <trigger conditions>"
 ---
 ```
 
-**Budgets** (spec): `name` ≤64, no doubled/edge hyphen, matches the directory. `description` ≤1024 (warn past 500) — a router, not documentation. Body ≤500 lines (warn at 300). `compatibility` ≤500, usually omit.
+**Budgets** (spec): `name` ≤64, no doubled/edge hyphen, matches its directory. `description` ≤1024, warn past 500 — a router, not documentation. Body ≤500 lines, warn at 300. `compatibility` ≤500, usually omit.
 
-**Flat discovery**: references one level deep; name every `references/*.md` and every `scripts/` executable in SKILL.md; `## Contents` past 100 lines. Why, and how to test triggering: [skill-architecture](references/skill-architecture.md). Audit: `scripts/audit-skills.sh`. Catalog fields belong in README, not frontmatter.
+**Flat discovery**: references one level deep; SKILL.md names every `references/*.md` and every `scripts/` executable; `## Contents` past 100 lines. Rationale and trigger evals: [skill-architecture](references/skill-architecture.md). Audit: `scripts/audit-skills.sh`.
 
 ## Manifests
 
@@ -101,24 +99,18 @@ Bump root `plugin.json` → sync → PR → merge → pull main → verify parit
 
 ## Installation
 
-1. **Marketplace**: `/plugin marketplace add netresearch/claude-code-marketplace`
-2. **Release**: Download to `~/.claude/skills/{name}/`
-3. **Composer**: `composer require netresearch/{repo-name}`
-4. **npm**: `npm i -D @netresearch/agent-skill-coordinator github:netresearch/{repo-name}`. Use `templates/package.json.template` (minimal `files` default).
+Marketplace, release download, Composer, npm — commands and the npm `files` default in [installation-methods](references/installation-methods.md).
 
 ## Validation
 
 `scripts/validate-skill.sh` (layout, manifests, budgets, flat discovery). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
 
-Other `scripts/` executables, named here because the control plane is where a script becomes findable: `bump-version.sh` (raise every version surface), `check-version-parity.sh` (assert they agree), `sync-plugin-manifest.sh` (regenerate the Claude manifest), `roll-changelog.py` (Unreleased → dated release), `fleet-release-github.sh` (release across the fleet), `migrate-licensing.sh` (dual-licence layout), `validate-evals.sh` (check `evals/`).
+Named here so they are findable: `bump-version.sh`, `check-version-parity.sh`, `sync-plugin-manifest.sh`, `roll-changelog.py`, `fleet-release-github.sh`, `migrate-licensing.sh`, `validate-evals.sh` — each with `--help`.
 
 ## References (`references/`)
 
 [agent-plugins-compat](references/agent-plugins-compat.md) · [installation-methods](references/installation-methods.md) · [composer-setup](references/composer-setup.md) · [release-discipline](references/release-discipline.md) · [review-replies](references/review-replies.md) · [skill-quality](references/skill-quality.md) · [repository-quality-rules](references/repository-quality-rules.md) · [readme-template](references/readme-template.md) · [skill-discovery-metadata](references/skill-discovery-metadata.md) · [validation-checklist](references/validation-checklist.md) · [marketplace-integration](references/marketplace-integration.md) · [materialization-contract](references/materialization-contract.md) · [authoring-ci-gotchas](references/authoring-ci-gotchas.md) · [skill-retirement](references/skill-retirement.md)
 
-## See Also
-
-[`agent-rules-skill`](https://github.com/netresearch/agent-rules-skill), [`agent-harness-skill`](https://github.com/netresearch/agent-harness-skill), [`retro-skill`](https://github.com/netresearch/retro-skill).
 
 ---
 
