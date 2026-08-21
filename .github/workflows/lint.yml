@@ -15,6 +15,12 @@ permissions: {}
 jobs:
   validate:
     name: Skill Validation
-    uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
+    # Local reference, not netresearch/skill-repo-skill/...@main. This IS that
+    # repository: pointing at main runs the workflow this pull request is
+    # changing, from before the change, so a workflow or validator edit is
+    # judged by the version it replaces and can never be green on its own pull
+    # request. self-test.yml already calls it locally; this is the same call
+    # made consistent. Consumer repos keep the remote @main reference.
+    uses: ./.github/workflows/validate.yml
     permissions:
       contents: read
