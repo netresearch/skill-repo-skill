@@ -60,7 +60,21 @@ jobs:
           cache-dependency-glob: ""
 
       - name: Run skill validation
-        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
+        # When the CALLER is skill-repo-skill itself, validate with the copy
+        # under test rather than with the one on main. Both jobs that run this
+        # workflow used the .skill-repo-tools checkout, so a pull request that
+        # changed the validator was judged by the version it was replacing --
+        # including the job literally named "this PR's validator". A validator
+        # change could therefore never be green on its own pull request.
+        # github.repository is the CALLER's repository inside a reusable
+        # workflow, so consumers keep using the pinned tools checkout.
+        run: |
+          if [ "${{ github.repository }}" = "netresearch/skill-repo-skill" ]; then
+            echo "Self-validation: using the working copy under test"
+            bash skills/skill-repo/scripts/validate-skill.sh .
+          else
+            bash .skill-repo-tools/skills/skill-repo/scripts/validate-skill.sh .
+          fi
 
       # Root plugin.json (Agent Plugins 1.0.0) is the source of truth for the
       # shared metadata. No-op in repos that have not adopted it yet.
