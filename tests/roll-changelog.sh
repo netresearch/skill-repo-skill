@@ -241,6 +241,29 @@ before=$(cat "$f")
 check "dry run exits 0" 0 "$(roll "$f" 1.1.0 --dry-run)"
 check "dry run leaves the file untouched" "$before" "$(cat "$f")"
 
+# --- --check-unreleased ------------------------------------------------------
+f="$WORK/chk.md"
+printf '# C\n\n## [Unreleased]\n\n- pending\n\n## [1.0.0] - 2026-01-01\n\n- b\n' > "$f"
+check "check-unreleased: content exits 0" 0 "$(roll "$f" --check-unreleased)"
+check "check-unreleased: content reported" has-content "$(cat "$WORK/out.txt")"
+check "check-unreleased: file untouched" yes \
+    "$(grep -q '^- pending$' "$f" && echo yes)"
+
+printf '# C\n\n## [Unreleased]\n\n<!-- only a comment -->\n\n## [1.0.0] - 2026-01-01\n\n- b\n' > "$f"
+check "check-unreleased: comment-only is empty (same rule as the roll)" empty \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+
+printf '# C\n\n## [1.0.0] - 2026-01-01\n\n- b\n' > "$f"
+check "check-unreleased: no Unreleased heading" no-unreleased \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '# C\n\n## [Unreleased]\n\n```\n## [Unreleased]\n```\n\n## [1.0.0] - 2026-01-01\n' > "$f"
+check "check-unreleased: fenced lookalike is no heading; fence body counts as content" has-content \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+
+check "no version without --check-unreleased still refused" 1 "$(roll "$f")"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All roll-changelog tests passed"
