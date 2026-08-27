@@ -10,6 +10,7 @@
 - Multi-Skill-Repo Release Dry-Run
 - GitLab (`git.netresearch.de`) skill repos release on tag too
 - A pushed tag is not a release — check the pattern the release job matches
+- Release notes: the generated body is the default — do not curate it away
 - Immutable-Release Caveat
 - Tag Signing (Mandatory)
 - No `--latest` Drift for Non-Default Branches
@@ -326,6 +327,13 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
   very next query reads a still-pending rollup. Observed 2026-08-08.
 - **`plugin.json` ahead of the last tag ⇒ the bump already merged — tag only, no bump PR.** Classify each repo from the `origin/main` value: `plugin.json.version > last tag` means a prior bump PR already landed and the repo just needs a signed tag; `plugin.json.version == last tag` means it needs a bump PR first. Tagging a "prepared" repo at its committed version keeps parity true by construction. Don't open a bump PR for a repo that is already prepared — it would double-bump.
 - **A never-released repo can be prepared too — plan it at its committed version, do not invent one.** `FIRST-RELEASE` (no release *and* no tag) usually already carries the version someone meant to ship in `.claude-plugin/plugin.json`, so the plan row names exactly that and the bump phase reports "nothing to bump; finish will tag". The monotonicity check therefore accepts `version >= plugin.json` for this class and only refuses a version *below* it, where parity would fail at tag time — unlike `BUMP`, which still requires strictly greater, because there a released version exists to regress from. Until v1.35.0 equality was refused for every class, which left a prepared first release unrepresentable: the operator had to retype the row `TAG-ONLY` or invent a version nobody wrote (both `ecom-*` repos in the 2026-08-17 sweep).
+- **Splicing re-surveyed rows into an existing plan drops `version` and `body`.**
+  After a partial re-survey (e.g. the freshness gate tripped on renovate merges),
+  the regenerated `plan.skeleton.jsonl` rows carry empty `version`/`body` for
+  TAG-ONLY rows the operator had already filled. Merge the fresh `head`/
+  `classification` into the OLD plan rows, keeping their `version` and `body` —
+  replacing rows wholesale ships a release with no notes source (2026-08-27:
+  markdown-to-pdf briefly published "First release" as its v1.4.2 notes this way).
 - **`git pull origin main` merges into whatever branch the worktree has checked out.** A fleet sweep hits worktrees parked on a leftover feature branch, and `--ff-only` does not protect you — the stale branch fast-forwards onto `origin/main` "successfully" (observed 2026-08-03: a leftover `ci/*` branch silently advanced to the main tip).
 
   **Do not check out at all — tag `origin/main` directly.** Fetching, verifying
@@ -403,6 +411,27 @@ release workflow ran, but died on `Script not found "build"` because the caller
 never set `build-cmd` and the shared reusable defaults to `bun run build`. A
 caller that adopts a reusable and then does not cut a release has not tested it —
 the first tag after the adoption is the test.
+
+## Release notes: the generated body is the default — do not curate it away
+
+Operator decision, 2026-08-27 (netresearch/skill-repo-skill#257, twice re-scoped
+and closed): GitHub's `generate_release_notes` body is the only release-notes
+mechanism with no maintenance debt — it has no requirements and just counts the
+merged PRs — so it stays the default, **including its `by @<login>` author
+credits** (they do not hurt; the no-bot-credit rule applies to *manually
+written* notes, where agent/bot credit must not be added). Do not rewrite
+generated bodies, do not strip credits, do not make releases depend on a
+CHANGELOG the repo does not maintain — in the 2026-08-27 sweep most repos had
+no CHANGELOG.md and five with one had an empty `[Unreleased]` at bump time.
+Curate a body only where it is otherwise a dead pointer: the GitLab
+`claude-code-skill` component writes a fixed "see CHANGELOG.md for details."
+description, which the GitLab fleet driver's finish replaces with the tag's
+CHANGELOG section or the plan row's body (gitlab-skill !88).
+
+A release job that dies on a transient network error (observed: cosign's
+`Post https://fulcio.sigstore.dev/…: connection reset by peer`) does not
+invalidate the tag — `gh run rerun <run-id> --failed` and re-verify the
+Release; never delete and re-push the tag for this.
 
 ## Immutable-Release Caveat
 
