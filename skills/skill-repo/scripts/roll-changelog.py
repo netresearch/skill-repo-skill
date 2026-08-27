@@ -107,7 +107,11 @@ def parse_args():
         description="Roll the [Unreleased] CHANGELOG section into a release."
     )
     parser.add_argument("file", help="path to CHANGELOG.md")
-    parser.add_argument("version", help="release version (leading v stripped)")
+    parser.add_argument(
+        "version",
+        nargs="?",
+        help="release version (leading v stripped); not needed with --check-unreleased",
+    )
     parser.add_argument(
         "--date",
         default=datetime.datetime.now(datetime.timezone.utc)
@@ -121,7 +125,19 @@ def parse_args():
         action="store_true",
         help="print the new heading and moved-section size, write nothing",
     )
+    parser.add_argument(
+        "--check-unreleased",
+        action="store_true",
+        help="report the Unreleased section's state (no-unreleased | empty | "
+        "has-content) with the SAME emptiness rule the roll enforces, write "
+        "nothing; surveys use this so an empty section surfaces before the "
+        "bump fails on it",
+    )
     args = parser.parse_args()
+    if args.check_unreleased:
+        return args
+    if args.version is None:
+        fail("version is required (only --check-unreleased goes without one)")
     args.version = args.version.lstrip("v")
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", args.version):
         fail(f"'{args.version}' is not a semantic version")
@@ -203,8 +219,39 @@ def write_atomic(path, out):
         fail(str(exc))
 
 
+def unreleased_state(lines):
+    """One of 'no-unreleased' | 'empty' | 'has-content', by the same section
+    boundaries and comments-are-not-content rule the roll itself enforces."""
+    unreleased_at = []
+    heading_at = []
+    for i, line, in_fence in scan(lines):
+        if in_fence:
+            continue
+        if UNRELEASED_RE.match(line):
+            unreleased_at.append(i)
+        elif line.startswith("## "):
+            heading_at.append(i)
+    if not unreleased_at:
+        return "no-unreleased"
+    if len(unreleased_at) > 1:
+        fail(
+            f"{len(unreleased_at)} Unreleased headings outside code fences "
+            f"(need exactly 1)"
+        )
+    idx = unreleased_at[0]
+    end = next((h for h in heading_at if h > idx), len(lines))
+    section = "\n".join(lines[idx + 1 : end])
+    if re.sub(r"<!--.*?-->", "", section, flags=re.DOTALL).strip():
+        return "has-content"
+    return "empty"
+
+
 def main() -> None:
     args = parse_args()
+    if args.check_unreleased:
+        lines, _eol, _tn = read_changelog(args.file)
+        print(unreleased_state(lines))
+        return
     version = args.version
     lines, eol, trailing_newline = read_changelog(args.file)
     idx, first_released = locate_headings(lines)

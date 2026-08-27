@@ -354,6 +354,7 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "own-pr" | .resolved = "o/own-pr" | .open_release_prs = [{"id":"8","url":"https://example.invalid/8","author":"sweep-bot","branch":"release/v2.5.0","title":"chore(release): v2.5.0"}]'
         row '.repo = "blipped" | .resolved = "o/blipped" | .ahead = -1 | .nonci = -1'
         row '.repo = "ruled" | .resolved = "o/ruled" | .ci_tag_rules = "12: rules | if CI_COMMIT_TAG;30:release_job:"'
+        row '.repo = "cl-empty" | .resolved = "o/cl-empty" | .changelog_unreleased = "empty"'
     } > "$MWD/survey.jsonl"
     out=$(FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
     check "manifest: runs offline on a fixture survey" yes \
@@ -366,6 +367,10 @@ if command -v gh > /dev/null 2>&1; then
         "$(grep -q '| ci-only | SKIP-CI-ONLY |' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: foreign PR blocked with author named" yes \
         "$(grep -q '| foreign | BLOCKED-FOREIGN-PR |.*@colleague' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: empty Unreleased flagged in column and note" yes \
+        "$(grep -q '| cl-empty | BUMP |.*| EMPTY |.*write the release entries before the bump' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: rows without the changelog field render a dash" yes \
+        "$(grep -qE '\| bump-me \| BUMP \|.*\| — \| success \|' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: skeleton prefills TAG-ONLY version" 1.10.0 \
         "$(jq -r 'select(.repo == "prepared") | .version' "$MWD/plan.skeleton.jsonl")"
     # Assert the row EXISTS before asserting its emptiness — an absent row also

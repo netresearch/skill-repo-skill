@@ -109,6 +109,13 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         release_gate=false
     fi
 
+    # Unreleased-section state, by the same rule the bump-time roll enforces —
+    # an empty section becomes a manifest warning instead of a mid-bump failure.
+    local cl_raw cl_state
+    cl_raw=$(gh_json -H "Accept: application/vnd.github.raw" \
+        "repos/$FR_ORG/$r/contents/CHANGELOG.md?ref=$def" || echo "")
+    cl_state=$(fr_changelog_state "$cl_raw")
+
     # Measured CI state of the default branch — the manifest's precondition
     # column must show a value, never an assumed checkmark.
     local ci_status
@@ -168,12 +175,14 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         --arg ci "$ci_status" --argjson ahead "$ahead" --argjson nonci "$nonci" \
         --argjson subjects "$subjects" --argjson files "$files" \
         --argjson trunc "$files_truncated" --argjson prs "$prs" \
+        --arg clstate "$cl_state" \
         '{host: $host, repo: $repo, resolved: $resolved, default: $def, head: $head,
           archived: $archived, empty: false, unreachable: false, duplicate_of: "",
           last_release: $rel, last_tag: $last_tag,
           root_plugin: $rootv, claude_plugin: $cpv,
           composer_has_version: $chv, release_gate: $gate, ci_status: $ci,
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
+          changelog_unreleased: $clstate,
           subjects: $subjects, files: $files,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'
 }

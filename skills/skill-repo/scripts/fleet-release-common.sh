@@ -25,7 +25,7 @@
 # Normalized survey row schema (both hosts emit exactly these keys):
 #   host repo resolved default archived empty unreachable duplicate_of
 #   last_release last_tag root_plugin claude_plugin composer_has_version
-#   release_gate ci_status ahead nonci files_truncated subjects files
+#   release_gate ci_status ahead nonci changelog_unreleased files_truncated subjects files
 #   open_release_prs [{id,url,author,branch,title}] ci_tag_rules notes
 #
 # Every phase writes into $FR_WORKDIR:
@@ -82,6 +82,23 @@ fr_tool() { # NAME — locate a skill-repo tool (bump-version.sh, roll-changelog
 
 fr_note() { printf '%s\n' "$*"; }
 fr_err()  { printf 'ERROR: %s\n' "$*" >&2; }
+
+fr_changelog_state() { # RAW-CONTENT — "absent" | "empty" | "has-content" |
+    # "no-unreleased" | "unknown". An empty argument means the survey found no
+    # CHANGELOG.md. Classification is delegated to roll-changelog.py
+    # --check-unreleased so the survey warns by the SAME emptiness rule the
+    # bump-time roll enforces — five repos failed mid-bump on empty
+    # [Unreleased] sections in the 2026-08-27 sweep, each one visible to the
+    # survey that ran hours earlier.
+    local raw="$1" tool tmp state
+    [[ -n "$raw" ]] || { echo "absent"; return 0; }
+    tool=$(fr_tool roll-changelog.py 2> /dev/null) || { echo "unknown"; return 0; }
+    tmp=$(mktemp "${TMPDIR:-/tmp}/fr-clstate.XXXXXX") || { echo "unknown"; return 0; }
+    printf '%s\n' "$raw" > "$tmp"
+    state=$(python3 "$tool" --check-unreleased "$tmp" 2> /dev/null) || state="unknown"
+    rm -f "$tmp"
+    echo "${state:-unknown}"
+}
 fr_die()  { fr_err "$*"; exit 1; }
 
 # ---------------------------------------------------------------------------
@@ -425,8 +442,8 @@ fr_manifest() {
         echo "Approval covers ONLY the PRs this sweep opens. Rows marked"
         echo "BLOCKED-FOREIGN-PR need that author's separate go-ahead."
         echo
-        echo "| Repo | Class | Last tag | Release | plugin.json | Ahead | Non-CI | CI on default | Notes |"
-        echo "|---|---|---|---|---|---|---|---|---|"
+        echo "| Repo | Class | Last tag | Release | plugin.json | Ahead | Non-CI | Changelog | CI on default | Notes |"
+        echo "|---|---|---|---|---|---|---|---|---|---|"
     } > "$manifest"
     while IFS= read -u 3 -r row; do
         cls=$(fr_classify "$row")
@@ -439,6 +456,7 @@ fr_manifest() {
               (.claude_plugin | ordash),
               ((.ahead // "") | tostring | ordash),
               ((.nonci // "") | tostring | ordash),
+              ((.changelog_unreleased // "") | if . == "empty" then "EMPTY" else ordash end),
               (.ci_status | ordash),
               ([ (if (.open_release_prs // []) | length > 0
                   then "PRs: " + ([.open_release_prs[] | "\(.url) by @\(.author)"] | join("; "))
@@ -454,6 +472,9 @@ fr_manifest() {
                   else empty end),
                  (if $cls == "BLOCKED-ARCHIVED"
                   then "unarchive is a human decision; afterwards re-run survey --repos \(.repo)"
+                  else empty end),
+                 (if $cls == "BUMP" and (.changelog_unreleased // "") == "empty"
+                  then "CHANGELOG [Unreleased] is empty — write the release entries before the bump phase, or its roll fails on exactly this"
                   else empty end),
                  (if $cls == "SURVEY-INCOMPLETE"
                   then "the compare MEASUREMENT failed (this is not a no-delta result) — re-run survey --repos \(.repo)"
