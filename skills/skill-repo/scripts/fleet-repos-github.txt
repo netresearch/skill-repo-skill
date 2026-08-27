@@ -1,7 +1,7 @@
 # Default repo list for fleet-release-github.sh survey (--repos/--repos-file
 # override it). One repo per line, org-relative; '#' and blank lines ignored.
 #
-# Snapshot of the public GitHub skill fleet as of the 2026-08-13 sweep.
+# Snapshot of the public GitHub skill fleet as of the 2026-08-27 sweep.
 # Naming conventions do NOT enumerate this fleet (plugins and oddly-named
 # repos exist), so the list is maintained here — reviewable, and cheap to
 # refresh:
@@ -11,9 +11,7 @@
 # here becomes a DUPLICATE row, never a second bump PR.
 agent-harness-skill
 agent-rules-skill
-agents-skill
 automated-assessment-skill
-claude-coach-skill
 cli-tools-skill
 concourse-ci-skill
 context7-skill
@@ -32,8 +30,8 @@ markdown-to-pdf-skill
 matrix-skill
 netresearch-branding-skill
 orocommerce-skill
-pagerangers-skill
 peer-qa-review-skill
+php-ast-edit-skill
 php-modernization-skill
 retro-skill
 security-audit-skill
