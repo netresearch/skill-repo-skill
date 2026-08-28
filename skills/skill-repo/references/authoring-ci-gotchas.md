@@ -131,8 +131,16 @@ moment someone copies it into a real `Makefile`.
 The fix is a linter exemption, not a fake tab:
 
 ```jsonc
-// .markdownlint.jsonc
-"MD010": { "ignore_code_languages": ["makefile"] }
+// .markdownlint-cli2.jsonc — add the key to the EXISTING "config" object.
+// A separate .markdownlint.jsonc file does not merge with .markdownlint-cli2.jsonc's
+// "config" — it replaces it wholesale, silently re-enabling every other rule this
+// repo already disables there (MD013, MD033, etc.).
+{
+  "config": {
+    "MD010": { "ignore_code_languages": ["makefile"] }
+    // ...alongside this repo's other existing "config" entries
+  }
+}
 ```
 
 This keeps `MD010` enforcing real prose/other-language blocks while letting a
