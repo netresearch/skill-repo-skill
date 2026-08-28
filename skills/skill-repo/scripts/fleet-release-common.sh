@@ -759,13 +759,12 @@ fr_lint_changelog() { # WT — the roll is generated text and generated text is
     fi
 }
 
-fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces may
-    # move; -z parsing (paths with spaces exist in the fleet), no add -A ever
-    local repo="$1" wt="$2" version="$3"
+fr_stage_allowlisted() { # REPO WT — stage every pending path, refusing anything
+    # outside the version surfaces; -z parsing (paths with spaces exist in the
+    # fleet), no add -A ever
+    local repo="$1" wt="$2"
     local entry status path
     local paths=()
-    echo "--- porcelain:"
-    git -C "$wt" status --porcelain
     while IFS= read -r -d '' entry; do
         [[ -n "$entry" ]] || continue
         status="${entry:0:2}"
@@ -783,11 +782,41 @@ fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces m
         paths+=("$path")
     done < <(git -C "$wt" status --porcelain -z)
     [[ "${#paths[@]}" -gt 0 ]] || { echo "FAIL $repo: nothing to commit after bump"; return 1; }
-    ( cd "$wt" && git add -- "${paths[@]}" \
-        && git commit -S --signoff -m "${FR_COMMIT_PREFIX}${version}" )
-    local ec=$?
-    echo "COMMIT EXIT: $ec"   # bare exit code — a pipe here once hid a hook abort
-    [[ "$ec" -eq 0 ]] || { echo "FAIL $repo: commit"; return 1; }
+    git -C "$wt" add -- "${paths[@]}"
+}
+
+fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces may
+    # move. Two attempts: a reformatting hook (pre-commit's pretty-format-json
+    # --autofix, black, ruff format, …) rewrites a staged file and FAILS the
+    # commit, and re-staging its output is the documented remedy — without it
+    # a bump dies as "FAIL <repo>: commit" and leaves a half-written worktree
+    # the resume then refuses as dirty (#263: it-maintenance-skill v1.15.0 and
+    # netresearch-jira-skill v2.11.1 in the 2026-08-28 sweep, where the hook
+    # sorts the keys sync-plugin-manifest.sh emits unsorted). The retry re-walks
+    # the porcelain instead of re-adding the first attempt's paths, so a hook
+    # that writes OUTSIDE the version surfaces still fails the allowlist. A
+    # deterministic rejection fails the second attempt too and reports as before.
+    local repo="$1" wt="$2" version="$3"
+    local attempt ec
+    for attempt in 1 2; do
+        echo "--- porcelain (attempt $attempt):"
+        git -C "$wt" status --porcelain
+        fr_stage_allowlisted "$repo" "$wt" || return 1
+        ( cd "$wt" && git commit -S --signoff -m "${FR_COMMIT_PREFIX}${version}" )
+        ec=$?
+        echo "COMMIT EXIT ($attempt): $ec"   # bare exit code — a pipe here once hid a hook abort
+        if [[ "$ec" -eq 0 ]]; then
+            return 0
+        fi
+        # An `if`, not `cond && echo`: the latter is the loop body's last
+        # command and returns 1 on the second pass, which would make the
+        # function's own status depend on how the caller suppresses `set -e`.
+        if [[ "$attempt" -eq 1 ]]; then
+            echo "commit failed — retrying once, in case a hook rewrote a staged file"
+        fi
+    done
+    echo "FAIL $repo: commit"
+    return 1
 }
 
 fr_create_and_record() { # REPO BRANCH VERSION BODY TARGET

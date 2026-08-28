@@ -327,6 +327,69 @@ check "partial re-survey replaced the requested row" 2 \
 check "partial re-survey left the others at gen 1" "1 1" \
     "$(jq -r 'select(.repo != "beta") | .gen' "$FR_WORKDIR/survey.jsonl" | tr '\n' ' ' | sed 's/ $//')"
 
+# --- commit retry: a reformatting hook aborts the first commit (#263) --------
+# pre-commit's pretty-format-json --autofix (and black, ruff format, …) rewrites
+# a staged file and then FAILS the run. Without the retry the bump dies as
+# "FAIL <repo>: commit" and leaves a half-written worktree the resume refuses.
+# The retry must re-walk the porcelain, not re-add the first pass's paths, or a
+# hook that writes outside the version surfaces would ride in on the second try.
+SIGNKEY="$WORK/signing-key"
+ssh-keygen -q -t ed25519 -N '' -C fleet-test -f "$SIGNKEY" < /dev/null
+mk_commit_repo() { # DIR HOOK-SCRIPT
+    local d="$1" hook="$2"
+    git init -q -b main "$d"
+    mkdir -p "$d/.claude-plugin"
+    printf '{"name":"demo","version":"1.0.0"}\n' > "$d/plugin.json"
+    printf '{"name":"demo","version":"1.0.0"}\n' > "$d/.claude-plugin/plugin.json"
+    ( cd "$d" && git add -A && git commit -q -m base )
+    git -C "$d" config gpg.format ssh
+    git -C "$d" config user.signingkey "$SIGNKEY.pub"
+    printf '%s\n' "$hook" > "$d/.git/hooks/pre-commit"
+    chmod +x "$d/.git/hooks/pre-commit"
+    # the bump itself: both version surfaces move
+    printf '{"name":"demo","version":"1.1.0"}\n' > "$d/plugin.json"
+    printf '{"name":"demo","version":"1.1.0"}\n' > "$d/.claude-plugin/plugin.json"
+}
+# Fires once, rewrites a staged ALLOWLISTED file, fails — then passes, exactly
+# as an --autofix hook behaves on the re-run.
+REFORMAT_HOOK='#!/bin/sh
+[ -f .git/HOOK_FIRED ] && exit 0
+: > .git/HOOK_FIRED
+printf %s "{\n  \"name\": \"demo\",\n  \"version\": \"1.1.0\"\n}\n" > .claude-plugin/plugin.json
+exit 1'
+mk_commit_repo "$WORK/commit-reformat" "$REFORMAT_HOOK"
+out=$(fr_commit_allowlisted demo "$WORK/commit-reformat" 1.1.0 2>&1)
+check "commit: first attempt fails on the reformatting hook (the defect)" yes \
+    "$(grep -q 'COMMIT EXIT (1): [^0]' <<< "$out" && echo yes || echo no)"
+check "commit: retry re-stages the hook's output and commits" yes \
+    "$(grep -q 'COMMIT EXIT (2): 0' <<< "$out" && echo yes || echo no)"
+check "commit: the bump landed as one commit" "chore(release): v1.1.0" \
+    "$(git -C "$WORK/commit-reformat" log -1 --format=%s)"
+check "commit: nothing left in the worktree afterwards" "" \
+    "$(git -C "$WORK/commit-reformat" status --porcelain)"
+# The retry must NOT widen the allowlist: a hook that writes an unrelated file
+# still fails, on the second pass as on the first.
+FOREIGN_HOOK='#!/bin/sh
+[ -f .git/HOOK_FIRED ] && exit 0
+: > .git/HOOK_FIRED
+echo junk > NOTES.md
+exit 1'
+mk_commit_repo "$WORK/commit-foreign" "$FOREIGN_HOOK"
+out=$(fr_commit_allowlisted demo "$WORK/commit-foreign" 1.1.0 2>&1; echo "rc=$?")
+check "commit: a hook writing outside the version surfaces still FAILs" yes \
+    "$(grep -q 'unexpected change outside the version surfaces: NOTES.md' <<< "$out" && echo yes || echo no)"
+check "commit: that failure is reported to the caller" yes \
+    "$(grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+# A deterministic rejection is not a reformat — it must not become a retry loop.
+REJECT_HOOK='#!/bin/sh
+exit 1'
+mk_commit_repo "$WORK/commit-reject" "$REJECT_HOOK"
+out=$(fr_commit_allowlisted demo "$WORK/commit-reject" 1.1.0 2>&1; echo "rc=$?")
+check "commit: a hook that always rejects fails after exactly two attempts" yes \
+    "$([ "$(grep -c 'COMMIT EXIT' <<< "$out")" = 2 ] && echo yes || echo no)"
+check "commit: the permanent rejection is reported to the caller" yes \
+    "$(grep -q 'FAIL demo: commit' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+
 # --- the shipped fleet list is non-empty and comment-clean -------------------
 n=$(grep -cvE '^\s*(#|$)' "$SCRIPTS/fleet-repos-github.txt")
 check "fleet-repos-github.txt ships a non-empty list" yes \
