@@ -146,5 +146,7 @@ The fix is a linter exemption, not a fake tab:
 This keeps `MD010` enforcing real prose/other-language blocks while letting a
 ` ```makefile ` fence carry an actual, pastable tab. Verify the fix reproduces
 correctly before trusting it — write the fenced snippet to a scratch file and
-run `make -n` against it; a `make` that resolves the target confirms the tab
-survived, a lint pass alone does not.
+run `make -n -f <scratch-file>` against it (`-n` alone silently looks for
+`Makefile`/`makefile`/`GNUmakefile` in the current directory and ignores an
+arbitrarily named scratch file); a `make` that resolves the target confirms
+the tab survived, a lint pass alone does not.
