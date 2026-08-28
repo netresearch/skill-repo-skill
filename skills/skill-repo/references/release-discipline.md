@@ -6,6 +6,7 @@
 - Canonical Order: Bump PR Merged → Tag Pushed
 - Pre-Release Version-Parity Check
 - Changelog Rollover in the Bump Commit
+- A reformatting hook aborts the first bump commit
 - Cache Safety: Never Edit the Installed Copy
 - Multi-Skill-Repo Release Dry-Run
 - GitLab (`git.netresearch.de`) skill repos release on tag too
@@ -144,6 +145,29 @@ the roll is generated text, and generated text is exactly what nobody proofreads
 Boundary regexes are also **fence-blind** — a scan anchored on `^##` matches a
 heading-looking line inside a fenced code block and splices the new section into
 the middle of an example. Track fences while scanning.
+
+## A reformatting hook aborts the first bump commit
+
+A hook that rewrites a file it is checking — `pretty-format-json --autofix`,
+`black`, `ruff format`, `end-of-file-fixer` — modifies the staged tree and then
+*fails* the commit; re-staging its output and committing again is the remedy,
+and the second run passes because the file is already in the shape the hook
+wants. `fr_commit_allowlisted` therefore makes two attempts, and the log shows
+both (`COMMIT EXIT (1): 1`, `COMMIT EXIT (2): 0`). The retry re-walks the
+porcelain rather than re-adding the first pass's paths, so a hook that writes
+*outside* the version surfaces still fails the allowlist on the second pass.
+
+Before that retry existed, such a repo left the `bump` phase as
+`FAIL <repo>: commit` with a half-written worktree the resume then refused as
+dirty, and the operator had to commit by hand and re-run — `it-maintenance-skill`
+v1.15.0 and `netresearch-jira-skill` v2.11.1 both did on 2026-08-28 (#263).
+Their trigger is worth knowing because it recurs: `sync-plugin-manifest.sh`
+emits `.claude-plugin/plugin.json` in the source manifest's key order and
+`pretty-format-json` sorts the keys, so the two rewrite each other on every
+bump. Sorting the generator's output would settle that one pairing and no
+other — the same hook also escapes non-ASCII, which the fleet's descriptions
+are full of — so the retry, which is blind to *what* the hook changed, is the
+fix rather than agreeing with one formatter.
 
 ## Cache Safety: Never Edit the Installed Copy
 
