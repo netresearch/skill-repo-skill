@@ -171,6 +171,37 @@ found_count="$(grep -cF 'SKILL.md found:' <<<"$multi_out")"
 if [[ "$found_count" -eq 3 ]]; then ((PASS++)); else
     echo "  FAIL [multi] expected 3 discovered skills, got $found_count"; ((FAIL++)); fi
 
+# Dangling references: a skill-relative path named in SKILL.md must exist under
+# the skill directory (retro-skill#19 shipped scripts/ and references/ outside
+# it, so every path was dead on a faithful install). The present file must not
+# be reported, the missing ones must -- including the ${CLAUDE_SKILL_DIR} form.
+# Globs and placeholders are not paths and must stay silent.
+echo "== Dangling references =="
+dang="$TMP/fx_dangling"
+rm -rf "$dang"
+mkdir -p "$dang/skills/d/references" "$dang/skills/d/scripts"
+printf '# present\n' > "$dang/skills/d/references/present.md"
+printf '#!/bin/sh\n' > "$dang/skills/d/scripts/present.sh"
+chmod +x "$dang/skills/d/scripts/present.sh"
+{
+    printf '%b' "${hdr}description: Use when doing X\n---\n# D\n"
+    printf 'Read \x60references/present.md\x60 and \x60references/missing.md\x60.\n'
+    printf '%s\n' "Run \`scripts/present.sh\` or \`\${CLAUDE_SKILL_DIR}/scripts/missing.sh\`;"
+    printf 'never \x60references/*.md\x60 wholesale, nor \x60references/<topic>.md\x60.\n'
+} > "$dang/skills/d/SKILL.md"
+dang_out="$(run_validator fallback "$dang")"
+dang_line="$(grep -F 'names path(s) that do not exist' <<<"$dang_out" || true)"
+if [[ -n "$dang_line" ]]; then ((PASS++)); else
+    echo "  FAIL [dangling] missing paths were not reported"; ((FAIL++)); fi
+for want in references/missing.md scripts/missing.sh; do
+    if grep -qF " $want" <<<"$dang_line"; then ((PASS++)); else
+        echo "  FAIL [dangling] $want not named in: $dang_line"; ((FAIL++)); fi
+done
+for absent in present.md present.sh 'references/*.md' 'references/<topic>.md'; do
+    if grep -qF "$absent" <<<"$dang_line"; then
+        echo "  FAIL [dangling] $absent wrongly reported"; ((FAIL++)); else ((PASS++)); fi
+done
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
