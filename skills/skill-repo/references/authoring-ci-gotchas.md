@@ -8,6 +8,7 @@
 - "Skill Validation" can run more than once — wait for all of it
 - Installing the Claude Code CLI with `--ignore-scripts`
 - Generated YAML: exactly one trailing newline
+- `MD010` breaks copy-pasted Makefile snippets — exempt the fence, don't fake the tab
 
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
@@ -116,3 +117,36 @@ newline and verify before committing:
 printf '%s\n' "$CONTENT" > file.yml     # not: echo "$CONTENT" > file.yml
 tail -c 2 file.yml | xxd -p             # must NOT be 0a0a
 ```
+
+## 7. `MD010` breaks copy-pasted Makefile snippets — exempt the fence, don't fake the tab
+
+A ` ```makefile ` fenced block showing a real recipe line needs a literal tab —
+`make` rejects a space there with `*** missing separator. Stop.` But
+markdownlint's `MD010` (no-hard-tabs) flags a hard tab **inside a fenced code
+block by default**, not just in prose. Substituting a single leading space to
+keep the linter quiet (observed in a skill repo's own docs, twice, across two
+separate snippets) produces a snippet that reads clean but silently fails the
+moment someone copies it into a real `Makefile`.
+
+The fix is a linter exemption, not a fake tab:
+
+```jsonc
+// .markdownlint-cli2.jsonc — add the key to the EXISTING "config" object.
+// A separate .markdownlint.jsonc file does not merge with .markdownlint-cli2.jsonc's
+// "config" — it replaces it wholesale, silently re-enabling every other rule this
+// repo already disables there (MD013, MD033, etc.).
+{
+  "config": {
+    "MD010": { "ignore_code_languages": ["makefile"] }
+    // ...alongside this repo's other existing "config" entries
+  }
+}
+```
+
+This keeps `MD010` enforcing real prose/other-language blocks while letting a
+` ```makefile ` fence carry an actual, pastable tab. Verify the fix reproduces
+correctly before trusting it — write the fenced snippet to a scratch file and
+run `make -n -f <scratch-file>` against it (`-n` alone silently looks for
+`Makefile`/`makefile`/`GNUmakefile` in the current directory and ignores an
+arbitrarily named scratch file); a `make` that resolves the target confirms
+the tab survived, a lint pass alone does not.
