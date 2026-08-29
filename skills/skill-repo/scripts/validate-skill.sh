@@ -110,9 +110,18 @@ validate_skill_md() {
         # judgement call for tools the agent runs itself, and a skill may have
         # reasons to keep an interpreter listed.
         if [[ -d "$(dirname "$skill_file")/scripts" ]]; then
-            at_line=$(echo "$frontmatter" | grep -m1 "^allowed-tools:" || true)
-            if [[ -n "$at_line" ]] && echo "$at_line" \
-                | grep -qE '^allowed-tools:.*(Bash( |$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+            # The value may be a plain scalar, a folded/literal block, or a YAML
+            # list, all of which the spec accepts. Take the key line plus every
+            # indented continuation, or a "- " item block, so a rule on a
+            # continuation line is not missed.
+            at_value=$(echo "$frontmatter" | awk '
+                /^allowed-tools:/ { found = 1; print; next }
+                found && /^[[:space:]]/ { print; next }
+                found && /^-[[:space:]]/ { print; next }
+                found { exit }
+            ')
+            if [[ -n "$at_value" ]] && echo "$at_value" \
+                | grep -qE '(Bash([[:space:]]|$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi

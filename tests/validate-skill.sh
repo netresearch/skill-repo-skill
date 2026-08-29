@@ -243,6 +243,20 @@ at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(git:*) Read' ye
 at_case 'allowed-tools: Bash(git:*) Bash(gh:*) Read'                          yes quiet 'no interpreter at all'
 at_case 'allowed-tools: Bash(bash:*) Read'                                    no  quiet 'no scripts/ to name'
 
+# The spec accepts a plain scalar, a folded/literal block and a YAML list, so a
+# check that reads only the key line misses a rule on a continuation line.
+# shellcheck disable=SC2016
+at_case 'allowed-tools: >-
+  Bash(bash:*)
+  Read'                                                                       yes warn  'folded scalar'
+at_case 'allowed-tools:
+  - Bash(python3:*)
+  - Read'                                                                     yes warn  'yaml list'
+# shellcheck disable=SC2016
+at_case 'allowed-tools: >-
+  Bash(${CLAUDE_SKILL_DIR}/scripts/*)
+  Read'                                                                       yes quiet 'folded scalar, converted'
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
