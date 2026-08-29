@@ -99,6 +99,24 @@ validate_skill_md() {
             error "$rel frontmatter has non-spec fields: $field_names (allowed: name, description, license, compatibility, metadata, allowed-tools)"
         fi
 
+        # allowed-tools: a skill that ships scripts should name the scripts, not
+        # the interpreter. Bash(bash:*) pre-approves every bash command the skill
+        # issues for the whole turn; a bare Bash covers every shell command there
+        # is. ${CLAUDE_SKILL_DIR} is substituted in the frontmatter Bash rules as
+        # well as in the body, so a rule can name the shipped scripts without
+        # pinning an install path. See references/repository-quality-rules.md,
+        # section "allowed-tools".
+        # Warning, not error: the field is optional, the narrower form is a
+        # judgement call for tools the agent runs itself, and a skill may have
+        # reasons to keep an interpreter listed.
+        if [[ -d "$(dirname "$skill_file")/scripts" ]]; then
+            at_line=$(echo "$frontmatter" | grep -m1 "^allowed-tools:" || true)
+            if [[ -n "$at_line" ]] && echo "$at_line" \
+                | grep -qE '^allowed-tools:.*(Bash( |$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+                warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
+            fi
+        fi
+
         # Check name field
         if echo "$frontmatter" | grep -q "^name:"; then
             skill_name=$(echo "$frontmatter" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')

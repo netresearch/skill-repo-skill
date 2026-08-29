@@ -206,6 +206,43 @@ for absent in present.md present.sh 'references/*.md' 'references/<topic>.md' 'a
         echo "  FAIL [dangling] $absent wrongly reported"; ((FAIL++)); else ((PASS++)); fi
 done
 
+# --- allowed-tools: interpreter-wide rule in a skill that ships scripts (#271)
+# Warns only when both hold. A skill without scripts/ keeps its interpreter
+# rule without comment, and a converted rule must stay silent -- otherwise the
+# warning would fire across a fleet that has already done the work.
+at_case() { # at_case <allowed-tools line> <with-scripts:yes|no> <expect:warn|quiet> <label>
+    local line="$1" with_scripts="$2" expect="$3" label="$4" dir out hit
+    dir="$(mktemp -d)"; mkdir -p "$dir/skills/d"
+    [[ "$with_scripts" == yes ]] && { mkdir -p "$dir/skills/d/scripts"; printf '#!/usr/bin/env bash\necho hi\n' > "$dir/skills/d/scripts/x.sh"; }
+    printf '{"name":"d","version":"1.0.0"}\n' > "$dir/plugin.json"
+    {
+        printf -- '---\n'
+        printf 'name: d\n'
+        printf 'description: "Use when exercising the allowed-tools check."\n'
+        printf '%s\n' "$line"
+        printf -- '---\n\n# D\n'
+    } > "$dir/skills/d/SKILL.md"
+    out="$(run_validator fallback "$dir")"
+    hit="$(grep -cF 'allowed-tools grants an interpreter' <<<"$out" || true)"
+    rm -rf "$dir"
+    if [[ "$expect" == warn && "$hit" -ge 1 ]] || [[ "$expect" == quiet && "$hit" -eq 0 ]]; then
+        ((PASS++))
+    else
+        echo "  FAIL [allowed-tools] $label: expected $expect, got $hit hit(s)"; ((FAIL++))
+    fi
+}
+at_case 'allowed-tools: Bash(bash:*) Read'                                    yes warn  'interpreter rule'
+at_case 'allowed-tools: Bash(python3:*) Read'                                 yes warn  'python3 rule'
+at_case 'allowed-tools: Bash(uv:*) Read'                                      yes warn  'uv rule'
+at_case 'allowed-tools: Bash(git:*,make:*,bash:*) Read'                       yes warn  'comma syntax hides bash'
+at_case 'allowed-tools: Bash Read Write'                                      yes warn  'bare Bash'
+# Single-quoted on purpose: the validator must see the variable unexpanded,
+# the way it appears in a real frontmatter line.
+# shellcheck disable=SC2016
+at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(git:*) Read' yes quiet 'converted rule'
+at_case 'allowed-tools: Bash(git:*) Bash(gh:*) Read'                          yes quiet 'no interpreter at all'
+at_case 'allowed-tools: Bash(bash:*) Read'                                    no  quiet 'no scripts/ to name'
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
