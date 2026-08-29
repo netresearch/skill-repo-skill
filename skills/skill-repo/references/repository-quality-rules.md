@@ -94,10 +94,11 @@ Das Muster begrenzt auf ein Präfix, nicht auf eine Dateimenge: `*` schließt `/
 
 Claude Code ersetzt `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}` und in Plugin-Skills `${CLAUDE_PLUGIN_ROOT}` an zwei Stellen: im Text der `SKILL.md` und in den Bash-Regeln des Frontmatters. Deshalb funktioniert das Muster über Installationsarten und Versionsstände hinweg, ohne einen Pfad festzuschreiben. `${CLAUDE_SKILL_DIR}` ist die breitere Wahl, weil sie auch außerhalb einer Plugin-Installation gesetzt ist.
 
-Zwei Fallstricke:
+Drei Fallstricke:
 
 - **Muster und Aufruf müssen zusammenpassen.** `bash x.sh` und `./x.sh` sind verschiedene Präfixe. Wenn die `SKILL.md` relative Aufrufe dokumentiert (`scripts/foo.sh PATH`), trifft eine absolute Regel sie nicht — dann kommt bei jedem Skriptaufruf eine Rückfrage, die der Nutzer wegklickt. Skill-Text und Regel gehören in denselben Commit.
 - **Werkzeuge, die der Agent selbst absetzt, bleiben separat.** Verifiziert der Skill Ergebnisse mit `git`, `jq` oder `grep`, gehören die weiter einzeln in die Zeile. Die Regel betrifft den Interpreter-Platzhalter, nicht jede Bash-Regel.
+- **Eine Shell-Variable im Skill-Text hebelt die Regel aus.** Ein Block, der mit `S=${CLAUDE_SKILL_DIR}/scripts` beginnt und dann `uv run $S/foo.py` schreibt, läuft in der Shell korrekt — die Berechtigungsprüfung sieht aber das Kommando, wie es abgesetzt wird, also das wörtliche `$S/…`. Kein einziger so geschriebener Aufruf trifft ein Muster auf den Vollpfad. Im `matrix-communication`-Skill betraf das alle 20 dokumentierten Aufrufe. Den Pfad ausschreiben; das Zeilenbudget gibt es her (dort 61 von 500 Zeilen).
 
 Nach dem Umstellen einmal im Standardmodus durchlaufen, mit unveränderten Einstellungen — nicht unter `--dangerously-skip-permissions`, und nicht mit einer `permissions.allow`-Regel, die dasselbe Kommando ohnehin freigibt. Sonst beweist keines der beiden Ergebnisse etwas: eine ausbleibende Rückfrage kann von einer anderen Freigabe kommen, und eine Rückfrage kann aus einer `ask`-Regel stammen, die `allowed-tools` unabhängig vom Muster sticht. Eine `deny`-Regel wiederum blockiert ohne jede Rückfrage, und ein zusammengesetztes Kommando braucht ohnehin für jeden Teil einen Treffer. Im Zweifel das tatsächlich abgefragte Kommando gegen die geltenden Regeln halten, bevor das Muster geändert wird.
 
