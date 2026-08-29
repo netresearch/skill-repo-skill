@@ -190,12 +190,13 @@ chmod +x "$dang/skills/d/scripts/present.sh"
     printf '%s\n' "Run \`scripts/present.sh\` or \`\${CLAUDE_SKILL_DIR}/scripts/missing.sh\`;"
     printf 'never \x60references/*.md\x60 wholesale, nor \x60references/<topic>.md\x60.\n'
     printf 'See [here](references/present.md#anchor) and [gone](references/linked.md).\n'
+    printf 'Angle-wrapped targets are links too: [w](<references/wrapped.md>).\n'
 } > "$dang/skills/d/SKILL.md"
 dang_out="$(run_validator fallback "$dang")"
 dang_line="$(grep -F 'names path(s) that do not exist' <<<"$dang_out" || true)"
 if [[ -n "$dang_line" ]]; then ((PASS++)); else
     echo "  FAIL [dangling] missing paths were not reported"; ((FAIL++)); fi
-for want in references/missing.md scripts/missing.sh references/linked.md; do
+for want in references/missing.md scripts/missing.sh references/linked.md references/wrapped.md; do
     if grep -qF " $want" <<<"$dang_line"; then ((PASS++)); else
         echo "  FAIL [dangling] $want not named in: $dang_line"; ((FAIL++)); fi
 done

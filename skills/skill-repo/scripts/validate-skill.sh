@@ -347,6 +347,13 @@ PYEOF
             token="${token%\`}"
             token="${token#](}"
             token="${token%)}"
+            # `[x](<references/y.md>)` is a valid link. Only a wholly wrapped
+            # target is unwrapped, so the `references/<topic>.md` placeholder
+            # keeps its angle brackets and stays filtered out below.
+            if [[ "$token" == "<"*">" ]]; then
+                token="${token#<}"
+                token="${token%>}"
+            fi
             token="${token%[.,;:)]}"
             rel="${token#\$\{CLAUDE_SKILL_DIR\}/}"
             # A link may point into a file: references/x.md#section is x.md.
