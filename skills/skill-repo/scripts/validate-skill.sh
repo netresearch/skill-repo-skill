@@ -65,7 +65,7 @@ validate_skill_md() {
     local closing_line frontmatter extra_fields field_names desc compat
     local desc_chars body_lines skill_body base unnamed linked_from ref_lines
     local relative_paths count skill_dir skill_dir_rel checkpoints_justified
-    local untested misclassified f s base
+    local untested misclassified f s base dangling token rel
     # After the local declarations, not before them: `local skill_dir` resets a
     # value assigned above it, so an earlier assignment silently becomes unset
     # and `set -u` then aborts the run mid-way -- which prints no summary and
@@ -322,6 +322,56 @@ PYEOF
                     warning "${skill_dir_rel}: references/${base} is $ref_lines lines with no Contents section - agents preview long files; add one so the rest is discoverable"
                 fi
             done
+        fi
+    fi
+
+    # --- Dangling references -------------------------------------------------
+    # The mirror image of flat discovery: a path SKILL.md names must exist under
+    # the skill directory. A reference that resolves to nothing is a door the
+    # agent opens onto a wall -- it costs a tool call and returns an error where
+    # the skill promised content. retro-skill#19 hit this in production: the
+    # skill shipped with scripts/ and references/ outside the declared skill
+    # directory, so every path in SKILL.md was dead on a faithful install.
+    # Skill-relative directories per the Agent Skills spec (scripts/,
+    # references/, assets/) plus evals/; `${CLAUDE_SKILL_DIR}/` resolves to the
+    # skill directory and is accepted as a prefix. Globs, placeholders and
+    # other variables are not paths and are skipped.
+    #
+    # Both spellings count: a backticked span and a Markdown link target. A
+    # SKILL.md that names its references as links only -- the common shape --
+    # would otherwise pass this check without a single path being looked at.
+    if [[ -n "$skill_dir" && -d "$skill_dir" ]]; then
+        dangling=""
+        while IFS= read -r token; do
+            token="${token#\`}"
+            token="${token%\`}"
+            token="${token#](}"
+            token="${token%)}"
+            # `[x](<references/y.md>)` is a valid link. Only a wholly wrapped
+            # target is unwrapped, so the `references/<topic>.md` placeholder
+            # keeps its angle brackets and stays filtered out below.
+            if [[ "$token" == "<"*">" ]]; then
+                token="${token#<}"
+                token="${token%>}"
+            fi
+            token="${token%[.,;:)]}"
+            rel="${token#\$\{CLAUDE_SKILL_DIR\}/}"
+            # A link may point into a file: references/x.md#section is x.md.
+            rel="${rel%%#*}"
+            case "$rel" in
+                scripts/*|references/*|assets/*|evals/*) ;;
+                *) continue ;;
+            esac
+            case "$rel" in *'*'*|*'<'*|*'>'*|*'{'*|*'}'*|*'$'*|*' '*|*'?'*) continue ;; esac
+            [[ -e "$skill_dir/$rel" ]] && continue
+            case " $dangling " in *" $rel "*) continue ;; esac
+            dangling="$dangling $rel"
+        done < <(
+            grep -oE "\`[^\`]+\`" <<<"$skill_body" || true
+            grep -oE '\]\([^) ]+\)' <<<"$skill_body" || true
+        )
+        if [[ -n "$dangling" ]]; then
+            warning "${skill_dir_rel}: SKILL.md names path(s) that do not exist under the skill directory:${dangling} - fix the path or ship the file"
         fi
     fi
 

@@ -52,7 +52,7 @@ description: "Use when <trigger conditions>"
 
 **Budgets** (spec): `name` ≤64, no doubled/edge hyphen, matches its directory. `description` ≤1024, warn past 500 — a router, not documentation. Body ≤500 lines, warn at 300. `compatibility` ≤500, usually omit.
 
-**Flat discovery**: references one level deep; SKILL.md names every `references/*.md` and every `scripts/` executable; `## Contents` past 100 lines. Rationale and trigger evals: [skill-architecture](references/skill-architecture.md). Audit: `scripts/audit-skills.sh`.
+**Flat discovery**: references one level deep; SKILL.md names every `references/*.md` and every `scripts/` executable; `## Contents` past 100 lines. Rationale and trigger evals: [skill-architecture](references/skill-architecture.md). Audit: `audit-skills.sh` in the repository's top-level `scripts/` (not shipped with the skill).
 
 ## Manifests
 
