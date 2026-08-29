@@ -362,6 +362,11 @@ PYEOF
                 scripts/*|references/*|assets/*|evals/*) ;;
                 *) continue ;;
             esac
+            # A bare directory name is prose about a kind of place ("keep
+            # fixtures under `assets/`", a project's own `assets/`), not a file
+            # the agent is told to open; dxp-frontend-license was flagged for a
+            # project directory this way.
+            case "$rel" in scripts/|references/|assets/|evals/) continue ;; esac
             case "$rel" in *'*'*|*'<'*|*'>'*|*'{'*|*'}'*|*'$'*|*' '*|*'?'*) continue ;; esac
             [[ -e "$skill_dir/$rel" ]] && continue
             case " $dangling " in *" $rel "*) continue ;; esac
