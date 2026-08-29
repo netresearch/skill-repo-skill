@@ -85,8 +85,10 @@ Siehe [`readme-template.md`](readme-template.md) für die **exakten Überschrift
 allowed-tools: Bash(bash:*) Read Glob Grep
 
 # ✅ deckt die mitgelieferten Skripte ab, sonst nichts
-allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Read Glob Grep
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(bash ${CLAUDE_SKILL_DIR}/scripts/*) Read Glob Grep
 ```
+
+Beide Formen gehören in die Zeile: ein Muster greift über das Präfix, und `./foo.sh` und `bash foo.sh` haben verschiedene. Wer Python-Skripte mitliefert, braucht `Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)` zusätzlich — oder ruft sie direkt auf, was Ausführungsbit und Shebang voraussetzt.
 
 Claude Code ersetzt `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}` und in Plugin-Skills `${CLAUDE_PLUGIN_ROOT}` an zwei Stellen: im Text der `SKILL.md` und in den Bash-Regeln des Frontmatters. Deshalb funktioniert das Muster über Installationsarten und Versionsstände hinweg, ohne einen Pfad festzuschreiben. `${CLAUDE_SKILL_DIR}` ist die breitere Wahl, weil sie auch außerhalb einer Plugin-Installation gesetzt ist.
 
@@ -95,7 +97,7 @@ Zwei Fallstricke:
 - **Muster und Aufruf müssen zusammenpassen.** `bash x.sh` und `./x.sh` sind verschiedene Präfixe. Wenn die `SKILL.md` relative Aufrufe dokumentiert (`scripts/foo.sh PATH`), trifft eine absolute Regel sie nicht — dann kommt bei jedem Skriptaufruf eine Rückfrage, die der Nutzer wegklickt. Skill-Text und Regel gehören in denselben Commit.
 - **Werkzeuge, die der Agent selbst absetzt, bleiben separat.** Verifiziert der Skill Ergebnisse mit `git`, `jq` oder `grep`, gehören die weiter einzeln in die Zeile. Die Regel betrifft den Interpreter-Platzhalter, nicht jede Bash-Regel.
 
-Nach dem Umstellen einmal ohne `--dangerously-skip-permissions` durchlaufen: bleibt die Rückfrage aus, greift das Muster; kommt sie, passt es nicht zum dokumentierten Aufruf.
+Nach dem Umstellen einmal ohne `--dangerously-skip-permissions` durchlaufen. Bleibt die Rückfrage aus, greift das Muster. Kommt sie, ist ein Mismatch die wahrscheinlichste, aber nicht die einzige Erklärung: eine passende `ask`- oder `deny`-Regel sticht `allowed-tools` unabhängig davon, und ein zusammengesetztes Kommando braucht für jeden Teil einen Treffer. Also erst das tatsächlich abgefragte Kommando und die geltenden Berechtigungsregeln ansehen, dann das Muster ändern.
 
 ---
 
