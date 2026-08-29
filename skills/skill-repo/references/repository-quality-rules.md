@@ -7,6 +7,7 @@
 - Scripts-first (mechanisch prüfbare Regeln)
 - Pflicht für README-Oberfläche
 - SKILL.md vs. Discovery
+- allowed-tools (vorab gewährte Rechte)
 - Related Skills (Repo-Ebene)
 - Marketplace-Sync (Quelle bleibt Repo)
 - GitHub Repository SEO
@@ -69,7 +70,32 @@ Siehe [`readme-template.md`](readme-template.md) für die **exakten Überschrift
 
 - **Erforderlich:** `name`, `description` (mit Präfix `Use when…`).
 - **Verboten für Discovery:** eigene Schlüssel wie `slug`, `tags`, `category`, `keywords`, `seo_*` im Frontmatter.
-- **Optional** (Agent Skills / Validator): `license`, `compatibility`, `metadata`, `allowed-tools` — nur wenn technisch nötig; keine Marketing-/SEO-Felder dort.
+- **Optional** (Agent Skills / Validator): `license`, `compatibility`, `metadata`, `allowed-tools` — nur wenn technisch nötig; keine Marketing-/SEO-Felder dort. Zur Formulierung von `allowed-tools` siehe unten.
+
+---
+
+## allowed-tools (vorab gewährte Rechte)
+
+`allowed-tools` schaltet für den Zug, in dem der Skill aufgerufen wird, die Rückfrage ab. Das Feld beschränkt nichts: laut Doku bleibt jedes Tool aufrufbar, und für alles Nichtgenannte greifen weiterhin die normalen Berechtigungseinstellungen. Was in der Zeile steht, ist also nicht die Fähigkeit des Skills, sondern die Fläche, auf der er ohne Nachfrage arbeitet — und genau die liest ein Prüfer, der ein fremdes Repo bewertet.
+
+**Regel: Ein Skill, der eigene Skripte mitbringt, deklariert die Skripte, nicht den Interpreter.**
+
+```yaml
+# ❌ deckt jedes bash-Kommando ab, das der Skill je absetzt
+allowed-tools: Bash(bash:*) Read Glob Grep
+
+# ✅ deckt die mitgelieferten Skripte ab, sonst nichts
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Read Glob Grep
+```
+
+Claude Code ersetzt `${CLAUDE_SKILL_DIR}`, `${CLAUDE_PROJECT_DIR}` und in Plugin-Skills `${CLAUDE_PLUGIN_ROOT}` an zwei Stellen: im Text der `SKILL.md` und in den Bash-Regeln des Frontmatters. Deshalb funktioniert das Muster über Installationsarten und Versionsstände hinweg, ohne einen Pfad festzuschreiben. `${CLAUDE_SKILL_DIR}` ist die breitere Wahl, weil sie auch außerhalb einer Plugin-Installation gesetzt ist.
+
+Zwei Fallstricke:
+
+- **Muster und Aufruf müssen zusammenpassen.** `bash x.sh` und `./x.sh` sind verschiedene Präfixe. Wenn die `SKILL.md` relative Aufrufe dokumentiert (`scripts/foo.sh PATH`), trifft eine absolute Regel sie nicht — dann kommt bei jedem Skriptaufruf eine Rückfrage, die der Nutzer wegklickt. Skill-Text und Regel gehören in denselben Commit.
+- **Werkzeuge, die der Agent selbst absetzt, bleiben separat.** Verifiziert der Skill Ergebnisse mit `git`, `jq` oder `grep`, gehören die weiter einzeln in die Zeile. Die Regel betrifft den Interpreter-Platzhalter, nicht jede Bash-Regel.
+
+Nach dem Umstellen einmal ohne `--dangerously-skip-permissions` durchlaufen: bleibt die Rückfrage aus, greift das Muster; kommt sie, passt es nicht zum dokumentierten Aufruf.
 
 ---
 
