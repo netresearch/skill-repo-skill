@@ -335,7 +335,9 @@ PYEOF
     # Skill-relative directories per the Agent Skills spec (scripts/,
     # references/, assets/) plus evals/; `${CLAUDE_SKILL_DIR}/` resolves to the
     # skill directory and is accepted as a prefix. Globs, placeholders and
-    # other variables are not paths and are skipped.
+    # other variables are not paths and are skipped. An error since the fleet
+    # was measured clean (skill-repo-skill#267): 40 GitHub and 37 GitLab skill
+    # repositories, every finding fixed at its source first.
     #
     # Both spellings count: a backticked span and a Markdown link target. A
     # SKILL.md that names its references as links only -- the common shape --
@@ -376,7 +378,7 @@ PYEOF
             grep -oE '\]\([^) ]+\)' <<<"$skill_body" || true
         )
         if [[ -n "$dangling" ]]; then
-            warning "${skill_dir_rel}: SKILL.md names path(s) that do not exist under the skill directory:${dangling} - fix the path or ship the file"
+            error "${skill_dir_rel}: SKILL.md names path(s) that do not exist under the skill directory:${dangling} - fix the path or ship the file"
         fi
     fi
 

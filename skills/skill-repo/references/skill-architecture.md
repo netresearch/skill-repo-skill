@@ -147,7 +147,7 @@ For very large references (upwards of ~10k words), go further and tell the agent
 | `references/*.md` not named in `SKILL.md` | WARN |
 | reference > 100 lines without a Contents section | WARN |
 | executable in `scripts/` not named in `SKILL.md` | WARN |
-| `scripts/`, `references/`, `assets/` or `evals/` path named in `SKILL.md` that does not exist | WARN |
+| `scripts/`, `references/`, `assets/` or `evals/` path named in `SKILL.md` that does not exist | ERROR |
 
 Deliberately **not** linted, because no mechanical check decides them honestly: whether the description narrates a workflow, whether a verification step exists, whether an optional frontmatter field has a consumer. Those belong in review.
 
