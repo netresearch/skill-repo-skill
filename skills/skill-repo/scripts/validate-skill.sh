@@ -336,13 +336,21 @@ PYEOF
     # references/, assets/) plus evals/; `${CLAUDE_SKILL_DIR}/` resolves to the
     # skill directory and is accepted as a prefix. Globs, placeholders and
     # other variables are not paths and are skipped.
+    #
+    # Both spellings count: a backticked span and a Markdown link target. A
+    # SKILL.md that names its references as links only -- the common shape --
+    # would otherwise pass this check without a single path being looked at.
     if [[ -n "$skill_dir" && -d "$skill_dir" ]]; then
         dangling=""
         while IFS= read -r token; do
             token="${token#\`}"
             token="${token%\`}"
+            token="${token#](}"
+            token="${token%)}"
             token="${token%[.,;:)]}"
             rel="${token#\$\{CLAUDE_SKILL_DIR\}/}"
+            # A link may point into a file: references/x.md#section is x.md.
+            rel="${rel%%#*}"
             case "$rel" in
                 scripts/*|references/*|assets/*|evals/*) ;;
                 *) continue ;;
@@ -351,7 +359,10 @@ PYEOF
             [[ -e "$skill_dir/$rel" ]] && continue
             case " $dangling " in *" $rel "*) continue ;; esac
             dangling="$dangling $rel"
-        done < <(grep -oE "\`[^\`]+\`" <<<"$skill_body" || true)
+        done < <(
+            grep -oE "\`[^\`]+\`" <<<"$skill_body" || true
+            grep -oE '\]\([^) ]+\)' <<<"$skill_body" || true
+        )
         if [[ -n "$dangling" ]]; then
             warning "${skill_dir_rel}: SKILL.md names path(s) that do not exist under the skill directory:${dangling} - fix the path or ship the file"
         fi
