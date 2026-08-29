@@ -257,6 +257,17 @@ at_case 'allowed-tools: >-
   Bash(${CLAUDE_SKILL_DIR}/scripts/*)
   Read'                                                                       yes quiet 'folded scalar, converted'
 
+# A blank line is legal inside a folded scalar, and the spec allows comma
+# separation and quoting -- all three defeated an earlier version of the check.
+at_case 'allowed-tools: >-
+  Read
+
+  Bash(python3:*)'                                                            yes warn  'blank line inside value'
+at_case 'allowed-tools: Bash,Read'                                            yes warn  'comma-separated bare Bash'
+at_case 'allowed-tools: "Bash"'                                               yes warn  'quoted bare Bash'
+# shellcheck disable=SC2016
+at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*),Read'             yes quiet 'comma-separated, converted'
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }

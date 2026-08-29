@@ -116,12 +116,13 @@ validate_skill_md() {
             # continuation line is not missed.
             at_value=$(echo "$frontmatter" | awk '
                 /^allowed-tools:/ { found = 1; print; next }
-                found && /^[[:space:]]/ { print; next }
-                found && /^-[[:space:]]/ { print; next }
+                # A blank line is legal inside a folded or literal scalar, so it
+                # continues the value; only a new top-level key ends it.
+                found && (/^[[:space:]]/ || /^-[[:space:]]/ || /^$/) { print; next }
                 found { exit }
             ')
             if [[ -n "$at_value" ]] && echo "$at_value" \
-                | grep -qE '(Bash([[:space:]]|$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+                | grep -qE '(Bash([[:space:],\"'\''"]|$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi
