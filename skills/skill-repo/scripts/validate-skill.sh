@@ -110,19 +110,46 @@ validate_skill_md() {
         # judgement call for tools the agent runs itself, and a skill may have
         # reasons to keep an interpreter listed.
         if [[ -d "$(dirname "$skill_file")/scripts" ]]; then
-            # The value may be a plain scalar, a folded/literal block, or a YAML
-            # list, all of which the spec accepts. Take the key line plus every
-            # indented continuation, or a "- " item block, so a rule on a
-            # continuation line is not missed.
-            at_value=$(echo "$frontmatter" | awk '
-                /^allowed-tools:/ { found = 1; print; next }
-                # A blank line is legal inside a folded or literal scalar, so it
-                # continues the value; only a new top-level key ends it.
-                found && (/^[[:space:]]/ || /^-[[:space:]]/ || /^$/) { print; next }
-                found { exit }
-            ')
-            if [[ -n "$at_value" ]] && echo "$at_value" \
-                | grep -qE '(Bash([[:space:],\"'\''"]|$)|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+            # The spec accepts a plain scalar, a folded or literal block and a
+            # YAML list, in block or flow style, quoted or not, space- or
+            # comma-separated. Rather than widen a pattern per shape -- each
+            # review round found another legal spelling -- take the whole value
+            # and split it into entries.
+            #
+            # Collect: key line plus every continuation. Only a new top-level key
+            # ends the value, so a blank line inside a folded scalar keeps it
+            # open. Comment lines and trailing comments are dropped; they are not
+            # part of the value.
+            #
+            # Split: on whitespace, comma, bracket and quote, but only at
+            # parenthesis depth 0 -- Bash(git:*,make:*,bash:*) is one entry with
+            # commas inside it, and Bash(bash ${CLAUDE_SKILL_DIR}/scripts/*)
+            # carries a space.
+            at_tokens=$(echo "$frontmatter" | awk '
+                /^allowed-tools:/ { found = 1; sub(/^allowed-tools:/, ""); }
+                !found { next }
+                found && NR > 1 && !/^[[:space:]]/ && !/^-[[:space:]]/ && !/^$/ && !/^allowed-tools:/ { exit }
+                {
+                    sub(/^[[:space:]]*#.*$/, "")
+                    # A " #" outside quotes starts a YAML comment; the rest
+                    # of the line is not part of the value, parentheses included.
+                    sub(/[[:space:]]#.*$/, "")
+                    depth = 0
+                    for (i = 1; i <= length($0); i++) {
+                        c = substr($0, i, 1)
+                        if (c == "(") depth++
+                        else if (c == ")") depth--
+                        if (depth == 0 && (c == " " || c == "\t" || c == "," || \
+                                           c == "[" || c == "]" || c == "\"" || c == "'"'"'"))
+                            printf "\n"
+                        else
+                            printf "%s", c
+                    }
+                    printf "\n"
+                }
+            ' | sed -e 's/^-$//' -e '/^$/d')
+            if [[ -n "$at_tokens" ]] && echo "$at_tokens" \
+                | grep -qE '^(Bash$|Bash\([^)]*\b(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi

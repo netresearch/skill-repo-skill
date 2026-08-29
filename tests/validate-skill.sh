@@ -268,6 +268,16 @@ at_case 'allowed-tools: "Bash"'                                               ye
 # shellcheck disable=SC2016
 at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*),Read'             yes quiet 'comma-separated, converted'
 
+# A comment is not part of the value, and a flow list is still a list.
+at_case 'allowed-tools:
+  - Read
+  # Bash(python3:*) is not granted'                                           yes quiet 'comment mentioning an interpreter'
+at_case 'allowed-tools: [Bash]'                                               yes warn  'flow list, bare Bash'
+at_case 'allowed-tools: [Bash(bash:*), Read]'                                 yes warn  'flow list, interpreter'
+# shellcheck disable=SC2016
+at_case 'allowed-tools: [Bash(${CLAUDE_SKILL_DIR}/scripts/*), Read]'          yes quiet 'flow list, converted'
+at_case 'allowed-tools: Read # Bash(bash:*) would be wrong'                   yes quiet 'trailing comment'
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
