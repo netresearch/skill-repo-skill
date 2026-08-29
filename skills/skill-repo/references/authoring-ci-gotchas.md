@@ -9,6 +9,7 @@
 - Installing the Claude Code CLI with `--ignore-scripts`
 - Generated YAML: exactly one trailing newline
 - `MD010` breaks copy-pasted Makefile snippets — exempt the fence, don't fake the tab
+- A validator over a structured value parses it; it does not pattern-match it
 
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
@@ -150,3 +151,40 @@ run `make -n -f <scratch-file>` against it (`-n` alone silently looks for
 `Makefile`/`makefile`/`GNUmakefile` in the current directory and ignores an
 arbitrarily named scratch file); a `make` that resolves the target confirms
 the tab survived, a lint pass alone does not.
+
+---
+
+## 8. A validator over a structured value parses it; it does not pattern-match it
+
+A check added to `validate-skill.sh` read `allowed-tools` with one anchored
+`grep`. It went through four review rounds, and each one found another **legal
+spelling of the same value** the pattern did not anticipate:
+
+| Round | Spelling that slipped past |
+|---|---|
+| 1 | folded scalar `>-`, and the YAML list form — the check read only the key line |
+| 2 | a blank line inside the value, which ended collection; `Bash,Read` and `"Bash"`, where the boundary was whitespace-only |
+| 3 | a YAML comment mentioning what it does *not* grant, matched as if it did |
+| 4 | flow list `[Bash]`, where `]` was not a delimiter |
+
+Widening the pattern each round buys one shape. The signal that the *approach*
+is wrong rather than incomplete is the repetition itself: the value never
+changed, only its spelling.
+
+What worked was taking the value apart instead:
+
+1. **Collect** the key line plus every continuation, ending only at a new
+   top-level key — so a blank line inside a folded scalar keeps the value open.
+2. **Drop** comment lines and everything after a space-`#`, which is where a YAML
+   comment starts. Anchoring on `[^)]*$` here fails on a comment that contains
+   a parenthesis, which is exactly what a comment about `Bash(python3:*)` does.
+3. **Split** on whitespace, comma, bracket and quote — but only at parenthesis
+   depth 0, so `Bash(git:*,make:*)` stays one entry and
+   `Bash(bash ${CLAUDE_SKILL_DIR}/scripts/*)` survives its space.
+4. **Match each entry on its own**, anchored.
+
+`[Bash]` then falls out without a special case, because the bracket is a
+delimiter like any other. Two of the four rounds also broke *existing* passing
+tests when the split was naive — the suite is what caught it, so write the
+shape cases (plain, folded, literal, block list, flow list, comma-separated,
+quoted, commented) before widening anything.
