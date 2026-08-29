@@ -189,6 +189,7 @@ chmod +x "$dang/skills/d/scripts/present.sh"
     printf 'Read \x60references/present.md\x60 and \x60references/missing.md\x60.\n'
     printf '%s\n' "Run \`scripts/present.sh\` or \`\${CLAUDE_SKILL_DIR}/scripts/missing.sh\`;"
     printf 'never \x60references/*.md\x60 wholesale, nor \x60references/<topic>.md\x60.\n'
+    printf 'Project files live under \x60assets/\x60 (a bare directory, not a file).\n'
     printf 'See [here](references/present.md#anchor) and [gone](references/linked.md).\n'
     printf 'Angle-wrapped targets are links too: [w](<references/wrapped.md>).\n'
 } > "$dang/skills/d/SKILL.md"
@@ -200,7 +201,7 @@ for want in references/missing.md scripts/missing.sh references/linked.md refere
     if grep -qF " $want" <<<"$dang_line"; then ((PASS++)); else
         echo "  FAIL [dangling] $want not named in: $dang_line"; ((FAIL++)); fi
 done
-for absent in present.md present.sh 'references/*.md' 'references/<topic>.md'; do
+for absent in present.md present.sh 'references/*.md' 'references/<topic>.md' 'assets/'; do
     if grep -qF "$absent" <<<"$dang_line"; then
         echo "  FAIL [dangling] $absent wrongly reported"; ((FAIL++)); else ((PASS++)); fi
 done
