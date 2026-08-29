@@ -7,7 +7,7 @@ metadata:
   author: Netresearch DTT GmbH
   version: "1.37.0"
   repository: https://github.com/netresearch/skill-repo-skill
-allowed-tools: Bash(bash:*) Bash(python3:*) Read Write Glob Grep
+allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(bash ${CLAUDE_SKILL_DIR}/scripts/*) Bash(skills/skill-repo/scripts/*) Bash(bash skills/skill-repo/scripts/*) Read Write Glob Grep
 ---
 
 # Skill Repository Structure Guide
