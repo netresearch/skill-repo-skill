@@ -503,29 +503,45 @@ done <<< "$RESULT"
 # gate nobody can pass.
 TRIGGER_FILE="$(dirname "$EVALS_FILE")/eval_queries.json"
 if [[ -f "$TRIGGER_FILE" ]]; then
-  n_q=$(python3 -c "
+  # One reader, one verdict. Counting positives in a second call meant a
+  # malformed entry raised there and `|| echo 0` turned the failure into
+  # "0 positives", so the validator printed PASS for a file it could not read.
+  TRIGGER_READ=$(python3 -c "
 import json, sys
 try:
     d = json.load(open(sys.argv[1]))
-except Exception:
-    print(-1); raise SystemExit
+except Exception as exc:
+    print('ERR|not valid JSON: %s' % exc); raise SystemExit
 q = d.get('queries') if isinstance(d, dict) else d
-print(len(q) if isinstance(q, list) else -1)
-" "$TRIGGER_FILE" 2>/dev/null || echo -1)
-  if [[ "$n_q" -lt 0 ]]; then
-    fail "$(basename "$TRIGGER_FILE") is not readable as a list of queries"
-  else
-    n_pos=$(python3 -c "
-import json, sys
-d = json.load(open(sys.argv[1]))
-q = d.get('queries') if isinstance(d, dict) else d
-print(sum(1 for x in q if x.get('should_trigger')))
-" "$TRIGGER_FILE" 2>/dev/null || echo 0)
-    pass "$(basename "$TRIGGER_FILE"): $n_q trigger quer(y|ies), $n_pos labelled should_trigger"
-    if [[ "$n_pos" -eq "$n_q" ]]; then
-      warn "every trigger query is a positive - without negatives the file cannot catch a description that fires on everything"
-    fi
-  fi
+if not isinstance(q, list):
+    print('ERR|no list of queries (expected a top-level list, or a queries key)')
+    raise SystemExit
+bad = [i for i, x in enumerate(q) if not isinstance(x, dict) or 'query' not in x
+       or not isinstance(x.get('should_trigger'), bool)]
+if bad:
+    print('ERR|entr(y|ies) %s lack a query string or a boolean should_trigger'
+          % ', '.join(str(i) for i in bad[:5]))
+    raise SystemExit
+print('OK|%d|%d' % (len(q), sum(1 for x in q if x['should_trigger'])))
+" "$TRIGGER_FILE" 2>&1)
+
+  case "$TRIGGER_READ" in
+    OK\|*)
+      n_q=$(echo "$TRIGGER_READ" | cut -d'|' -f2)
+      n_pos=$(echo "$TRIGGER_READ" | cut -d'|' -f3)
+      if [[ "$n_q" -eq 0 ]]; then
+        warn "$(basename "$TRIGGER_FILE") carries no queries - an empty file is not a trigger test"
+      else
+        pass "$(basename "$TRIGGER_FILE"): $n_q trigger quer(y|ies), $n_pos labelled should_trigger"
+        if [[ "$n_pos" -eq "$n_q" ]]; then
+          warn "every trigger query is a positive - without negatives the file cannot catch a description that fires on everything"
+        fi
+      fi
+      ;;
+    *)
+      fail "$(basename "$TRIGGER_FILE"): ${TRIGGER_READ#ERR|}"
+      ;;
+  esac
 else
   warn "no eval_queries.json beside this file - evals.json measures what the skill does once loaded, never whether a real request reaches it (materialization-contract.md, Rule 7)"
 fi
