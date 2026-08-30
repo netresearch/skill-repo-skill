@@ -519,7 +519,7 @@ if not isinstance(q, list):
 bad = [i for i, x in enumerate(q) if not isinstance(x, dict) or 'query' not in x
        or not isinstance(x.get('should_trigger'), bool)]
 if bad:
-    print('ERR|entr(y|ies) %s lack a query string or a boolean should_trigger'
+    print('ERR|entries %s lack a query string or a boolean should_trigger'
           % ', '.join(str(i) for i in bad[:5]))
     raise SystemExit
 print('OK|%d|%d' % (len(q), sum(1 for x in q if x['should_trigger'])))
@@ -532,7 +532,7 @@ print('OK|%d|%d' % (len(q), sum(1 for x in q if x['should_trigger'])))
       if [[ "$n_q" -eq 0 ]]; then
         warn "$(basename "$TRIGGER_FILE") carries no queries - an empty file is not a trigger test"
       else
-        pass "$(basename "$TRIGGER_FILE"): $n_q trigger quer(y|ies), $n_pos labelled should_trigger"
+        pass "$(basename "$TRIGGER_FILE"): $n_q trigger queries, $n_pos labelled should_trigger"
         if [[ "$n_pos" -eq "$n_q" ]]; then
           warn "every trigger query is a positive - without negatives the file cannot catch a description that fires on everything"
         fi
