@@ -11,6 +11,7 @@
 - Rule 5: PR template
 - Rule 6: Target area mapping
 - Rule 7: Eval format (skill-repo convention)
+  - What these evals cannot measure, and why it matters
 - Rule 8: Per-private-repo confirmation
 - Rule 9: New-skill scaffolding
 - See also
@@ -236,6 +237,46 @@ Two things change for evals **without** a samples block: patterns are now checke
 parseable by `grep -E`, and an unparseable one fails — except under a `*_contains` type,
 where the value is usually a literal and the mismatch is the grader's, so it only warns.
 Nothing else about validation changed, and no evals.json in the fleet changes verdict.
+
+### What these evals cannot measure, and why it matters
+
+`run-ab-evals.sh` builds the "with" arm by pasting the whole `SKILL.md` into
+`--append-system-prompt`, and runs both arms with `--tools ""`. The skill is
+force-fed. **There is no routing in this harness at all**, so no eval in any
+`evals.json` can detect the one failure a description can have: never being
+picked up.
+
+That is not hypothetical. Measured in
+[netresearch/agent-system-evals](https://github.com/netresearch/agent-system-evals),
+`typo3-conformance` — the skill for what a TYPO3 extension declares about
+supported versions — sat in the fleet across three cases about exactly that and
+was loaded in **1 of 25 trials**, because its description never named those
+artefacts. Its 30 evals all passed throughout: 29 of their prompts are phrased
+in the skill's own vocabulary (*"Check this TYPO3 extension for conformance to
+current standards"*), so they measure what it does once loaded and cannot see
+that nothing reaches it. Across the 58 installed Netresearch skills there are
+**1335 evals and no trigger evals**.
+
+Two consequences for anyone reading an A/B result:
+
+- **A green A/B says the content helps when supplied.** It says nothing about
+  whether the skill is ever consulted, and the two are independent — a skill can
+  win every eval and be reached by nobody.
+- **A `tool_use` assertion does not observe a tool call.** The grader matches
+  `value or pattern` against the answer text with `grep -qiE`, whatever the
+  type, and the arm runs with no tools. It is a text assertion wearing another
+  name.
+
+**Where trigger testing belongs.** A trigger eval needs the skill *installed as
+a skill* rather than pasted, tools enabled, and the transcript inspected for an
+invocation. `agent-system-evals` already does this — its `skill_invoked`
+endpoint counts `Skill(...)` calls in the recorded trajectory, and
+`scripts/invocation-census` reports the rate per case. Write the queries in the
+format [agentskills.io documents](https://agentskills.io/skill-creation/optimizing-descriptions)
+— realistic prompts labelled `should_trigger` — keep them in
+`evals/eval_queries.json` beside `evals.json`, and take the phrasings from
+requests real users actually made rather than from the description they are
+meant to test.
 
 ## Rule 8: Per-private-repo confirmation
 
