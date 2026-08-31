@@ -507,7 +507,7 @@ if [[ -f "$TRIGGER_FILE" ]]; then
   # malformed entry raised there and `|| echo 0` turned the failure into
   # "0 positives", so the validator printed PASS for a file it could not read.
   TRIGGER_READ=$(python3 -c "
-import json, sys
+import json, re, sys
 try:
     d = json.load(open(sys.argv[1]))
 except Exception as exc:
@@ -522,13 +522,27 @@ if bad:
     print('ERR|entries %s lack a query string or a boolean should_trigger'
           % ', '.join(str(i) for i in bad[:5]))
     raise SystemExit
-print('OK|%d|%d' % (len(q), sum(1 for x in q if x['should_trigger'])))
+# A benchmark case identifier is a shape no user request carries, and it is
+# how the first trigger file written under this rule leaked: queries copied
+# from the benchmark that was measuring the skill, its case ids beside them.
+# Shaped like OFR-TYPO3-EXT-001: uppercase words, then a zero-padded
+# three-digit ordinal. Deliberately not four digits, so CVE-2024-1234 and
+# OWASP-A01-2021 -- which a security skill may legitimately quote -- do not
+# trip it.
+marks = sorted(set(re.findall(r'\\b[A-Z]{2,}(?:-[A-Z][A-Z0-9]*)+-\\d{3}\\b',
+                              json.dumps(q))))
+print('OK|%d|%d|%s' % (len(q), sum(1 for x in q if x['should_trigger']),
+                       ','.join(marks[:5])))
 " "$TRIGGER_FILE" 2>&1)
 
   case "$TRIGGER_READ" in
     OK\|*)
       n_q=$(echo "$TRIGGER_READ" | cut -d'|' -f2)
       n_pos=$(echo "$TRIGGER_READ" | cut -d'|' -f3)
+      case_ids=$(echo "$TRIGGER_READ" | cut -d'|' -f4)
+      if [[ -n "$case_ids" ]]; then
+        fail "$(basename "$TRIGGER_FILE") names benchmark case identifier(s): ${case_ids} - a trigger query is a user's request, and a case id is the answer key to the run measuring this skill (materialization-contract.md, Rule 7)"
+      fi
       if [[ "$n_q" -eq 0 ]]; then
         warn "$(basename "$TRIGGER_FILE") carries no queries - an empty file is not a trigger test"
       else

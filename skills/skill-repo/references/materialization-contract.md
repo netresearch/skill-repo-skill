@@ -278,6 +278,24 @@ format [agentskills.io documents](https://agentskills.io/skill-creation/optimizi
 requests real users actually made rather than from the description they are
 meant to test.
 
+**Never copy them from a benchmark that measures the skill.** This advice, read
+literally, produced exactly that: the first trigger file written under it took
+its queries verbatim from `agent-system-evals`, named that repository's case
+identifiers, and recorded the routing rate each case had measured — including
+the rate for the case that was measuring the skill at the time. The benchmark's
+contamination check raised nineteen hits the first moment a fleet resolved the
+skill, and the arm had to be rebuilt and the comparison re-run.
+
+The line is between subject and sentences. A trigger eval for a conformance
+skill is about version declarations, and so is the case that measures it;
+sharing that subject is unavoidable and carries nothing. Sharing the case's
+sentences hands the agent the prompt it will be given, and a case identifier
+hands it the answer key. So write each query from the artefact it is about, in
+a maintainer's words, then check mechanically: no case identifier, no measured
+figure, and no run of words shared with any instruction in the benchmark beyond
+an ordinary noun phrase. `evals.json` is not exempt — its prompts reach the
+same fleet.
+
 ## Rule 8: Per-private-repo confirmation
 
 Before pushing to a private host (`git.netresearch.de`, `gitlab.com/<private-org>`, etc.), prompt the user. Decision is remembered per `(session, repo-url)` for the duration of the active retro-skill session; not persisted across sessions.
