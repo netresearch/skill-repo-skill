@@ -306,11 +306,19 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 - **A bump PR with an unresolved bot review thread never auto-merges, and `finish` waits it out.** The `bump` phase arms auto-merge, so the natural reading of an open PR is "CI still running". A `copilot_code_review` (or CodeRabbit) thread on the rolled CHANGELOG blocks the merge with every check green and nothing red anywhere: `mergeStateStatus` says `BLOCKED`, the checks summary says all pass, and the merge gate in `finish` then polls until its timeout. Sweep the PRs the `bump` phase opened *before* running `finish`, and resolve what it finds:
 
   ```bash
-  gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){
-    pullRequest(number:$n){reviewThreads(first:20){nodes{id isResolved}}}}}' \
-    -f o="$O" -f r="$R" -F n="$N" \
-    --jq '[.data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved==false)|.id]|length'
+  gh api graphql --paginate -f o="$O" -f r="$R" -F n="$N" -f query='
+    query($o:String!,$r:String!,$n:Int!,$endCursor:String){repository(owner:$o,name:$r){
+      pullRequest(number:$n){reviewThreads(first:100,after:$endCursor){
+        nodes{id isResolved} pageInfo{hasNextPage endCursor}}}}}' \
+    | jq -s '[.[].data.repository.pullRequest.reviewThreads.nodes[]|select(.isResolved==false)]|length'
   ```
+
+  **Paginate it, and do not lower the page size.** A fixed `first: 20` returns the
+  first page and says nothing about the rest, so a PR with more threads reports
+  zero unresolved and sails through the gate this check exists to close — the
+  false-negative twin of the implausible-rate rule, in the one place where a wrong
+  zero is indistinguishable from a clean PR. `--paginate` needs the `$endCursor`
+  variable and the `pageInfo` block above, and `jq -s` to slurp the pages it emits.
 
   In the 2026-09-03 sweep this hit 3 of 4 PRs in one batch — all three findings were real defects in the *generated* changelog, which is exactly the text nobody proofreads. Budget a review round for the roll's output rather than treating a bump PR as mechanical.
 - **Archived repos are release-infeasible** (pushes rejected). A deprecated repo whose deprecation-banner commit landed *after* the last tag has never shipped its own deprecation notice — flag it for an unarchive decision instead of silently skipping.
