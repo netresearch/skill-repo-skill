@@ -57,7 +57,7 @@ repos:
         files: (^skills/.+/SKILL\.md$|^SKILL\.md$|^skills/.+/checkpoints\.yaml$|^checkpoints\.yaml$|^\.claude-plugin/plugin\.json$|^composer\.json$)
         require_serial: true
   - repo: https://github.com/netresearch/skill-repo-skill
-    rev: v2.0.0
+    rev: v2.0.1
     hooks:
       - id: check-version-parity
 
