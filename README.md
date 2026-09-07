@@ -67,11 +67,23 @@ This is an **Agent Skill** following the [open standard](https://agentskills.io)
 
 ### Marketplace (recommended)
 
-Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
+Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then install this plugin from it:
 
 ```bash
 /plugin marketplace add netresearch/claude-code-marketplace
+/plugin install skill-repo@netresearch-claude-code-marketplace
 ```
+
+> **Do not** run `/plugin marketplace add netresearch/skill-repo-skill`. `marketplace add` needs a `.claude-plugin/marketplace.json` catalog; this repo ships a `.claude-plugin/plugin.json` plugin manifest, so that fails with `Marketplace file not found`.
+
+### Without a marketplace: skills directory (Claude Code 2.1.157+)
+
+```bash
+git clone https://github.com/netresearch/skill-repo-skill.git \
+  ~/.claude/skills/skill-repo
+```
+
+Loads as `skill-repo@skills-dir` on the next session, hooks and commands included. Update with `git pull`; remove by deleting the directory.
 
 ### npx ([skills.sh](https://skills.sh))
 
@@ -150,10 +162,10 @@ The layout for a Netresearch skill repository (one or more skills per repo):
 
 ### Installation methods (summary)
 
-1. **Marketplace** — `/plugin marketplace add netresearch/claude-code-marketplace`
-2. **npx (skills.sh)** — `npx skills add <repo-url> --skill <name>`
-3. **Release download** — GitHub Releases (skill files only)
-4. **Git clone** — direct clone
+1. **Marketplace** (recommended) — `/plugin marketplace add netresearch/claude-code-marketplace`, then `/plugin install <plugin-name>@netresearch-claude-code-marketplace`
+2. **Skills directory** — clone into `~/.claude/skills/<plugin-name>/`; loads as `<plugin-name>@skills-dir`, no marketplace (Claude Code 2.1.157+)
+3. **npx (skills.sh)** — `npx skills add <repo-url> --skill <name>` (skills only: drops hooks, agents, commands, `bin/`)
+4. **Release download** — GitHub Releases (skill files only)
 5. **Composer** — `composer require netresearch/<repo-name>` (PHP projects)
 6. **npm** — coordinator + `github:<org>/<repo>` (Node projects)
 

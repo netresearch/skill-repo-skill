@@ -159,8 +159,15 @@ Updated in `.claude-plugin/marketplace.json`:
 ### Install Skill
 
 ```bash
-/plugin install {skill-name}
+/plugin install {plugin-name}@netresearch-claude-code-marketplace
 ```
+
+`{plugin-name}` is the entry's `name` in the catalog, not necessarily the repo
+name. `marketplace add` must point at the catalog repo — pointing it at an
+individual skill repo fails, because a skill repo ships
+`.claude-plugin/plugin.json`, not `.claude-plugin/marketplace.json`. See
+[`installation-methods.md`](installation-methods.md) for the marketplace-free
+skills-directory route.
 
 ## Benefits of Marketplace Distribution
 

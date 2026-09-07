@@ -49,11 +49,27 @@
 
 ### Marketplace (recommended)
 
-Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then browse and install skills:
+Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-marketplace) once, then install this plugin from it:
 
 ```bash
 /plugin marketplace add netresearch/claude-code-marketplace
+/plugin install {plugin-name}@netresearch-claude-code-marketplace
 ```
+
+`{plugin-name}` is the `name` this repo has in the marketplace catalog, which is not always the repo name. Only this route supports `claude plugin update` and shows a version in `/plugin`.
+
+> **Do not** run `/plugin marketplace add netresearch/{repo-name}`. `marketplace add` requires a `.claude-plugin/marketplace.json` catalog; this repo ships a `.claude-plugin/plugin.json` plugin manifest, so pointing it here fails with `Marketplace file not found`.
+
+### Without a marketplace: skills directory (Claude Code 2.1.157+)
+
+Clone the repo into your personal skills directory. Claude Code loads any folder there that has a `.claude-plugin/plugin.json` as `{plugin-name}@skills-dir` on the next session — with no install step, and including hooks, agents and commands:
+
+```bash
+git clone https://github.com/netresearch/{repo-name}.git \
+  ~/.claude/skills/{plugin-name}
+```
+
+Update with `git pull`. There is no uninstall step: delete the directory, or run `claude plugin disable {plugin-name}@skills-dir`.
 
 ### npx ([skills.sh](https://skills.sh))
 
@@ -63,15 +79,11 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 npx skills add https://github.com/netresearch/{repo-name} --skill {skill-name}
 ```
 
+> **Limitation:** `npx skills` installs `SKILL.md`-based skills only. It reads `.claude-plugin/plugin.json` to *locate* skills, not to register a plugin, so `hooks/`, `agents/`, `commands/`, `bin/` and `.mcp.json` are silently left out. Repos shipping any of those need the marketplace or skills-directory route for full functionality.
+
 ### Download release
 
 Download the [latest release](https://github.com/netresearch/{repo-name}/releases/latest) and extract to your agent’s skills directory.
-
-### Git clone
-
-```bash
-git clone https://github.com/netresearch/{repo-name}.git
-```
 
 ### Composer (PHP projects)
 
