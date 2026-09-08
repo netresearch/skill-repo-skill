@@ -100,12 +100,6 @@ npx skills add https://github.com/netresearch/skill-repo-skill --skill skill-rep
 
 Download the [latest release](https://github.com/netresearch/skill-repo-skill/releases/latest) and extract to your agent’s skills directory.
 
-### Git clone
-
-```bash
-git clone https://github.com/netresearch/skill-repo-skill.git
-```
-
 ### Composer (PHP projects)
 
 ```bash
