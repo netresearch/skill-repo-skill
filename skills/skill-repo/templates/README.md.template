@@ -62,14 +62,15 @@ Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-mar
 
 ### Without a marketplace: skills directory (Claude Code 2.1.157+)
 
-Clone the repo into your personal skills directory. Claude Code loads any folder there that has a `.claude-plugin/plugin.json` as `{plugin-name}@skills-dir` on the next session — with no install step, and including hooks, agents and commands:
+Clone the repo into your personal skills directory. Claude Code loads any folder there that has a `.claude-plugin/plugin.json` as `{plugin-name}@skills-dir` on the next session — with no install step, and including any hooks, agents and commands it ships:
 
 ```bash
+mkdir -p ~/.claude/skills
 git clone https://github.com/netresearch/{repo-name}.git \
   ~/.claude/skills/{plugin-name}
 ```
 
-Update with `git pull`. There is no uninstall step: delete the directory, or run `claude plugin disable {plugin-name}@skills-dir`.
+Update with `git -C ~/.claude/skills/{plugin-name} pull` and start a new session. There is no uninstall step: delete the directory, or run `claude plugin disable {plugin-name}@skills-dir`.
 
 ### npx ([skills.sh](https://skills.sh))
 

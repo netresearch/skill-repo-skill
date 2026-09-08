@@ -94,6 +94,8 @@ Install with any [Agent Skills](https://agentskills.io)-compatible agent:
 npx skills add https://github.com/netresearch/skill-repo-skill --skill skill-repo
 ```
 
+> **Limitation:** `npx skills` installs `SKILL.md`-based skills only. It reads `.claude-plugin/plugin.json` to *locate* skills, not to register a plugin, so `hooks/`, `agents/`, `commands/`, `bin/` and `.mcp.json` are left out. Use the marketplace or the skills directory when a repo ships any of those.
+
 ### Download release
 
 Download the [latest release](https://github.com/netresearch/skill-repo-skill/releases/latest) and extract to your agent’s skills directory.
