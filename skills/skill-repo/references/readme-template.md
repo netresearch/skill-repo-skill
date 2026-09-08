@@ -29,7 +29,7 @@ Use **exact** level-2 headings so agents can grep them:
 - `## Context requirements`
 - `## Example prompts` — **minimum three** fenced or bulleted realistic prompts (distinct scenarios).
 - `## Related skills` — slugs/URLs **or** explicit `none (justified: …)`.
-- `## Installation` — must include Netresearch marketplace path (`/plugin marketplace add netresearch/claude-code-marketplace`) **or** pointer to org-standard install doc.
+- `## Installation` — must include the Netresearch marketplace path, **both** lines (`/plugin marketplace add netresearch/claude-code-marketplace` followed by `/plugin install {plugin-name}@netresearch-claude-code-marketplace`), **or** a pointer to the org-standard install doc. The `marketplace add` target is always the catalog repo — never the skill's own repo, which has no `marketplace.json` and fails.
 - `## Contributing`
 - `## License`
 

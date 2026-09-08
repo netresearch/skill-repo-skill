@@ -3,13 +3,14 @@
 ## Contents
 
 - Method 1: Netresearch Marketplace (Recommended)
-- Method 2: Download Release
-- Method 3: Composer (PHP Projects)
-- Method 4: npm (Node Projects)
+- Method 2: Skills Directory (no marketplace)
+- Method 3: Download Release
+- Method 4: Composer (PHP Projects)
+- Method 5: npm (Node Projects)
 - Choosing a Method
 - Directory Locations
 
-Four methods for installing Netresearch skills.
+Five methods for installing Netresearch skills.
 
 ## Method 1: Netresearch Marketplace (Recommended)
 
@@ -27,18 +28,84 @@ The marketplace aggregates all Netresearch skills in one place.
 # Browse available plugins
 /plugin
 
-# Install specific skill
-/plugin install {skill-name}
+# Install a specific plugin
+/plugin install {plugin-name}@netresearch-claude-code-marketplace
 ```
+
+`{plugin-name}` is the `name` field of the repo's entry in the catalog's
+`marketplace.json`, which is **not** always the repo name — `jira-skill` is
+`jira-integration`, `matrix-skill` is `matrix-communication`,
+`php-ast-edit-skill` is `php-structured-edit`. Read the name from the catalog,
+never derive it from the repo slug.
+
+### Do not point `marketplace add` at a skill repo
+
+```bash
+# WRONG — fails with: Marketplace file not found at .../marketplace.json
+/plugin marketplace add netresearch/{repo-name}
+```
+
+`marketplace add` requires the target repo to contain a
+`.claude-plugin/marketplace.json` **catalog**. Skill repos ship a
+`.claude-plugin/plugin.json` **plugin manifest** instead, so this fails. The
+catalog is `netresearch/claude-code-marketplace`; its entries point back at
+each skill repo as their source, so installing from it still fetches the code
+from this repo.
 
 ### Benefits
 
 - Curated collection
-- Automatic updates via sync
+- Automatic updates — the only route with `claude plugin update` and a version in `/plugin`
 - Easy discovery
 - No manual file management
 
-## Method 2: Download Release
+## Method 2: Skills Directory (no marketplace, Claude Code 2.1.157+)
+
+Since Claude Code 2.1.157: *"Plugins in `.claude/skills` directories are now
+automatically loaded, no marketplace required."* Any folder under a skills
+directory containing `.claude-plugin/plugin.json` loads as
+`{plugin-name}@skills-dir` on the next session — discovered in place, not
+copied into the plugin cache.
+
+### Installation
+
+```bash
+mkdir -p ~/.claude/skills
+git clone https://github.com/netresearch/{repo-name}.git \
+  ~/.claude/skills/{plugin-name}
+```
+
+### What loads
+
+Personal scope (`~/.claude/skills/`) loads the whole plugin — skills, agents,
+hooks, commands, `bin/`, `.mcp.json`, `.lsp.json` — with no restrictions.
+
+Project scope (`<cwd>/.claude/skills/`, checked into a repo) loads only after
+the workspace trust dialog, and restricts what runs: MCP servers need
+per-server approval, LSP servers start only after trust, and background
+monitors do not load at all. Project-scope plugins are found only in the
+session's primary working directory — they do not walk up to the repo root, so
+launch from the repo root or move there with `/cd` (2.1.246+).
+
+### Update and removal
+
+```bash
+git -C ~/.claude/skills/{plugin-name} pull   # update
+rm -rf ~/.claude/skills/{plugin-name}        # remove
+claude plugin disable {plugin-name}@skills-dir  # keep on disk, stop loading
+```
+
+There is no uninstall step, because nothing was installed from a marketplace.
+`SKILL.md` edits apply immediately; changes to `hooks/`, `.mcp.json`,
+`agents/` and output styles need `/reload-plugins` or a restart.
+
+### Trade-off vs. the marketplace
+
+No `claude plugin update`, no version in `/plugin`, no discovery — updating is
+whatever `git pull` gives you. Use it for pinning to a branch or working from
+a local checkout; prefer the marketplace otherwise.
+
+## Method 3: Download Release
 
 Download packaged skill files from GitHub Releases.
 
@@ -67,7 +134,7 @@ Release packages contain only skill-relevant files:
 - `composer.json` (separate distribution)
 - Dev configuration files
 
-## Method 3: Composer (PHP Projects)
+## Method 4: Composer (PHP Projects)
 
 For PHP projects, install skills as Composer packages.
 
@@ -100,7 +167,7 @@ composer require netresearch/{repo-name}
 - Project-specific skill sets
 - Easy updates with `composer update`
 
-## Method 4: npm (Node Projects)
+## Method 5: npm (Node Projects)
 
 For Node.js / TypeScript projects, install skills as npm packages discovered by `@netresearch/agent-skill-coordinator`.
 
@@ -207,6 +274,8 @@ The npm path registers only `SKILL.md` content into `AGENTS.md`. **Slash command
 |----------|-------------------|
 | General Claude Code use | Marketplace |
 | Offline/air-gapped | Release download |
+| Repo not in the catalog | Skills directory |
+| Pinning to a branch, or hacking on the skill | Skills directory |
 | PHP project | Composer |
 | Node / TypeScript project | npm |
 | CI/CD automation | Composer or npm |
@@ -217,6 +286,7 @@ The npm path registers only `SKILL.md` content into `AGENTS.md`. **Slash command
 | Method | Location |
 |--------|----------|
 | Marketplace | Managed by Claude Code |
+| Skills directory | `~/.claude/skills/{plugin-name}/` (loaded in place) |
 | Release | `~/.claude/skills/{skill-name}/` |
 | Composer | `vendor/netresearch/{repo-name}/` |
 | npm | `node_modules/@netresearch/{repo-name}/` |
