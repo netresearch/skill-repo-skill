@@ -79,11 +79,12 @@ Add the [Netresearch marketplace](https://github.com/netresearch/claude-code-mar
 ### Without a marketplace: skills directory (Claude Code 2.1.157+)
 
 ```bash
+mkdir -p ~/.claude/skills
 git clone https://github.com/netresearch/skill-repo-skill.git \
   ~/.claude/skills/skill-repo
 ```
 
-Loads as `skill-repo@skills-dir` on the next session, hooks and commands included. Update with `git pull`; remove by deleting the directory.
+Loads as `skill-repo@skills-dir` on the next session. Update with `git -C ~/.claude/skills/skill-repo pull` and start a new session; remove by deleting the directory.
 
 ### npx ([skills.sh](https://skills.sh))
 

@@ -70,6 +70,7 @@ copied into the plugin cache.
 ### Installation
 
 ```bash
+mkdir -p ~/.claude/skills
 git clone https://github.com/netresearch/{repo-name}.git \
   ~/.claude/skills/{plugin-name}
 ```
