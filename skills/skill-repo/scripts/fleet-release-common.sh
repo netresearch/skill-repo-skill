@@ -832,13 +832,18 @@ fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces m
     # deterministic rejection fails the second attempt too and reports as before.
     local repo="$1" wt="$2" version="$3"
     local attempt ec
+    # Expanded below as ${trailer_args[@]+"${trailer_args[@]}"}: expanding an
+    # EMPTY array as "${a[@]}" under `set -u` is an error before bash 4.4, and
+    # fr_preflight admits bash >= 4 — so the plain form would break every bump
+    # on exactly the older shells that guard exists for, and only for operators
+    # who did NOT set FR_COMMIT_TRAILERS.
     local -a trailer_args=()
     fr_trailer_args trailer_args
     for attempt in 1 2; do
         echo "--- porcelain (attempt $attempt):"
         git -C "$wt" status --porcelain
         fr_stage_allowlisted "$repo" "$wt" || return 1
-        ( cd "$wt" && git commit -S --signoff "${trailer_args[@]}" -m "${FR_COMMIT_PREFIX}${version}" )
+        ( cd "$wt" && git commit -S --signoff ${trailer_args[@]+"${trailer_args[@]}"} -m "${FR_COMMIT_PREFIX}${version}" )
         ec=$?
         echo "COMMIT EXIT ($attempt): $ec"   # bare exit code — a pipe here once hid a hook abort
         if [[ "$ec" -eq 0 ]]; then
