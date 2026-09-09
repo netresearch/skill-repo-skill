@@ -289,6 +289,31 @@ def main() -> None:
         print(defs_note)
 
 
+def released_labels(lines):
+    """Tag labels of every released heading, document order, fences skipped.
+
+    The compare base for a new release is the heading directly below it, not
+    whatever [Unreleased] happened to point at — see update_link_reference_
+    definitions.
+    """
+    labels = []
+    for _, line, in_fence in scan(lines):
+        if in_fence:
+            continue
+        for rx in (LINKED_RE, BRACKETED_RE, BARE_PAREN_RE):
+            m = rx.match(line)
+            if m:
+                labels.append(m.group("tag"))
+                break
+    return labels
+
+
+def styled_tag(label, v_prefixed):
+    """Render `label` in the tag style the link definitions already use."""
+    bare = label.removeprefix("v")
+    return f"v{bare}" if v_prefixed else bare
+
+
 def update_link_reference_definitions(new_lines, new_heading, version):
     """Keep-a-changelog ref-style links: `[Unreleased]: …/compare/vOLD...HEAD`
     at the bottom, one definition per released heading. After a roll the
@@ -316,11 +341,45 @@ def update_link_reference_definitions(new_lines, new_heading, version):
                 f"[{version}] manually"
             )
         old = old_m.group(0)
-        new_tag = f"v{version}" if old.startswith("v") else version
+        v_prefixed = old.startswith("v")
+        new_tag = f"v{version}" if v_prefixed else version
         base = stem[: old_m.start()]
+
+        # The compare base comes from the HEADINGS, not from [Unreleased].
+        # [Unreleased] can be stale — an earlier roll that skipped a definition
+        # leaves it pointing several releases back, and inheriting it spans the
+        # new release across all of them (matrix-skill shipped
+        # v3.1.1...v3.1.3 that way).
+        labels = released_labels(new_lines)
+        head_label = head_m.group("label")
+        prev_label = labels[1] if len(labels) > 1 else None
+        prev_tag = styled_tag(prev_label, v_prefixed) if prev_label else old
+
         new_lines[i] = f"[{m.group('label')}]: {base}{new_tag}...HEAD"
-        new_lines.insert(i + 1, f"[{head_m.group('label')}]: {base}{old}...{new_tag}")
-        return f"updated link-reference definitions ([Unreleased] -> {new_tag}...HEAD)"
+        new_lines.insert(i + 1, f"[{head_label}]: {base}{prev_tag}...{new_tag}")
+
+        # A previous release with no definition of its own is what let the
+        # stale base survive in the first place; write it while we can still
+        # see the version below it.
+        note = f"updated link-reference definitions ([Unreleased] -> {new_tag}...HEAD)"
+        if prev_label is not None and len(labels) > 2:
+            # Compared without the v prefix: a file may head its sections
+            # `## [v3.1.2]` while defining `[3.1.2]:`. A raw match would call
+            # the existing definition missing and add a second one under the
+            # other spelling.
+            want = prev_label.removeprefix("v")
+            have_prev = any(
+                ln.split("]:", 1)[0][1:].removeprefix("v") == want
+                for ln in new_lines
+                if ln.startswith("[") and "]:" in ln
+            )
+            if not have_prev:
+                prev2_tag = styled_tag(labels[2], v_prefixed)
+                new_lines.insert(
+                    i + 2, f"[{prev_label}]: {base}{prev2_tag}...{prev_tag}"
+                )
+                note += f"; backfilled the missing [{prev_label}] definition"
+        return note
     return None
 
 
