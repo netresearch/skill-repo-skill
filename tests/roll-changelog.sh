@@ -227,6 +227,54 @@ check "ref-style defs: [Unreleased] range restarts at the new tag" yes \
     "$(grep -qx '\[Unreleased\]: https://github.com/x/y/compare/v1.3.0...HEAD' "$f" && echo yes || echo no)"
 check "ref-style defs: the new release got its own definition" yes \
     "$(grep -qx '\[1.3.0\]: https://github.com/x/y/compare/v1.2.0...v1.3.0' "$f" && echo yes || echo no)"
+# The compare base comes from the headings, not from [Unreleased] (#281).
+# Reproduces matrix-skill: [Unreleased] still points at v3.1.1 and the [3.1.2]
+# definition was never written, so the old code shipped v3.1.1...v3.1.3.
+f="$WORK/refs-stale.md"
+cat > "$f" <<'EOF'
+## [Unreleased]
+
+- change
+
+## [3.1.2] - 2026-02-01
+
+- mid
+
+## [3.1.1] - 2026-01-01
+
+- old
+
+[Unreleased]: https://github.com/x/y/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/x/y/compare/v3.1.0...v3.1.1
+EOF
+check "stale base: exits 0" 0 "$(roll "$f" 3.1.3 --date 2026-08-13)"
+check "stale base: new release compares against the heading below it" yes \
+    "$(grep -qx '\[3.1.3\]: https://github.com/x/y/compare/v3.1.2...v3.1.3' "$f" && echo yes || echo no)"
+check "stale base: NOT the stale [Unreleased] base" yes \
+    "$(grep -q 'compare/v3.1.1\.\.\.v3.1.3' "$f" && echo no || echo yes)"
+check "stale base: the missing [3.1.2] definition is backfilled" yes \
+    "$(grep -qx '\[3.1.2\]: https://github.com/x/y/compare/v3.1.1...v3.1.2' "$f" && echo yes || echo no)"
+check "stale base: [Unreleased] still restarts at the new tag" yes \
+    "$(grep -qx '\[Unreleased\]: https://github.com/x/y/compare/v3.1.3...HEAD' "$f" && echo yes || echo no)"
+
+# Unprefixed tag style must stay unprefixed on both ends of the range.
+f="$WORK/refs-bare.md"
+cat > "$f" <<'EOF'
+## [Unreleased]
+
+- change
+
+## [2.0.0] - 2026-02-01
+
+- old
+
+[Unreleased]: https://github.com/x/y/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/x/y/compare/1.9.0...2.0.0
+EOF
+check "bare tag style: exits 0" 0 "$(roll "$f" 2.1.0 --date 2026-08-13)"
+check "bare tag style: no v prefix leaks into the new range" yes \
+    "$(grep -qx '\[2.1.0\]: https://github.com/x/y/compare/2.0.0...2.1.0' "$f" && echo yes || echo no)"
+
 f="$WORK/refs-odd.md"
 printf '## [Unreleased]\n\n- a\n\n## [1.0.0] - 2026-01-01\n\n- b\n\n[Unreleased]: https://example.invalid/branches\n' > "$f"
 check "ref-style defs in an unknown shape: roll succeeds with a warning" 0 \
