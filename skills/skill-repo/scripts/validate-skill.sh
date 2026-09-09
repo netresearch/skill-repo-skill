@@ -973,18 +973,26 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
     MP_ADD=$(grep -E '^[[:space:]]*/plugin[[:space:]]+marketplace[[:space:]]+add[[:space:]]' \
         <<< "$README_CMDS" || true)
     if [[ -n "$MP_ADD" ]]; then
+        # The ARGUMENT, not the line: a substring test makes
+        # `add netresearch/foo-catalog` match the slug `netresearch/foo`, and
+        # splitting on a single space mis-parses `install  <two spaces>`.
+        MP_ADD_TARGETS=$(awk '{ for (i = 1; i <= NF; i++) if ($i == "add") { print $(i + 1); break } }' \
+            <<< "$MP_ADD")
         SELF_SLUG=""
         if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
             SELF_SLUG="$GITHUB_REPOSITORY"
-        elif git -C "$REPO_DIR" remote get-url origin &> /dev/null; then
-            SELF_SLUG="netresearch/$(basename "$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null)" .git)"
+        elif SELF_URL=$(git -C "$REPO_DIR" remote get-url origin 2> /dev/null); then
+            # owner/repo from any remote form, including the scp-style
+            # git@host:group/repo.git and a GitLab subgroup path.
+            SELF_URL="${SELF_URL%.git}"
+            SELF_SLUG=$(awk -F'[:/]' '{ print $(NF - 1) "/" $NF }' <<< "$SELF_URL")
         fi
         # `marketplace add` resolves .claude-plugin/marketplace.json in the
         # TARGET repo. Pointing it at a repo that ships only plugin.json fails
         # with "Marketplace file not found" — provable locally when the target
         # is this repo.
         if [[ -n "$SELF_SLUG" && ! -f "$REPO_DIR/.claude-plugin/marketplace.json" ]] \
-            && grep -qF -- "$SELF_SLUG" <<< "$MP_ADD"; then
+            && grep -Fxq -- "$SELF_SLUG" <<< "$MP_ADD_TARGETS"; then
             error "README.md: '/plugin marketplace add $SELF_SLUG' cannot work — the target must be a catalog repo shipping .claude-plugin/marketplace.json, and this repo ships .claude-plugin/plugin.json. Point it at netresearch/claude-code-marketplace (its entry names this repo as the source, so the code still comes from here)."
         else
             success "README.md marketplace-add target is not this repo"
@@ -995,10 +1003,10 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
         if [[ -z "$MP_INSTALL" ]]; then
             warning "README.md documents '/plugin marketplace add' but no '/plugin install <plugin>@<marketplace>' line — following it leaves the reader with a registered marketplace and no plugin"
         else
-            while IFS= read -r line; do
-                [[ -n "$line" ]] || continue
-                target="${line#*install }"
-                target="${target%%[[:space:]]*}"
+            MP_INSTALL_TARGETS=$(awk '{ for (i = 1; i <= NF; i++) if ($i == "install") { print $(i + 1); break } }' \
+                <<< "$MP_INSTALL")
+            while IFS= read -r target; do
+                [[ -n "$target" ]] || continue
                 case "$target" in
                     *@*/* | */*@*)
                         error "README.md: '/plugin install $target' — the part after @ is the marketplace NAME (e.g. netresearch-claude-code-marketplace), not owner/repo"
@@ -1008,7 +1016,7 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
                         warning "README.md: '/plugin install $target' has no @<marketplace> suffix — ambiguous once more than one marketplace is configured"
                         ;;
                 esac
-            done <<< "$MP_INSTALL"
+            done <<< "$MP_INSTALL_TARGETS"
         fi
         # Not checkable here: whether the named catalog actually lists this
         # plugin. That needs the catalog fetched at validation time — see the

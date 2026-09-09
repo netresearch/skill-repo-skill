@@ -322,6 +322,21 @@ readme_case prose_ok "$PROSE_ONLY" expect-present \
     "install target names a marketplace" "the correct pair is accepted"
 
 # shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+# The slug is compared against the ADD ARGUMENT, not the line. A catalog whose
+# name merely starts with this repo's slug must not read as self-referencing.
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+PREFIX_CATALOG='## Install\n\n```text\n/plugin marketplace add netresearch/demo-skill-catalog\n/plugin install demo@demo-skill-catalog\n```\n'
+readme_case prefix_catalog "$PREFIX_CATALOG" expect-absent \
+    "cannot work" "a catalog whose slug extends this repo's is not self-reference"
+
+# Two spaces after `install` must still yield the target, not an empty string.
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+DOUBLE_SPACE='## Install\n\n```text\n/plugin marketplace add netresearch/claude-code-marketplace\n/plugin  install   demo@netresearch-claude-code-marketplace\n```\n'
+readme_case double_space "$DOUBLE_SPACE" expect-present \
+    "install target names a marketplace: demo@netresearch-claude-code-marketplace" \
+    "irregular spacing still parses the install target"
+
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
 NO_INSTALL='## Install\n\n```text\n/plugin marketplace add netresearch/claude-code-marketplace\n```\n'
 readme_case no_install "$NO_INSTALL" expect-present \
     "no plugin" "an add line without an install line warns"
