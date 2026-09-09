@@ -799,6 +799,26 @@ fr_stage_allowlisted() { # REPO WT — stage every pending path, refusing anythi
     git -C "$wt" add -- "${paths[@]}"
 }
 
+fr_trailer_args() { # ARRAY_NAME — fill with --trailer args from FR_COMMIT_TRAILERS
+    # Disclosure trailers (provenance, session, host) are the operator's to
+    # define, not this driver's: it must not know what `Assisted-by` means, so
+    # the caller supplies whole `Key: value` lines, one per line, and each
+    # becomes a `git commit --trailer`. Blank lines are skipped so a
+    # here-doc-assigned variable with a trailing newline behaves.
+    # `--trailer` appends into the message's own trailer block, so it composes
+    # with the `--signoff` above rather than competing with it, and git dedupes
+    # nothing — a line already present in the message would appear twice, which
+    # is why this only ever runs against the generated one-line subject.
+    local -n _out="$1"
+    _out=()
+    [[ -n "${FR_COMMIT_TRAILERS:-}" ]] || return 0
+    local line
+    while IFS= read -r line; do
+        [[ -n "${line//[[:space:]]/}" ]] || continue
+        _out+=(--trailer "$line")
+    done <<< "$FR_COMMIT_TRAILERS"
+}
+
 fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces may
     # move. Two attempts: a reformatting hook (pre-commit's pretty-format-json
     # --autofix, black, ruff format, …) rewrites a staged file and FAILS the
@@ -812,11 +832,13 @@ fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces m
     # deterministic rejection fails the second attempt too and reports as before.
     local repo="$1" wt="$2" version="$3"
     local attempt ec
+    local -a trailer_args=()
+    fr_trailer_args trailer_args
     for attempt in 1 2; do
         echo "--- porcelain (attempt $attempt):"
         git -C "$wt" status --porcelain
         fr_stage_allowlisted "$repo" "$wt" || return 1
-        ( cd "$wt" && git commit -S --signoff -m "${FR_COMMIT_PREFIX}${version}" )
+        ( cd "$wt" && git commit -S --signoff "${trailer_args[@]}" -m "${FR_COMMIT_PREFIX}${version}" )
         ec=$?
         echo "COMMIT EXIT ($attempt): $ec"   # bare exit code — a pipe here once hid a hook abort
         if [[ "$ec" -eq 0 ]]; then

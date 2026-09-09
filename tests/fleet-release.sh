@@ -416,6 +416,50 @@ check "commit: a hook that always rejects fails after exactly two attempts" yes 
 check "commit: the permanent rejection is reported to the caller" yes \
     "$(grep -q 'FAIL demo: commit' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
 
+# --- FR_COMMIT_TRAILERS: disclosure the operator defines, not the driver -----
+# A bump commit must be able to carry provenance trailers (Assisted-by,
+# Agent-Session, Agent-Host …). The driver stays agent-neutral: it appends
+# whatever `Key: value` lines the operator supplies and knows none of them.
+# Unset must remain byte-identical to the old behaviour, or every repo that
+# does not opt in changes shape.
+mk_commit_repo "$WORK/commit-trailers" '#!/bin/sh
+exit 0'
+FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model
+Agent-Session: https://example.invalid/session_1
+
+Agent-Host: abcdef' \
+    fr_commit_allowlisted demo "$WORK/commit-trailers" 1.1.0 > /dev/null 2>&1
+body=$(git -C "$WORK/commit-trailers" log -1 --format=%B)
+check "trailers: Assisted-by lands in the commit" yes \
+    "$(grep -qx 'Assisted-by: some-agent:some-model' <<< "$body" && echo yes || echo no)"
+check "trailers: Agent-Session lands in the commit" yes \
+    "$(grep -qx 'Agent-Session: https://example.invalid/session_1' <<< "$body" && echo yes || echo no)"
+check "trailers: Agent-Host lands in the commit" yes \
+    "$(grep -qx 'Agent-Host: abcdef' <<< "$body" && echo yes || echo no)"
+check "trailers: a blank line in the variable adds no empty trailer" 3 \
+    "$(grep -cE '^(Assisted-by|Agent-Session|Agent-Host):' <<< "$body")"
+check "trailers: --signoff still applies alongside them" yes \
+    "$(grep -q '^Signed-off-by:' <<< "$body" && echo yes || echo no)"
+check "trailers: the subject is untouched" "chore(release): v1.1.0" \
+    "$(git -C "$WORK/commit-trailers" log -1 --format=%s)"
+# Both attempts must carry them: a reformatting hook aborts the first commit,
+# and the retry is a SECOND `git commit` — the one place trailers could silently
+# be dropped for exactly the repos whose hooks rewrite the manifest.
+mk_commit_repo "$WORK/commit-trailers-retry" "$REFORMAT_HOOK"
+FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model' \
+    fr_commit_allowlisted demo "$WORK/commit-trailers-retry" 1.1.0 > /dev/null 2>&1
+check "trailers: survive the reformatting-hook retry" yes \
+    "$(git -C "$WORK/commit-trailers-retry" log -1 --format=%B \
+        | grep -qx 'Assisted-by: some-agent:some-model' && echo yes || echo no)"
+# Unset: the opt-out stays exactly as before.
+mk_commit_repo "$WORK/commit-no-trailers" '#!/bin/sh
+exit 0'
+( unset FR_COMMIT_TRAILERS
+  fr_commit_allowlisted demo "$WORK/commit-no-trailers" 1.1.0 > /dev/null 2>&1 )
+check "trailers: unset adds none" 0 \
+    "$(git -C "$WORK/commit-no-trailers" log -1 --format=%B \
+        | grep -cE '^(Assisted-by|Agent-Session|Agent-Host):')"
+
 # --- the shipped fleet list is non-empty and comment-clean -------------------
 n=$(grep -cvE '^\s*(#|$)' "$SCRIPTS/fleet-repos-github.txt")
 check "fleet-repos-github.txt ships a non-empty list" yes \
