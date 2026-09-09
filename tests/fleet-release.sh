@@ -460,6 +460,37 @@ else
     echo "  skip manifest golden tests (gh not installed)"
 fi
 
+# --- a failed tag query is not an untagged repo ------------------------------
+# A 403 or rate-limit on the tags endpoint leaves last_tag empty, which reads
+# exactly like "never tagged" and would offer an initial tag over an existing
+# history. The row carries the failure instead.
+check "classify: tags_failed outranks FIRST-RELEASE" SURVEY-INCOMPLETE \
+    "$(fr_classify "$(row '.tags_failed = true | .last_release = "" | .last_tag = ""')")"
+check "classify: tags_failed outranks a normal BUMP row" SURVEY-INCOMPLETE \
+    "$(fr_classify "$(row '.tags_failed = true')")"
+# Blocks still outrank it: an archived repo is archived whether or not the tag
+# query answered.
+check "classify: BLOCKED-ARCHIVED still outranks tags_failed" BLOCKED-ARCHIVED \
+    "$(fr_classify "$(row '.tags_failed = true | .archived = true')")"
+# A row from a driver that does not emit the key at all must behave as before.
+check "classify: absent tags_failed is not a failure" BUMP \
+    "$(fr_classify "$(row 'del(.tags_failed)')")"
+check "classify: tags_failed = false is not a failure" BUMP \
+    "$(fr_classify "$(row '.tags_failed = false')")"
+
+# --- poisoned-capture invariant ---------------------------------------------
+# `gh` prints HTTP error bodies to STDOUT, so `$(gh api …)` captures the error
+# as data: the caller sees non-empty output and parses {"message":"Not Found"}
+# as if it were the resource. gh_json exists to make that impossible, and the
+# only legitimate `$(gh api` in the driver is the one inside it. This is a
+# source invariant rather than a behavioural test because the survey and
+# release-verify paths are network-bound and out of this suite's offline scope.
+# shellcheck disable=SC2016  # the patterns are literal source text, not expansions
+stray_api=$(grep -n '\$(gh api' "$SCRIPTS/fleet-release-github.sh" \
+    | grep -Ev '^[0-9]+: *#' \
+    | grep -Fv 'out=$(gh api "$@"' || true)
+check "no bare \$(gh api ...) capture outside gh_json" "" "$stray_api"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All fleet-release tests passed"

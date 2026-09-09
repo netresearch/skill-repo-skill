@@ -66,6 +66,18 @@ gh_json() { # ARGS... — gh api that NEVER leaks an HTTP error body as data:
     return 1
 }
 
+fr_resolve_self_login() { # set FR_SELF_LOGIN, or die — never leave it poisoned.
+    # `gh api user --jq .login` applies the filter to the ERROR body too, so an
+    # expired token yields the string "null". The author gate then compares
+    # every PR author against "null" and classifies the sweep's own PRs as
+    # BLOCKED-FOREIGN-PR. Failing here says why; a statement, not a $( ), so
+    # fr_die ends the run instead of a subshell.
+    [[ -n "$FR_SELF_LOGIN" ]] && return 0
+    FR_SELF_LOGIN=$(gh_json user | jq -r '.login // empty') || FR_SELF_LOGIN=""
+    [[ -n "$FR_SELF_LOGIN" ]] \
+        || fr_die "cannot resolve the authenticated gh login — check 'gh auth status'"
+}
+
 host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     local r="$1" meta resolved archived def
     meta=$(gh_json "repos/$FR_ORG/$r") || return 1
@@ -82,8 +94,22 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     # (a release workflow that ran and died). The tags list tells them apart —
     # and it is NOT date-ordered, so pick the max by version, never .[0].
     # --paginate: one page would hide the newest tag of a >100-tag repo.
-    tags=$(gh api --paginate "repos/$FR_ORG/$r/tags?per_page=100" 2> /dev/null \
-        | jq -s '[.[][]]' || echo '[]')
+    # Same poisoned-capture class as host_release_verify: on 403/404 gh prints
+    # the error body to STDOUT, and `[.[][]]` happily flattens {"message":…}
+    # into ["Not Found", …]. The map(.name) below then fails, last_tag comes
+    # back empty, and a rate-limited repo classifies FIRST-RELEASE — the survey
+    # would offer to tag v1.0.0 over an existing history.
+    local tags_failed=false
+    if tags=$(gh_json --paginate "repos/$FR_ORG/$r/tags?per_page=100"); then
+        tags=$(jq -s '[.[][]]' <<< "$tags" 2> /dev/null) || { tags='[]'; tags_failed=true; }
+    else
+        tags='[]'
+        tags_failed=true
+    fi
+    # A failed query is NOT an empty tag list. Conflating them is how a
+    # rate-limited repo reaches FIRST-RELEASE, so the failure travels in the row
+    # and fr_classify turns it into SURVEY-INCOMPLETE — the same convention the
+    # negative ahead/nonci sentinels already use for a failed compare.
     last_tag=$(jq -r "$FR_JQ_VPARSE"' map(.name) | max_by(vparse) // empty' <<< "$tags")
 
     local rootv cpv composer_has_version release_gate
@@ -175,13 +201,14 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         --arg ci "$ci_status" --argjson ahead "$ahead" --argjson nonci "$nonci" \
         --argjson subjects "$subjects" --argjson files "$files" \
         --argjson trunc "$files_truncated" --argjson prs "$prs" \
-        --arg clstate "$cl_state" \
+        --arg clstate "$cl_state" --argjson tagsfailed "$tags_failed" \
         '{host: $host, repo: $repo, resolved: $resolved, default: $def, head: $head,
           archived: $archived, empty: false, unreachable: false, duplicate_of: "",
           last_release: $rel, last_tag: $last_tag,
           root_plugin: $rootv, claude_plugin: $cpv,
           composer_has_version: $chv, release_gate: $gate, ci_status: $ci,
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
+          tags_failed: $tagsfailed,
           changelog_unreleased: $clstate,
           subjects: $subjects, files: $files,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'
@@ -278,7 +305,11 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
     local r="$1" tag="$2" deadline rel assets
     deadline=$(($(date +%s) + FR_RELEASE_TIMEOUT))
     while true; do
-        rel=$(gh api "repos/$FR_ORG/$r/releases/tags/$tag" 2> /dev/null || echo "")
+        # gh_json, not a bare capture: while the Release workflow is queued
+        # this 404s, and gh prints the error body to STDOUT, so `|| echo ""`
+        # leaves {"message":"Not Found"} in $rel — non-empty, and the jq below
+        # then errors on every poll of every repo (19 batch logs, 2026-09-03).
+        rel=$(gh_json "repos/$FR_ORG/$r/releases/tags/$tag") || rel=""
         if [[ -n "$rel" ]]; then
             assets=$(jq '[.assets[].name] | length' <<< "$rel")
             if [[ "$assets" -gt 0 ]]; then
@@ -334,17 +365,17 @@ case "$CMD" in
         fr_survey $REPOS
         ;;
     manifest)
-        FR_SELF_LOGIN="${FR_SELF_LOGIN:-$(gh api user --jq .login)}"
+        fr_resolve_self_login
         fr_preflight manifest gh
         fr_manifest
         ;;
     bump)
-        FR_SELF_LOGIN="${FR_SELF_LOGIN:-$(gh api user --jq .login)}"
+        fr_resolve_self_login
         fr_preflight bump gh
         fr_bump "$PLAN"
         ;;
     finish)
-        FR_SELF_LOGIN="${FR_SELF_LOGIN:-$(gh api user --jq .login)}"
+        fr_resolve_self_login
         fr_preflight finish gh
         fr_finish "$PLAN" "$CONTINUE"
         ;;
