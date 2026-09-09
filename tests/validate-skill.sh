@@ -279,6 +279,69 @@ at_case 'allowed-tools: [Bash(${CLAUDE_SKILL_DIR}/scripts/*), Read]'          ye
 at_case 'allowed-tools: Read # Bash(bash:*) would be wrong'                   yes quiet 'trailing comment'
 
 echo "----------------------------------------"
+echo "README install-instruction checks"
+echo "----------------------------------------"
+# netresearch/retro-skill#90: the documented steps failed on the first command
+# for as long as the README existed, and nothing in CI could see it.
+
+# readme_case <name> <readme-body> <expect-present|expect-absent> <pattern> <label>
+readme_case() {
+    local name="$1" body="$2" want="$3" pat="$4" label="$5" dir out
+    dir="$TMP/rm_$name"
+    rm -rf "$dir"; mkdir -p "$dir/.claude-plugin"
+    printf '%b' "$body" > "$dir/README.md"
+    printf '{"name":"x","version":"1.0.0"}\n' > "$dir/.claude-plugin/plugin.json"
+    out="$(GITHUB_REPOSITORY=netresearch/demo-skill bash "$VALIDATOR" "$dir" 2>&1)"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+FENCED_SELF='## Install\n\n```text\n/plugin marketplace add netresearch/demo-skill\n/plugin install demo@netresearch/demo-skill\n```\n'
+readme_case self_add "$FENCED_SELF" expect-present \
+    "cannot work" "self-referencing marketplace add is an error"
+readme_case self_install "$FENCED_SELF" expect-present \
+    "not owner/repo" "owner/repo after @ is an error"
+
+# The same wrong line OUTSIDE a fence is documentation about the mistake, not an
+# instruction — this repo's own README carries one. The unfenced copy below
+# starts at column 0, so only the fence tracking can exclude it: a version of
+# this check that reads the whole file matches it and reports an error.
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+PROSE_ONLY='## Install\n\n```text\n/plugin marketplace add netresearch/claude-code-marketplace\n/plugin install demo@netresearch-claude-code-marketplace\n```\n\nDo not write this, it fails:\n\n/plugin marketplace add netresearch/demo-skill\n'
+readme_case prose_only "$PROSE_ONLY" expect-absent \
+    "cannot work" "the same line in prose does not fire"
+readme_case prose_ok "$PROSE_ONLY" expect-present \
+    "install target names a marketplace" "the correct pair is accepted"
+
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+# The slug is compared against the ADD ARGUMENT, not the line. A catalog whose
+# name merely starts with this repo's slug must not read as self-referencing.
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+PREFIX_CATALOG='## Install\n\n```text\n/plugin marketplace add netresearch/demo-skill-catalog\n/plugin install demo@demo-skill-catalog\n```\n'
+readme_case prefix_catalog "$PREFIX_CATALOG" expect-absent \
+    "cannot work" "a catalog whose slug extends this repo's is not self-reference"
+
+# Two spaces after `install` must still yield the target, not an empty string.
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+DOUBLE_SPACE='## Install\n\n```text\n/plugin marketplace add netresearch/claude-code-marketplace\n/plugin  install   demo@netresearch-claude-code-marketplace\n```\n'
+readme_case double_space "$DOUBLE_SPACE" expect-present \
+    "install target names a marketplace: demo@netresearch-claude-code-marketplace" \
+    "irregular spacing still parses the install target"
+
+# shellcheck disable=SC2016  # literal markdown fixture, not an expansion
+NO_INSTALL='## Install\n\n```text\n/plugin marketplace add netresearch/claude-code-marketplace\n```\n'
+readme_case no_install "$NO_INSTALL" expect-present \
+    "no plugin" "an add line without an install line warns"
+
+echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
 echo "All validator smoke tests passed"
