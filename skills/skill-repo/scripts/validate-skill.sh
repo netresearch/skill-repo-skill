@@ -961,6 +961,59 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
             fi
         done
     fi
+
+    # --- Install instructions must be runnable -------------------------------
+    # A README documented steps that fail on the first command for as long as it
+    # existed, and no gate could see it: an outside user reported it
+    # (netresearch/retro-skill#90). Only FENCED command lines are considered — a
+    # README may legitimately quote the wrong form in prose to warn against it,
+    # and this one does.
+    README_CMDS=$(awk '/^ {0,3}(```|~~~)/ { infence = !infence; next } infence' \
+        "$REPO_DIR/README.md")
+    MP_ADD=$(grep -E '^[[:space:]]*/plugin[[:space:]]+marketplace[[:space:]]+add[[:space:]]' \
+        <<< "$README_CMDS" || true)
+    if [[ -n "$MP_ADD" ]]; then
+        SELF_SLUG=""
+        if [[ -n "${GITHUB_REPOSITORY:-}" ]]; then
+            SELF_SLUG="$GITHUB_REPOSITORY"
+        elif git -C "$REPO_DIR" remote get-url origin &> /dev/null; then
+            SELF_SLUG="netresearch/$(basename "$(git -C "$REPO_DIR" remote get-url origin 2>/dev/null)" .git)"
+        fi
+        # `marketplace add` resolves .claude-plugin/marketplace.json in the
+        # TARGET repo. Pointing it at a repo that ships only plugin.json fails
+        # with "Marketplace file not found" — provable locally when the target
+        # is this repo.
+        if [[ -n "$SELF_SLUG" && ! -f "$REPO_DIR/.claude-plugin/marketplace.json" ]] \
+            && grep -qF -- "$SELF_SLUG" <<< "$MP_ADD"; then
+            error "README.md: '/plugin marketplace add $SELF_SLUG' cannot work — the target must be a catalog repo shipping .claude-plugin/marketplace.json, and this repo ships .claude-plugin/plugin.json. Point it at netresearch/claude-code-marketplace (its entry names this repo as the source, so the code still comes from here)."
+        else
+            success "README.md marketplace-add target is not this repo"
+        fi
+        # The add line alone registers a marketplace and installs nothing.
+        MP_INSTALL=$(grep -E '^[[:space:]]*/plugin[[:space:]]+install[[:space:]]' \
+            <<< "$README_CMDS" || true)
+        if [[ -z "$MP_INSTALL" ]]; then
+            warning "README.md documents '/plugin marketplace add' but no '/plugin install <plugin>@<marketplace>' line — following it leaves the reader with a registered marketplace and no plugin"
+        else
+            while IFS= read -r line; do
+                [[ -n "$line" ]] || continue
+                target="${line#*install }"
+                target="${target%%[[:space:]]*}"
+                case "$target" in
+                    *@*/* | */*@*)
+                        error "README.md: '/plugin install $target' — the part after @ is the marketplace NAME (e.g. netresearch-claude-code-marketplace), not owner/repo"
+                        ;;
+                    *@*) success "README.md install target names a marketplace: $target" ;;
+                    *)
+                        warning "README.md: '/plugin install $target' has no @<marketplace> suffix — ambiguous once more than one marketplace is configured"
+                        ;;
+                esac
+            done <<< "$MP_INSTALL"
+        fi
+        # Not checkable here: whether the named catalog actually lists this
+        # plugin. That needs the catalog fetched at validation time — see the
+        # scheduled-job option in netresearch/skill-repo-skill#292.
+    fi
 fi
 
 # --- Summary ---
