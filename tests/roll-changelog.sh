@@ -257,6 +257,29 @@ check "stale base: the missing [3.1.2] definition is backfilled" yes \
 check "stale base: [Unreleased] still restarts at the new tag" yes \
     "$(grep -qx '\[Unreleased\]: https://github.com/x/y/compare/v3.1.3...HEAD' "$f" && echo yes || echo no)"
 
+# Headings and definitions may spell the tag differently. The backfill must see
+# the existing definition through that difference, or it writes a second one.
+f="$WORK/refs-mixed.md"
+cat > "$f" <<'EOF'
+## [Unreleased]
+
+- change
+
+## [v2.1.0] - 2026-02-01
+
+- mid
+
+## [v2.0.0] - 2026-01-01
+
+- old
+
+[Unreleased]: https://github.com/x/y/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/x/y/compare/v2.0.0...v2.1.0
+EOF
+check "mixed label style: exits 0" 0 "$(roll "$f" 2.2.0 --date 2026-08-13)"
+check "mixed label style: no duplicate definition for the previous version" 1 \
+    "$(grep -c 'compare/v2.0.0\.\.\.v2.1.0' "$f")"
+
 # Unprefixed tag style must stay unprefixed on both ends of the range.
 f="$WORK/refs-bare.md"
 cat > "$f" <<'EOF'

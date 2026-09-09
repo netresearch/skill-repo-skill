@@ -363,7 +363,16 @@ def update_link_reference_definitions(new_lines, new_heading, version):
         # see the version below it.
         note = f"updated link-reference definitions ([Unreleased] -> {new_tag}...HEAD)"
         if prev_label is not None and len(labels) > 2:
-            have_prev = any(ln.startswith(f"[{prev_label}]:") for ln in new_lines)
+            # Compared without the v prefix: a file may head its sections
+            # `## [v3.1.2]` while defining `[3.1.2]:`. A raw match would call
+            # the existing definition missing and add a second one under the
+            # other spelling.
+            want = prev_label.removeprefix("v")
+            have_prev = any(
+                ln.split("]:", 1)[0][1:].removeprefix("v") == want
+                for ln in new_lines
+                if ln.startswith("[") and "]:" in ln
+            )
             if not have_prev:
                 prev2_tag = styled_tag(labels[2], v_prefixed)
                 new_lines.insert(
