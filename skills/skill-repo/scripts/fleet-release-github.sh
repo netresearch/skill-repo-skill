@@ -99,11 +99,17 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     # into ["Not Found", …]. The map(.name) below then fails, last_tag comes
     # back empty, and a rate-limited repo classifies FIRST-RELEASE — the survey
     # would offer to tag v1.0.0 over an existing history.
+    local tags_failed=false
     if tags=$(gh_json --paginate "repos/$FR_ORG/$r/tags?per_page=100"); then
-        tags=$(jq -s '[.[][]]' <<< "$tags" 2> /dev/null || echo '[]')
+        tags=$(jq -s '[.[][]]' <<< "$tags" 2> /dev/null) || { tags='[]'; tags_failed=true; }
     else
         tags='[]'
+        tags_failed=true
     fi
+    # A failed query is NOT an empty tag list. Conflating them is how a
+    # rate-limited repo reaches FIRST-RELEASE, so the failure travels in the row
+    # and fr_classify turns it into SURVEY-INCOMPLETE — the same convention the
+    # negative ahead/nonci sentinels already use for a failed compare.
     last_tag=$(jq -r "$FR_JQ_VPARSE"' map(.name) | max_by(vparse) // empty' <<< "$tags")
 
     local rootv cpv composer_has_version release_gate
@@ -195,13 +201,14 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         --arg ci "$ci_status" --argjson ahead "$ahead" --argjson nonci "$nonci" \
         --argjson subjects "$subjects" --argjson files "$files" \
         --argjson trunc "$files_truncated" --argjson prs "$prs" \
-        --arg clstate "$cl_state" \
+        --arg clstate "$cl_state" --argjson tagsfailed "$tags_failed" \
         '{host: $host, repo: $repo, resolved: $resolved, default: $def, head: $head,
           archived: $archived, empty: false, unreachable: false, duplicate_of: "",
           last_release: $rel, last_tag: $last_tag,
           root_plugin: $rootv, claude_plugin: $cpv,
           composer_has_version: $chv, release_gate: $gate, ci_status: $ci,
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
+          tags_failed: $tagsfailed,
           changelog_unreleased: $clstate,
           subjects: $subjects, files: $files,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'

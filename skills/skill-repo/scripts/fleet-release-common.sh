@@ -25,7 +25,8 @@
 # Normalized survey row schema (both hosts emit exactly these keys):
 #   host repo resolved default archived empty unreachable duplicate_of
 #   last_release last_tag root_plugin claude_plugin composer_has_version
-#   release_gate ci_status ahead nonci changelog_unreleased files_truncated subjects files
+#   release_gate ci_status ahead nonci changelog_unreleased files_truncated
+#   tags_failed subjects files
 #   open_release_prs [{id,url,author,branch,title}] ci_tag_rules notes
 #
 # Every phase writes into $FR_WORKDIR:
@@ -412,6 +413,11 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
         elif ([.open_release_prs[]? | select(.author != $self)] | length) > 0 then "BLOCKED-FOREIGN-PR"
         elif ([.open_release_prs[]? | select(.author == $self)] | length) > 0 then "OWN-PR-OPEN"
         elif .release_gate == false then "NO-RELEASE-JOB"
+        # Before FIRST-RELEASE, deliberately: a failed tag query leaves
+        # last_tag empty, which is indistinguishable from "never tagged" and
+        # would offer an initial tag over an existing history. Placed here and
+        # not in the else-branch because every branch below reads last_tag.
+        elif (.tags_failed // false) == true then "SURVEY-INCOMPLETE"
         elif (.last_release // "") == "" and (.last_tag // "") == "" then "FIRST-RELEASE"
         elif (.last_tag // "") != "" and (.last_tag != (.last_release // "")) then "TAG-RELEASE-DIVERGED"
         else
@@ -477,7 +483,10 @@ fr_manifest() {
                   then "CHANGELOG [Unreleased] is empty — write the release entries before the bump phase, or its roll fails on exactly this"
                   else empty end),
                  (if $cls == "SURVEY-INCOMPLETE"
-                  then "the compare MEASUREMENT failed (this is not a no-delta result) — re-run survey --repos \(.repo)"
+                  then (if (.tags_failed // false) == true
+                        then "the TAG QUERY failed (this is not an untagged repo) — re-run survey --repos \(.repo)"
+                        else "the compare MEASUREMENT failed (this is not a no-delta result) — re-run survey --repos \(.repo)"
+                        end)
                   else empty end),
                  (if (.ci_tag_rules // "") != ""
                   then "tag rules: " + (.ci_tag_rules | gsub("\\|"; "¦"))
