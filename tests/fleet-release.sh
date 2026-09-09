@@ -236,6 +236,32 @@ check "classify: UNREACHABLE" UNREACHABLE \
     "$(fr_classify '{"host":"test","repo":"gone","unreachable":true}')"
 check "classify: EMPTY" EMPTY \
     "$(fr_classify '{"host":"test","repo":"bare","resolved":"o/bare","empty":true}')"
+
+# --- FR_CI_ONLY_RE ----------------------------------------------------------
+# The survey counts a changed path as consumer-visible unless this filter
+# matches it; nonci=0 is what turns a row into SKIP-CI-ONLY. Exercised through
+# the same jq `test()` the driver uses, so a pattern valid in grep but not in
+# Oniguruma fails here rather than in a live sweep.
+nonci() { # FILES-JSON -> count of paths the filter does NOT absorb
+    jq --arg f "$FR_CI_ONLY_RE" '[.[] | select(test($f) | not)] | length' <<< "$1"
+}
+check "ci-only: workflow file" 0 "$(nonci '[".github/workflows/tests.yml"]')"
+check "ci-only: renovate.json" 0 "$(nonci '["renovate.json"]')"
+check "ci-only: .gitlab-ci.yml" 0 "$(nonci '[".gitlab-ci.yml"]')"
+check "ci-only: pre-commit hook pin (#287)" 0 "$(nonci '[".pre-commit-config.yaml"]')"
+check "ci-only: markdownlint configs" 0 \
+    "$(nonci '[".markdownlint-cli2.jsonc",".markdownlint.jsonc"]')"
+check "ci-only: yamllint and editorconfig" 0 \
+    "$(nonci '[".yamllint.yml",".editorconfig"]')"
+# The filter must not swallow anything a consumer installs.
+check "not ci-only: SKILL.md" 1 "$(nonci '["skills/foo/SKILL.md"]')"
+check "not ci-only: README.md" 1 "$(nonci '["README.md"]')"
+check "not ci-only: plugin manifest" 1 "$(nonci '[".claude-plugin/plugin.json"]')"
+# Anchored at the repo root: a config shipped inside a skill is content.
+check "not ci-only: nested pre-commit config" 1 \
+    "$(nonci '["skills/foo/templates/.pre-commit-config.yaml"]')"
+check "not ci-only: mixed delta still counts the content file" 1 \
+    "$(nonci '[".pre-commit-config.yaml","skills/foo/SKILL.md"]')"
 # A FAILED compare measurement (sentinel -1) must never read as "no delta" —
 # that silently drops a repo with releasable commits from the sweep.
 check "classify: failed compare is SURVEY-INCOMPLETE, never UP-TO-DATE" SURVEY-INCOMPLETE \

@@ -49,10 +49,15 @@ FR_RELEASE_TIMEOUT="${FR_RELEASE_TIMEOUT:-600}"
 FR_SELF_LOGIN="${FR_SELF_LOGIN:-}"        # resolved by the driver (gh/glab)
 FR_BRANCH_PREFIX="release/v"              # owned by github-release-skill
 FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
-# CI-only delta filter: commits touching only these paths ship a byte-identical
-# archive — not a release (release-discipline.md).
+# CI-only delta filter: commits touching only these paths make no
+# consumer-visible change, so they are not a release (release-discipline.md).
+# Note the test is "nothing a consumer can observe", not "byte-identical
+# archive": the lint configs below DO travel inside the release archive, but a
+# hook-pin bump changes nothing about the skill a consumer installs. The
+# `.github/**` entries are byte-identical as well; the others are not, and that
+# is deliberate.
 # shellcheck disable=SC2034  # consumed by the host drivers' survey callbacks
-FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$'
+FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-config\.yaml$|^\.markdownlint(-cli2)?\.jsonc$|^\.yamllint\.yml$|^\.editorconfig$'
 # The only files a bump commit may touch.
 FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\.md|CHANGELOG\.md)$'
 # Version-aware compare/sort, shared by every jq call site. Extracts the
