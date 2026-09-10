@@ -41,6 +41,14 @@ shared release CI first), and non-default-branch releases — the
 something the driver lacks, extend it in a PR; a session-local driver script
 is how the next incident starts.
 
+**Where a policy requires agent or tool disclosure on every commit, set
+`FR_COMMIT_TRAILERS`** — newline-separated `Key: value` lines that the bump
+commit carries as git trailers, alongside the `--signoff` it already writes.
+The driver appends them verbatim and interprets none of them, so the keys stay
+the operator's decision (`Assisted-by:`, `Agent-Session:`, … ). It applies to
+both commit attempts, including the retry after a reformatting hook — the one
+place a second `git commit` could otherwise drop them. Unset, nothing changes.
+
 **Budget the API before a sweep: the survey costs ~10 calls per repo, and
 each GitHub quota pool (REST 5,000/h, GraphQL 5,000 points/h — separate
 pools) is shared across every tool, watcher and agent in the session.** A

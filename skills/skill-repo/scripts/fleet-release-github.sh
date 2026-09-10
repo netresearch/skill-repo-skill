@@ -26,6 +26,17 @@
 # The driver never merges a PR this sweep did not open, never unarchives,
 # never clones, never invents versions or PR bodies, never touches CI files,
 # and only releases the default-branch tip.
+#
+# Environment:
+#   FR_COMMIT_TRAILERS  Newline-separated `Key: value` lines appended to every
+#                       bump commit as git trailers (requires git >= 2.32).
+#                       Where a policy requires agent/tool disclosure on every
+#                       commit, set it — the driver appends the lines verbatim
+#                       and interprets none of them, so which keys a fleet uses
+#                       stays the operator's decision:
+#                         export FR_COMMIT_TRAILERS='Assisted-by: <agent>:<model>
+#                         Agent-Session: <url>'
+#                       Unset, bump commits keep `--signoff` alone.
 
 set -euo pipefail
 
