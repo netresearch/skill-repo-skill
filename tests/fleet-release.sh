@@ -491,6 +491,32 @@ out=$( unset FR_COMMIT_TRAILERS
 check "trailers: the assertion is silent when none were requested" yes \
     "$(grep -q 'rc=0' <<< "$out" && echo yes || echo no)"
 
+# A hook that MOVES a requested line out of the trailer block and into the body
+# leaves it findable by a plain grep, while `git log --grep` and every other
+# trailer consumer stop seeing it as a trailer — which is the point of writing
+# one. Parsed with `git interpret-trailers --parse`, so this still FAILs.
+mk_commit_repo "$WORK/commit-trailer-moved" '#!/bin/sh
+exit 0'
+# shellcheck disable=SC2016  # $1 is the hook's own argument — it must NOT expand here
+printf '%s\n' '#!/bin/sh
+sed -i "s|^Assisted-by: \(.*\)$||" "$1"
+sed -i "2i Assisted-by: some-agent:some-model" "$1"' \
+    > "$WORK/commit-trailer-moved/.git/hooks/prepare-commit-msg"
+chmod +x "$WORK/commit-trailer-moved/.git/hooks/prepare-commit-msg"
+out=$(FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model' \
+    fr_commit_allowlisted demo "$WORK/commit-trailer-moved" 1.1.0 2>&1; echo "rc=$?")
+check "trailers: a line moved into the BODY does not count as landed" yes \
+    "$(grep -q 'requested trailer did not land' <<< "$out" && echo yes || echo no)"
+# A substring match would accept a longer line that merely contains the request.
+mk_commit_repo "$WORK/commit-trailer-substring" '#!/bin/sh
+exit 0'
+FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model-extended' \
+    fr_commit_allowlisted demo "$WORK/commit-trailer-substring" 1.1.0 > /dev/null 2>&1
+out=$(FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model' \
+    fr_assert_trailers_landed demo "$WORK/commit-trailer-substring" 2>&1; echo "rc=$?")
+check "trailers: a longer line is not accepted for a shorter request" yes \
+    "$(grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+
 # --- the shipped fleet list is non-empty and comment-clean -------------------
 n=$(grep -cvE '^\s*(#|$)' "$SCRIPTS/fleet-repos-github.txt")
 check "fleet-repos-github.txt ships a non-empty list" yes \

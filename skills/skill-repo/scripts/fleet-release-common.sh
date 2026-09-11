@@ -723,6 +723,14 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
         echo "bump already committed on $branch (crashed before push)"
     fi
 
+    # Also here, not only inside fr_commit_allowlisted: the branch above is the
+    # RESUME path, where the commit was written by an earlier run and this one
+    # never went through the commit function. A commit whose trailers failed the
+    # assertion leaves exactly that state behind — clean worktree, commit in
+    # place — so without this the next run would push the very commit the
+    # previous run refused.
+    fr_assert_trailers_landed "$repo" "$wt" || return 1
+
     ( cd "$wt" && git push -u origin "$branch" )
     local ec=$?
     echo "PUSH EXIT: $ec"
@@ -836,11 +844,17 @@ fr_assert_trailers_landed() { # REPO WT — every requested trailer is in the co
     local repo="$1" wt="$2" line key
     [[ -n "${FR_COMMIT_TRAILERS:-}" ]] || return 0
     local msg
-    msg=$(git -C "$wt" log -1 --format=%B)
+    # `git interpret-trailers --parse`, not the raw %B: a hook that moves a line
+    # into the message BODY leaves it findable by a plain grep while `git log
+    # --grep` and every other trailer consumer no longer see it as a trailer —
+    # which is the whole point of writing one. Compared with `-x` so a line is
+    # matched whole; a substring match would accept a longer line that merely
+    # contains the requested one.
+    msg=$(git -C "$wt" log -1 --format=%B | git interpret-trailers --parse)
     while IFS= read -r line; do
         [[ -n "${line//[[:space:]]/}" ]] || continue
         key=${line%%:*}
-        if ! grep -qF "$line" <<< "$msg"; then
+        if ! grep -qFx -- "$line" <<< "$msg"; then
             echo "FAIL $repo: requested trailer did not land in the commit: ${key}:"
             echo "  set FR_COMMIT_TRAILERS but the message has no such line — is this"
             echo "  driver copy current? git -C <skill-repo-skill> pull, then re-run."
