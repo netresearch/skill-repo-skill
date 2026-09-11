@@ -819,6 +819,37 @@ fr_trailer_args() { # ARRAY_NAME — fill with --trailer args from FR_COMMIT_TRA
     done <<< "$FR_COMMIT_TRAILERS"
 }
 
+fr_assert_trailers_landed() { # REPO WT — every requested trailer is in the commit
+    # A commit that exits 0 is not a commit that carries what was asked for.
+    # The failure this exists for: a driver copy that predates FR_COMMIT_TRAILERS
+    # ignores the variable entirely and commits happily, so the operator sets it,
+    # reads "OK <repo> vX.Y.Z bump PR open" per repo, and finds out only if they
+    # open a commit. On 2026-09-11 that shipped four bump commits to `main`
+    # without their disclosure trailers before anyone looked; auto-merge had
+    # taken them past the point where an amend was possible.
+    #
+    # A stale engine cannot warn about itself — it does not know the variable —
+    # so this check cannot catch that case in the copy that has the bug. It
+    # catches every other producer of the same symptom from here on: a
+    # prepare-commit-msg hook that rewrites the message, a git too old for
+    # --trailer, a trailer whose key git declines to append.
+    local repo="$1" wt="$2" line key
+    [[ -n "${FR_COMMIT_TRAILERS:-}" ]] || return 0
+    local msg
+    msg=$(git -C "$wt" log -1 --format=%B)
+    while IFS= read -r line; do
+        [[ -n "${line//[[:space:]]/}" ]] || continue
+        key=${line%%:*}
+        if ! grep -qF "$line" <<< "$msg"; then
+            echo "FAIL $repo: requested trailer did not land in the commit: ${key}:"
+            echo "  set FR_COMMIT_TRAILERS but the message has no such line — is this"
+            echo "  driver copy current? git -C <skill-repo-skill> pull, then re-run."
+            return 1
+        fi
+    done <<< "$FR_COMMIT_TRAILERS"
+    return 0
+}
+
 fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces may
     # move. Two attempts: a reformatting hook (pre-commit's pretty-format-json
     # --autofix, black, ruff format, …) rewrites a staged file and FAILS the
@@ -847,6 +878,7 @@ fr_commit_allowlisted() { # REPO WT VERSION — only the four version surfaces m
         ec=$?
         echo "COMMIT EXIT ($attempt): $ec"   # bare exit code — a pipe here once hid a hook abort
         if [[ "$ec" -eq 0 ]]; then
+            fr_assert_trailers_landed "$repo" "$wt" || return 1
             return 0
         fi
         # An `if`, not `cond && echo`: the latter is the loop body's last

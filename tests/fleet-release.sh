@@ -460,6 +460,37 @@ check "trailers: unset adds none" 0 \
     "$(git -C "$WORK/commit-no-trailers" log -1 --format=%B \
         | grep -cE '^(Assisted-by|Agent-Session|Agent-Host):')"
 
+# --- a requested trailer that does not land fails the repo -------------------
+# The 2026-09-11 defect: a driver copy predating FR_COMMIT_TRAILERS ignores the
+# variable, commits cleanly, and reports OK. Four bump commits reached `main`
+# without their disclosure trailers before anyone opened one. A stale engine
+# cannot warn about itself, but every other producer of the same symptom — a
+# message-rewriting hook, a git too old for --trailer — is caught here.
+mk_commit_repo "$WORK/commit-trailer-stripped" '#!/bin/sh
+exit 0'
+# A prepare-commit-msg hook that throws the trailers away, standing in for any
+# cause that leaves the commit without what the operator asked for.
+# shellcheck disable=SC2016  # $1 is the hook's own argument — it must NOT expand here
+printf '%s\n' '#!/bin/sh
+grep -v "^Assisted-by:" "$1" > "$1.tmp" && mv "$1.tmp" "$1"' \
+    > "$WORK/commit-trailer-stripped/.git/hooks/prepare-commit-msg"
+chmod +x "$WORK/commit-trailer-stripped/.git/hooks/prepare-commit-msg"
+out=$(FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model' \
+    fr_commit_allowlisted demo "$WORK/commit-trailer-stripped" 1.1.0 2>&1; echo "rc=$?")
+check "trailers: a stripped trailer FAILs the repo" yes \
+    "$(grep -q 'requested trailer did not land' <<< "$out" && echo yes || echo no)"
+check "trailers: that failure reaches the caller" yes \
+    "$(grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+check "trailers: the failure names the key" yes \
+    "$(grep -q 'Assisted-by:' <<< "$out" && echo yes || echo no)"
+# Unset: the assertion must stay silent, or every repo that does not opt in fails.
+mk_commit_repo "$WORK/commit-assert-optout" '#!/bin/sh
+exit 0'
+out=$( unset FR_COMMIT_TRAILERS
+       fr_commit_allowlisted demo "$WORK/commit-assert-optout" 1.1.0 2>&1; echo "rc=$?" )
+check "trailers: the assertion is silent when none were requested" yes \
+    "$(grep -q 'rc=0' <<< "$out" && echo yes || echo no)"
+
 # --- the shipped fleet list is non-empty and comment-clean -------------------
 n=$(grep -cvE '^\s*(#|$)' "$SCRIPTS/fleet-repos-github.txt")
 check "fleet-repos-github.txt ships a non-empty list" yes \

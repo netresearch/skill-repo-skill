@@ -41,6 +41,22 @@ shared release CI first), and non-default-branch releases — the
 something the driver lacks, extend it in a PR; a session-local driver script
 is how the next incident starts.
 
+**Run the sweep from a checkout you have just pulled, and read the FIRST bump
+commit before letting the phase continue.** `git fetch` is not `git pull`: a
+driver copy can be behind the feature you are relying on, and a copy that
+predates `FR_COMMIT_TRAILERS` ignores the variable rather than complaining about
+it — every repo reports `OK … bump PR open` and the commits carry nothing. On
+2026-09-11 that shipped four bump commits to `main` without their disclosure
+trailers before anyone opened one; auto-merge had already taken them past the
+point where an amend was possible, and rewriting `main` to fix it is worse than
+the defect. `fr_assert_trailers_landed` now fails the repo when a requested
+trailer is absent from the commit, which closes every producer of that symptom
+except the one it cannot see: a stale engine does not know the variable, so it
+cannot check for it. Hence the manual half — `git -C <skill-repo-skill> pull`,
+then `git log -1 --format=%B` on the first repo the phase touches. The same
+applies to a vendored engine: a fleet driver on another host reads *its own*
+copy, so an upstream fix reaches it only after a re-vendor.
+
 **Where a policy requires agent or tool disclosure on every commit, set
 `FR_COMMIT_TRAILERS`** — newline-separated `Key: value` lines that the bump
 commit carries as git trailers, alongside the `--signoff` it already writes.
