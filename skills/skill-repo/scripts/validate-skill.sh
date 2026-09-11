@@ -557,7 +557,7 @@ if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     SH_NOT_EXEC="$(shebang_no_exec '*.sh')"; SH_NOT_EXEC="${SH_NOT_EXEC% }"
 
     if [[ -n "$PY_NOT_EXEC" ]]; then
-        error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>"
+        error "committed 100644 but carries a shebang: ${PY_NOT_EXEC} — ruff EXE001 fails the build on this, and a local ruff run does not reproduce it (issue #235). Fix: chmod +x <file> && git update-index --chmod=+x <file>, or drop the shebang if the file is only ever imported — a module is not a script, and making it executable settles the mismatch from the wrong side"
     elif [[ -z "$SH_NOT_EXEC" ]]; then
         success "every committed script with a shebang is mode 100755"
     fi
