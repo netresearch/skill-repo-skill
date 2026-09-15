@@ -10,6 +10,7 @@
 - Generated YAML: exactly one trailing newline
 - `MD010` breaks copy-pasted Makefile snippets — exempt the fence, don't fake the tab
 - A validator over a structured value parses it; it does not pattern-match it
+- SonarCloud's `shelldre` rules fire on our own shell conventions — triage, don't comply
 
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
@@ -188,3 +189,37 @@ delimiter like any other. Two of the four rounds also broke *existing* passing
 tests when the split was naive — the suite is what caught it, so write the
 shape cases (plain, folded, literal, block list, flow list, comma-separated,
 quoted, commented) before widening anything.
+
+## 9. SonarCloud's `shelldre` rules fire on our own shell conventions — triage, don't comply
+
+Every skill repo here is mostly shell and Python and runs SonarCloud, so a PR
+touching one script reliably reports a dozen new MAJOR code smells while the
+quality gate passes. The count is alarming and the content is not: on
+git-workflow-skill#300, sixteen new issues over a 96-line diff were
+`shelldre:S7688` (use `[[` instead of `[`), `shelldre:S7679` (assign positional
+parameters to local variables) and one `shelldre:S7682` (add an explicit
+`return` at the end of the function).
+
+The first two are house style, not drift. `pr-status.sh` uses `[` twenty-one
+times and `[[` not once, and the `check`/`check_contains` helpers are copied
+verbatim between test files. "Fixing" four new lines makes them the only ones of
+their kind in the file, which is worse than the finding.
+
+`S7682` is the one to read rather than skim, because complying with it can
+introduce the bug:
+
+```bash
+collect_raw() {
+  gh api graphql -f owner="$OWNER" … -f query='…'
+}        # no explicit return: the function's status IS gh's status
+```
+
+The caller reads that status (`out=$(collect_raw 2>"$err"); rc=$?`) to tell a
+failed query from a successful one. `return 0` there would report every failure
+as a success — precisely the defect that PR was fixing. Adding `return $?` is a
+no-op that satisfies a linter and says nothing.
+
+So: read what the rule asks against what the code promises, then mark the
+intentional ones safe in the SonarCloud UI rather than contorting the code, and
+say in the PR which findings stand and why. A reviewer seeing "16 new issues"
+with no explanation has to re-derive that triage themselves.
