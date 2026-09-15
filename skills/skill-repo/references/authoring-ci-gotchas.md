@@ -219,7 +219,20 @@ failed query from a successful one. `return 0` there would report every failure
 as a success — precisely the defect that PR was fixing. Adding `return $?` is a
 no-op that satisfies a linter and says nothing.
 
-So: read what the rule asks against what the code promises, then mark the
-intentional ones safe in the SonarCloud UI rather than contorting the code, and
-say in the PR which findings stand and why. A reviewer seeing "16 new issues"
-with no explanation has to re-derive that triage themselves.
+So: read what the rule asks against what the code promises, resolve the
+intentional ones in the SonarCloud UI rather than contorting the code, and say
+in the PR which findings stand and why. A reviewer seeing "16 new issues" with
+no explanation has to re-derive that triage themselves.
+
+Pick the status by what is actually true of the finding — these are ordinary
+issues (`type: CODE_SMELL` from `api/issues`), not Security Hotspots, which live
+on their own endpoint with their own `Safe` / `Fixed` / `Acknowledged` review:
+
+- **Accept** — the rule read the code correctly and we are keeping it anyway.
+  That is the house-style case, `S7688` and `S7679` above.
+- **False positive** — the analysis itself does not hold. `S7682` on a function
+  whose exit status is its contract belongs here: the rule's premise, that a
+  missing `return` is an oversight, is wrong for that function.
+
+`Safe` is not available for either; reaching for it means you are in the
+hotspot review by mistake.
