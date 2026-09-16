@@ -78,15 +78,21 @@ description reached the agent.
 
 What it moved, and what it did not:
 
-| the description named | effect |
-|---|---|
-| the occasion the skill is for | the output directory changed, 3 trials of 3 against 0 of 3 |
-| every file that must carry the release version | the missing file was written in 5 of 6, endpoint 4/6 against 0/6 |
-| the file a newer convention replaced | nothing; the model kept writing the old one, across three wordings |
+Each row is one arm carrying the new description against one carrying the old
+one, six trials each, on the same case and fleet. "Passed" means the case's own
+mechanical check accepted the result.
+
+| the description named | arm with it | arm without it |
+|---|---|---|
+| the occasion the skill is for | wrote to the directory that renders, 3 of 3 | 0 of 3 |
+| every file that must carry the release version | wrote the missing file 5 of 6; passed 4 of 6 | wrote it 0 of 6; passed 0 of 6 |
+| the file a newer convention replaced | kept writing the old file, 3 of 3 | same, across three wordings |
 
 So the routing rule has a second half. A description decides *whether* the skill
-is reached, and where it is not reached it is also the only thing that decides
-*what the agent produces*. Two consequences for writing one:
+is reached, and where it is not reached it is the only part of the skill that
+reaches the agent at all — the prompt, the system instructions, the tools and
+the model's own habits are still there and still decide plenty. Two consequences
+for writing one:
 
 - **A fact the agent lacks belongs in the description** — the artefacts it must
   produce, the place they belong. Not the steps: those are still narration, and
