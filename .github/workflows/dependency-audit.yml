@@ -126,7 +126,11 @@ jobs:
             exit 0
           fi
           # Hash-locked tool env: requirements compiled with
-          # `uv pip compile --universal --generate-hashes`; --require-hashes
+          # `uv pip compile --universal --generate-hashes --python-version 3.12`;
+          # the floor matters: compiled on a newer interpreter, uv drops
+          # deps whose marker excludes it (typing_extensions is required
+          # by cyclonedx-python-lib only below 3.13) and the install then
+          # fails here, not at compile time. --require-hashes
           # rejects any artifact not pinned by digest, --only-binary blocks
           # sdist setup scripts. Bump via .github/requirements/pip-audit.txt.
           python3 -m venv "$RUNNER_TEMP/audit-env"
