@@ -5,6 +5,7 @@
 - The three surfaces
 - Budgets, and where each number comes from
 - The description is a router, not documentation
+  - What a description can move, measured
 - Flat discovery: one level, always
 - What belongs in SKILL.md and what does not
 - Long references need a Contents section
@@ -66,6 +67,40 @@ The second wastes routing context, and it can actively harm: a description conta
 On length, two pulls exist and both are real. The official guidance says *"A few sentences to a short paragraph"* and also *"Err on the side of being pushy. Explicitly list contexts where the skill applies"* — that argues for covering the scope properly. Against it: every description competes for a shared listing budget, and an over-broad one triggers when it should not.
 
 So: **1024 is a validation limit, not a target.** Past roughly 500 characters, check whether what you added is trigger information or process narration. Cut the narration; keep the contexts.
+
+### What a description can move, measured
+
+A small model often does not open the skill at all. In two recorded evaluation
+series — same case, same fleet, one arm per description — the trials that
+*passed* made no `Skill` call in any run: nothing read the body, the references,
+or the file that had listed the required artefacts all along. Only the
+description reached the agent.
+
+What it moved, and what it did not:
+
+Each row is one arm carrying the new description against one carrying the old
+one, six trials each, on the same case and fleet. "Passed" means the case's own
+mechanical check accepted the result.
+
+| the description named | arm with it | arm without it |
+|---|---|---|
+| the occasion the skill is for | wrote to the directory that renders, 3 of 3 | 0 of 3 |
+| every file that must carry the release version | wrote the missing file 5 of 6; passed 4 of 6 | wrote it 0 of 6; passed 0 of 6 |
+| the file a newer convention replaced | kept writing the old file, 3 of 3 | same, across three wordings |
+
+So the routing rule has a second half. A description decides *whether* the skill
+is reached, and where it is not reached it is the only part of the skill that
+reaches the agent at all — the prompt, the system instructions, the tools and
+the model's own habits are still there and still decide plenty. Two consequences
+for writing one:
+
+- **A fact the agent lacks belongs in the description** — the artefacts it must
+  produce, the place they belong. Not the steps: those are still narration, and
+  narration still invites the agent to follow the summary instead of the skill.
+- **A description cannot overturn what the model already believes.** Three
+  attempts at "this file replaced that one" changed nothing. Where the skill has
+  to correct a convention rather than supply a missing fact, the body is the only
+  place that can do it — and the body only works when the skill is opened.
 
 ## Flat discovery: one level, always
 
