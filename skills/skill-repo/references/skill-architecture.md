@@ -82,11 +82,19 @@ Each row is one arm carrying the new description against one carrying the old
 one, six trials each, on the same case and fleet. "Passed" means the case's own
 mechanical check accepted the result.
 
+The release-version row was first measured on an experiment branch whose
+description opened on the sentence naming the files, and then again on what
+actually shipped, where that sentence sits second behind the trigger list. The
+released wording reads 6 of 6 against 1 of 6 — the effect survives the move,
+which is worth knowing because a positive result on a branch is not a result
+about the release.
+
 | the description named | arm with it | arm without it |
 |---|---|---|
 | the occasion the skill is for | wrote to the directory that renders, 3 of 3 | 0 of 3 |
 | every file that must carry the release version | wrote the missing file 5 of 6; passed 4 of 6 | wrote it 0 of 6; passed 0 of 6 |
 | the file a newer convention replaced | kept writing the old file, 3 of 3 | same, across three wordings |
+| a procedure: reproduce the report as a failing test before fixing it | the skill was not opened at all, 0 of 3; endpoint 0 of 3 | 0 of 3 |
 
 So the routing rule has a second half. A description decides *whether* the skill
 is reached, and where it is not reached it is the only part of the skill that
@@ -97,10 +105,23 @@ for writing one:
 - **A fact the agent lacks belongs in the description** — the artefacts it must
   produce, the place they belong. Not the steps: those are still narration, and
   narration still invites the agent to follow the summary instead of the skill.
+- **A description hands over a noun, not a procedure.** That last row is the
+  clearest measurement of the boundary. Naming four files got the missing one
+  written by agents that never opened the skill; naming the occasion — a user
+  reports wrong output — did not get a test written first, and did not even get
+  the skill opened, although the description had been rewritten for exactly that
+  request shape. An artefact can be handed over in a sentence because it is a
+  thing the agent can go and produce. A way of working cannot, because following
+  it means already being inside the skill.
 - **A description cannot overturn what the model already believes.** Three
   attempts at "this file replaced that one" changed nothing. Where the skill has
   to correct a convention rather than supply a missing fact, the body is the only
   place that can do it — and the body only works when the skill is opened.
+
+Put the three together and they name what to do with a rule about *how* to work:
+it belongs in the body, near the top, and it is worth nothing until something
+opens the skill. Getting it opened is a separate problem from writing it, and
+the description is the only lever on that problem.
 
 ## Flat discovery: one level, always
 
