@@ -66,9 +66,15 @@ and `gh api "repos/$O/$R/commits?sha=release/v$V"` answers `404`. The PR record
 survives the branch deletion:
 
 ```bash
-N=$(jq -r 'select(.repo=="<repo>").id' "$WD/opened.jsonl")
+N=$(fr_opened_lookup "$R")          # host-filtered, last record wins
 gh api "repos/$O/$R/pulls/$N/commits" --jq '.[].commit.message'
 ```
+
+Take the id from `fr_opened_lookup`, not from a hand-written `jq` over
+`opened.jsonl`. That file accumulates across runs and can hold both hosts, so
+filtering on `.repo` alone yields several ids — which interpolate into a
+multi-line path that either queries the wrong PR or fails outright. The helper
+filters `.repo` *and* `.host` and keeps the last match.
 
 This is the one check standing between a missing trailer and a defect that
 cannot be fixed after the merge, so it must not be the step that gets skipped
