@@ -28,9 +28,23 @@ Claude Code reads its manifest from `.claude-plugin/plugin.json` and nowhere
 else; Agent Plugins clients read `plugin.json` at the package root and nowhere
 else. One file cannot serve both: the portable schema is **closed**
 (`additionalProperties: false`), so `skills`, `agents`, `commands`,
-`outputStyles`, `hooks`, `mcpServers`, `metadata` and `support` are schema
-violations there. Conversely Claude Code ignores fields it does not know, which
-is why the projection into `.claude-plugin/plugin.json` is safe.
+`outputStyles`, `hooks`, `mcpServers` and `metadata` are schema violations
+there. Conversely Claude Code ignores fields it does not know, which is why the
+projection into `.claude-plugin/plugin.json` is safe.
+
+`support` belongs in **neither** file. It is a composer-ism, not a Claude Code
+manifest field — the manifest reference documents `homepage` for a
+documentation URL and `metadata` as the free-form object, and nothing named
+`support`. `claude plugin validate --strict` reports `Unknown field 'support'`
+and exits 1; the claude.ai marketplace importer strips it and emits one warning
+per plugin. Put a contact URL in `homepage`, catalogue data in `metadata`, and
+issues under the `repository` host where they already live.
+
+Removing it once is not enough while a reviewer can suggest it back:
+`typo3-ddev-skill` dropped the key deliberately in `46b5fd6` ("fix: remove
+unsupported 'support' field from plugin.json", 2026-02-24) and a Copilot review
+reinstated it five weeks later in `1ae6b43`. Seven of the forty plugins in
+`netresearch/claude-code-marketplace` still carried it on 2026-09-17.
 
 Skills need no change: `skills/<name>/SKILL.md` is what both specs discover.
 
@@ -83,8 +97,8 @@ migrated yet.
 ## Migrating a repo
 
 1. Create `./plugin.json` with the fields above, copying the current values out
-   of `.claude-plugin/plugin.json`. Drop `skills`/`agents`/`support` — they stay
-   in the Claude manifest. Copy **every** shared field: a root manifest missing
+   of `.claude-plugin/plugin.json`. Drop `skills`/`agents` — they stay in the
+   Claude manifest; delete `support` from both. Copy **every** shared field: a root manifest missing
    one (`keywords` is the one that gets dropped in practice, because minimal
    manifests from repos that never had it look like templates) fails `--check`,
    and a plain sync then *deletes* the missing key from the Claude manifest —

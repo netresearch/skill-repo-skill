@@ -3,6 +3,21 @@
 Agents **must** walk through this list before declaring a skill-repo task complete.
 Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.md`** — do not merge those steps here.
 
+## Contents
+
+- README
+- SKILL.md
+- Manifests
+- Agents / OpenAI
+- Discovery metadata
+- GitHub repository SEO
+- GitHub Pages
+- Related skills
+- Marketplace sync expectations
+- Links and automation
+- Optional extended validation
+- Which validator catches what
+
 ## README
 
 - [ ] `README.md` contains **all** required sections listed in [`readme-template.md`](readme-template.md).
@@ -20,7 +35,8 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 ## Manifests
 
 - [ ] Root **`plugin.json`** exists and targets `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`.
-- [ ] It carries **only** the fields of the closed schema — no `skills`, `agents`, `support`, … — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
+- [ ] It carries **only** the fields of the closed schema — no `skills`, `agents`, … — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
+- [ ] Neither manifest carries `support`: it is not a Claude Code field either. `claude plugin validate --strict .` exits **0**.
 - [ ] `.claude-plugin/plugin.json` regenerated: `bash skills/skill-repo/scripts/sync-plugin-manifest.sh` leaves the tree clean (`--check` exits 0).
 - [ ] Version bumped in the **root** `plugin.json` (source of truth), then synced; `check-version-parity.sh` exits 0.
 - [ ] Every skill lives at `skills/<name>/SKILL.md` — a root `SKILL.md` is invisible to Agent Plugins clients.
@@ -62,3 +78,42 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 ## Optional extended validation
 
 - [ ] `scripts/audit-skills.sh` (if present in repo) reports no new orphan `references/` files.
+
+## Which validator catches what
+
+Three checkers run over a skill repository and none of them is a superset of the others. A green run of one is not a release gate for the others.
+
+| Checker | Catches | Does **not** catch |
+|---|---|---|
+| `validate-skill.sh` | repo structure, required files, root `LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`, shared-field parity between `plugin.json` and `.claude-plugin/plugin.json` (`version` among them) | anything the Claude Code manifest schema defines; `SKILL.md` version metadata, tag parity and the `composer.json` version rule, which belong to `check-version-parity.sh` |
+| `claude plugin validate [--strict]` | unknown top-level manifest fields (`--strict` turns the warning into exit 1), malformed manifest | dangling symlinks, markup inside a `SKILL.md` description |
+| claude.ai marketplace import | unknown manifest fields, **symlinks whose target is not in the repository**, **XML tags in a `SKILL.md` description** | — |
+
+The gap is not theoretical: on 2026-09-17 three `skills/*/LICENSE` symlinks in `netresearch/matrix-skill` had pointed at a file deleted six months earlier, and a description in `netresearch/orocommerce-skill` carried a literal `<Secret:>` placeholder. Both passed `validate-skill.sh` and `claude plugin validate --strict`; only the marketplace import named them. Run the import, or check symlinks and descriptions by hand, before assuming a repository is clean:
+
+```bash
+git ls-files -s | awk '$1=="120000" {print $4}' | while read -r l; do [ -e "$l" ] || echo "DANGLING: $l"; done
+```
+
+The description check has two traps, and a one-line `grep` walks into both. It must read the **frontmatter only** — an unscoped `/^description:/` also matches the SKILL.md template inside a body code fence, and this repository's own `skills/skill-repo/SKILL.md` carries `description: "Use when <trigger conditions>"` there, a false positive that reads exactly like a real defect. And it must read the **whole value**: `validate-skill.sh` accepts block scalars (`|`, `>`), so a tag on a continuation line is part of the description the import rejects while a check anchored on the `description:` line alone reports the file clean.
+
+```bash
+python3 - skills/*/SKILL.md <<'PY'
+import re, sys
+for p in sys.argv[1:]:
+    txt = open(p, encoding="utf-8").read()
+    fm = txt.split("\n---", 1)[0][4:] if txt.startswith("---\n") else ""
+    val, grab = [], False
+    for ln in fm.split("\n"):
+        if grab:
+            if ln[:1] in (" ", "\t") or not ln.strip():
+                val.append(ln); continue
+            break
+        m = re.match(r"description:(.*)", ln)
+        if m:
+            val.append(m.group(1)); grab = True
+    for ln in val:
+        if re.search(r"<[A-Za-z/]", ln):
+            print(f"{p}: {ln.strip()[:110]}")
+PY
+```

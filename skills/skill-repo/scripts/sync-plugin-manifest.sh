@@ -11,9 +11,11 @@
 # Root ./plugin.json is the source of truth for the shared metadata: name,
 # version, description, author, homepage, repository, license, keywords.
 # .claude-plugin/plugin.json is generated from it and keeps its Claude-only
-# keys (skills, agents, commands, outputStyles, hooks, mcpServers, metadata,
-# support, …) untouched — those fields have no place in the portable manifest,
-# whose schema is closed.
+# keys (skills, agents, commands, outputStyles, hooks, mcpServers, metadata, …)
+# untouched — those fields have no place in the portable manifest, whose schema
+# is closed. `support` is not among them: it is no Claude Code field either, so
+# this script preserving it is a carry-over, not an endorsement — see
+# references/agent-plugins-compat.md.
 #
 # Exit codes: 0 = written / in sync (or no portable manifest to sync from),
 #             1 = out of sync (--check) or invalid input.
