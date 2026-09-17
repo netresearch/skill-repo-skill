@@ -1,12 +1,20 @@
 # Default repo list for fleet-release-github.sh survey (--repos/--repos-file
 # override it). One repo per line, org-relative; '#' and blank lines ignored.
 #
-# Snapshot of the public GitHub skill fleet as of the 2026-08-27 sweep.
+# Snapshot of the public GitHub skill fleet as of the 2026-09-17 sweep.
 # Naming conventions do NOT enumerate this fleet (plugins and oddly-named
-# repos exist), so the list is maintained here — reviewable, and cheap to
-# refresh:
-#   gh repo list netresearch --limit 300 --no-archived \
-#     --json name --jq '.[].name' | grep -E -- '-(skill|plugin)$' | sort
+# repos exist), and a name filter over the org returns repos that are not
+# skills at all — composer-agent-skill-plugin and composer-patches-plugin are
+# composer plugins with no plugin.json. The marketplace manifest is what
+# defines the fleet: a skill the marketplace ships is one the fleet releases.
+# Refresh against it, and diff both ways:
+#   gh api repos/netresearch/claude-code-marketplace/contents/.claude-plugin/marketplace.json \
+#     --jq .content | base64 -d | jq -r '.plugins[].source.repo' \
+#     | sed 's|netresearch/||' | sort
+# A repo in the org but not in the manifest is either not a skill or a
+# marketplace gap; a repo in the manifest but not here is one the sweep never
+# surveys. The GitLab counterpart carries the same rule and was short three
+# repos by it on 2026-09-17 (coding-ai/gitlab-skill!142).
 # The survey dedupes rename redirects by resolved full_name, so a stale name
 # here becomes a DUPLICATE row, never a second bump PR.
 agent-harness-skill
