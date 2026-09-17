@@ -79,22 +79,25 @@ description reached the agent.
 What it moved, and what it did not:
 
 Each row is one arm carrying the new description against one carrying the old
-one, six trials each, on the same case and fleet. "Passed" means the case's own
-mechanical check accepted the result.
+one, on the same case and fleet. Trials per arm differ by round and are stated
+in the table. "Passed" is the case's own mechanical check accepting the result;
+"opened" is an explicit `Skill` call.
 
-The release-version row was first measured on an experiment branch whose
-description opened on the sentence naming the files, and then again on what
-actually shipped, where that sentence sits second behind the trigger list. The
-released wording reads 6 of 6 against 1 of 6 — the effect survives the move,
-which is worth knowing because a positive result on a branch is not a result
-about the release.
+| the description named | trials per arm | passed, with → without | opened, with → without |
+|---|---|---|---|
+| the occasion the skill is for | 3 | wrote to the directory that renders, 3 → 0 | 0 → 0 |
+| every file that must carry the release version, sentence first | 6 | 4 → 0 (wrote the missing file 5 → 0) | 0 → 0 |
+| the same, as released, sentence second | 6 | 6 → 1 | 1 → 0 |
+| the file a newer convention replaced | 3 | 0 → 0, across three wordings | 0 → 0 |
+| a procedure: reproduce the report as a failing test before fixing it | 3 | 0 → 0 | 0 → 0 |
 
-| the description named | arm with it | arm without it |
-|---|---|---|
-| the occasion the skill is for | wrote to the directory that renders, 3 of 3 | 0 of 3 |
-| every file that must carry the release version | wrote the missing file 5 of 6; passed 4 of 6 | wrote it 0 of 6; passed 0 of 6 |
-| the file a newer convention replaced | kept writing the old file, 3 of 3 | same, across three wordings |
-| a procedure: reproduce the report as a failing test before fixing it | the skill was not opened at all, 0 of 3; endpoint 0 of 3 | 0 of 3 |
+The two release-version rows are the same idea measured twice. The first is an
+experiment branch whose description opened on the sentence naming the files;
+the second is what shipped, where that sentence sits second behind the trigger
+list. The effect survives the move, which is worth recording because a positive
+result on a branch is not a result about the release. The two are not
+distinguishable at six trials per arm, and nothing here says the released
+wording is better.
 
 So the routing rule has a second half. A description decides *whether* the skill
 is reached, and where it is not reached it is the only part of the skill that
