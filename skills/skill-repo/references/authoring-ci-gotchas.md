@@ -16,7 +16,8 @@
 - A SAST job's interpreter bounds what it scans, and says nothing
 - A new script is committed `100755`, not just `chmod +x` locally
 
-Process learnings from a cross-session retrospective (2026-06-27). Companion to
+Process learnings from cross-session retrospectives (§§1–10 from 2026-06-27,
+§§11–13 from 2026-09-17). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
 [`validation-checklist.md`](validation-checklist.md) (pre-completion checks).
 Each item is a habit that prevents a costly redo, not a structural rule.
@@ -311,9 +312,12 @@ states the tool cannot:
 ```bash
 python3 - <<'PY'
 import json, re, pathlib
-pat = json.loads(pathlib.Path("renovate.json").read_text())["customManagers"][0]["matchStrings"][0]
+cfg = json.loads(pathlib.Path("renovate.json").read_text())
 text = pathlib.Path(".github/workflows/validate.yml").read_text()
-print([m.group("currentValue") for m in re.finditer(pat.replace("(?<", "(?P<"), text)])
+for mgr in cfg["customManagers"]:          # iterate: a repo may carry several
+    for pat in mgr["matchStrings"]:
+        hits = [m.group("currentValue") for m in re.finditer(pat.replace("(?<", "(?P<"), text)]
+        print(len(hits), hits)
 PY
 ```
 
@@ -366,7 +370,11 @@ BANDIT_PYTHON="$(printf '%s' "$PYTHON_VERSIONS" \
   | jq -r 'max_by(split(".") | map(gsub("[^0-9]";"") | tonumber? // 0))')"
 uv python install "$BANDIT_PYTHON"
 uv venv --seed --python "$BANDIT_PYTHON" "$RUNNER_TEMP/bandit-env"
-"$RUNNER_TEMP/bandit-env/bin/python" -V
+want="${BANDIT_PYTHON%%[!0-9.]*}"
+case "$("$RUNNER_TEMP/bandit-env/bin/python" -V)" in
+  "Python $want"|"Python $want".*) ;;
+  *) echo "::error::bandit venv is not on $BANDIT_PYTHON"; exit 1 ;;
+esac
 ```
 
 Two details that cost a round each. `--seed` is what puts a pip into the venv,
