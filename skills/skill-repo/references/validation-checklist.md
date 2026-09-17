@@ -20,7 +20,8 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 ## Manifests
 
 - [ ] Root **`plugin.json`** exists and targets `https://agent-plugins.org/schemas/1.0.0/plugin.schema.json`.
-- [ ] It carries **only** the fields of the closed schema — no `skills`, `agents`, `support`, … — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
+- [ ] It carries **only** the fields of the closed schema — no `skills`, `agents`, … — see [`agent-plugins-compat.md`](agent-plugins-compat.md).
+- [ ] Neither manifest carries `support`: it is not a Claude Code field either. `claude plugin validate --strict .` exits **0**.
 - [ ] `.claude-plugin/plugin.json` regenerated: `bash skills/skill-repo/scripts/sync-plugin-manifest.sh` leaves the tree clean (`--check` exits 0).
 - [ ] Version bumped in the **root** `plugin.json` (source of truth), then synced; `check-version-parity.sh` exits 0.
 - [ ] Every skill lives at `skills/<name>/SKILL.md` — a root `SKILL.md` is invisible to Agent Plugins clients.
@@ -62,3 +63,22 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 ## Optional extended validation
 
 - [ ] `scripts/audit-skills.sh` (if present in repo) reports no new orphan `references/` files.
+
+## Which validator catches what
+
+Three checkers run over a skill repository and none of them is a superset of the others. A green run of one is not a release gate for the others.
+
+| Checker | Catches | Does **not** catch |
+|---|---|---|
+| `validate-skill.sh` | repo structure, required files, root `LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`, version parity | anything the Claude Code manifest schema defines |
+| `claude plugin validate [--strict]` | unknown top-level manifest fields (`--strict` turns the warning into exit 1), malformed manifest | dangling symlinks, markup inside a `SKILL.md` description |
+| claude.ai marketplace import | unknown manifest fields, **symlinks whose target is not in the repository**, **XML tags in a `SKILL.md` description** | — |
+
+The gap is not theoretical: on 2026-09-17 three `skills/*/LICENSE` symlinks in `netresearch/matrix-skill` had pointed at a file deleted six months earlier, and a description in `netresearch/orocommerce-skill` carried a literal `<Secret:>` placeholder. Both passed `validate-skill.sh` and `claude plugin validate --strict`; only the marketplace import named them. Run the import, or check symlinks and descriptions by hand, before assuming a repository is clean:
+
+The description check is scoped to the **frontmatter** block: an unscoped `/^description:/` also matches the SKILL.md template inside a body code fence, and this repository's own `skills/skill-repo/SKILL.md` carries `description: "Use when <trigger conditions>"` there — a false positive that reads exactly like a real defect.
+
+```bash
+git ls-files -s | awk '$1=="120000" {print $4}' | while read -r l; do [ -e "$l" ] || echo "DANGLING: $l"; done
+awk 'FNR==1{fm=0} /^---$/{fm++; next} fm==1 && /^description:/ && /<[A-Za-z\/]/ {print FILENAME ": " $0}' skills/*/SKILL.md
+```

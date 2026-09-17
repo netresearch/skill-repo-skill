@@ -15,6 +15,7 @@
 - Immutable-Release Caveat
 - Tag Signing (Mandatory)
 - No `--latest` Drift for Non-Default Branches
+- What a release archive contains
 - Supply-Chain Attestation
 
 Every step that caused the "30 failed plugin releases" incident, codified as rules.
@@ -544,6 +545,21 @@ gh release create v1.5.12 --latest=false --title "v1.5.12" --notes-file CHANGELO
 ```
 
 GitHub marks releases "Latest" by creation timestamp, not semver. A v1.5.12 created after v2.0.0 will become "Latest" without this flag — wrong, misleading, and often noticed only by downstream consumers.
+
+## What a release archive contains
+
+`copy_skill()` in `.github/workflows/release.yml` packages a fixed **allow-list** per skill — `SKILL.md`, `references`, `scripts`, `assets`, `templates`, `examples`, plus `checkpoints.yaml` — and then copies the two root licence files into each skill directory:
+
+```bash
+cp LICENSE-MIT LICENSE-CC-BY-SA-4.0 "$dst/"
+```
+
+Two consequences worth knowing before touching files under `skills/<name>/`:
+
+- **A file outside that list never ships.** A per-skill `README.md`, a stray note, a `LICENSE` of its own — none of it reaches an archive, so removing one cannot change what consumers get. Answer "does deleting this break the release?" from the allow-list, not from intuition.
+- **Per-skill licence files are redundant by construction.** Every packaged skill already carries `LICENSE-MIT` and `LICENSE-CC-BY-SA-4.0` because the workflow puts them there. A `skills/<name>/LICENSE` adds nothing and rots silently: three such symlinks in `netresearch/matrix-skill` pointed at a root `LICENSE` that the split-licensing migration had deleted, and they stayed dangling for six months until a marketplace import named them.
+
+Adding a new packageable file type means extending the `for item in …` list in the reusable workflow — a repo cannot opt in from its own side.
 
 ## Supply-Chain Attestation
 
