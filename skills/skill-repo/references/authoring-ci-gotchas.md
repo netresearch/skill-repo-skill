@@ -11,6 +11,7 @@
 - `MD010` breaks copy-pasted Makefile snippets — exempt the fence, don't fake the tab
 - A validator over a structured value parses it; it does not pattern-match it
 - SonarCloud's `shelldre` rules fire on our own shell conventions — triage, don't comply
+- `uv pip compile --universal` drops marker-conditional deps — pin the floor
 
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
@@ -236,3 +237,46 @@ on their own endpoint with their own `Safe` / `Fixed` / `Acknowledged` review:
 
 `Safe` is not available for either; reaching for it means you are in the
 hotspot review by mistake.
+
+## 10. `uv pip compile --universal` drops marker-conditional deps — pin the floor
+
+`--universal` is not "resolve for every Python". It resolves from the running
+interpreter's version upward, so a dependency whose environment marker excludes
+that version is omitted from the lock entirely — silently, with exit 0.
+
+The omission surfaces where the lock is *consumed*, not where it is written. Our
+hash-locked tool envs install with `--require-hashes`, and pip refuses the whole
+file rather than the one line:
+
+```
+ERROR: In --require-hashes mode, all requirements must have their versions
+pinned with ==. These do not:
+    typing_extensions<5.0,>=4.6 ... (from cyclonedx-python-lib==11.11.0)
+```
+
+`cyclonedx-python-lib` declares `typing_extensions ; python_version < "3.13"`.
+Compiled on 3.14 the marker excludes it and the entry is never written; the
+audit job runs on the runner's default `python3` (3.12), which needs it. Compile
+and install therefore disagree, and only the install fails.
+
+Pass the floor the consumer actually runs on:
+
+```bash
+uv pip compile --universal --generate-hashes --python-version 3.12 \
+  requirements.in -o .github/requirements/pip-audit.txt
+```
+
+Two things follow. **The compile command belongs in a comment next to the file
+it produces, with the floor in it** — ours said only
+`uv pip compile --universal --generate-hashes`, so following it on a newer
+machine reproduced the defect. And because this is shared CI, one stale lock
+fails the job in every consuming repo at once; it presents as one repo's red
+check, since the others have not run since.
+
+Verify on the consumer's interpreter, not yours:
+
+```bash
+python3.12 -m venv /tmp/probe
+/tmp/probe/bin/pip install --dry-run --require-hashes --only-binary :all: \
+  -r .github/requirements/pip-audit.txt
+```
