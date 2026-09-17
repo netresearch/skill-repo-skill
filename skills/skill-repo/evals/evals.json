@@ -529,5 +529,37 @@
         "pattern": "plugin uninstall"
       }
     ]
+  },
+  {
+    "name": "renovate_regex_manager_verify_after_flag_change",
+    "prompt": "I added --no-build to the uvx ruff invocation in .github/workflows/validate.yml. The renovate.json customManager pins that version. Anything to do?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(?i)run the pattern against the real file|check the count|matchStrings"
+      },
+      {
+        "type": "content",
+        "pattern": "(?i)silent|no dependency found|nothing to update"
+      }
+    ]
+  },
+  {
+    "name": "sast_job_interpreter_bounds_the_scan",
+    "prompt": "Our bandit job builds its venv with `python3 -m venv` on ubuntu-latest and the scan is green. Is that enough?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(?i)runner('s)? (default|image)|oldest"
+      },
+      {
+        "type": "content",
+        "pattern": "(?i)skipped|exit 0|scanned nothing|parse"
+      },
+      {
+        "type": "content",
+        "pattern": "(?i)uv venv|--seed|newest"
+      }
+    ]
   }
 ]

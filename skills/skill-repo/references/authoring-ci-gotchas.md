@@ -12,6 +12,9 @@
 - A validator over a structured value parses it; it does not pattern-match it
 - SonarCloud's `shelldre` rules fire on our own shell conventions — triage, don't comply
 - `uv pip compile --universal` drops marker-conditional deps — pin the floor
+- A Renovate regex manager fails silently in both directions
+- A SAST job's interpreter bounds what it scans, and says nothing
+- A new script is committed `100755`, not just `chmod +x` locally
 
 Process learnings from a cross-session retrospective (2026-06-27). Companion to
 [`skill-quality.md`](skill-quality.md) (SKILL.md sizing) and the
@@ -280,3 +283,113 @@ python3.12 -m venv /tmp/probe
 /tmp/probe/bin/pip install --dry-run --require-hashes --only-binary :all: \
   -r .github/requirements/pip-audit.txt
 ```
+
+## 11. A Renovate regex manager fails silently in both directions
+
+A `customManagers` entry pins ad-hoc tool versions in workflow files
+(`uvx ruff@0.16.0`, `uv run --with pyyaml==6.0.3`) so Renovate opens a PR when
+they move. Both of its failure modes are invisible, because **"no dependency
+found here" and "nothing to update here" produce the same output: none.**
+
+*It stops matching.* Ours was written against `uvx <name>@<version>` with an
+optional `--from <x>` in front. Sixteen minutes later another commit hardened
+the pin to `uvx --no-build ruff@0.16.0`, and the pattern matched nothing from
+then on. The pin sat unmoved for seven weeks while ruff released eight versions,
+and nothing reported it — the repository looked up to date.
+
+*It matches the wrong token.* Widening the prefix to "any word may stand here"
+fixed that and broke the other direction: under a `datasource=pypi` comment,
+`uvx --from git+https://github.com/o/r@2843b87 tool` yields `2843b87` as the
+PyPI version of the package the comment names.
+
+Three habits follow.
+
+**Run the pattern against the real file after every change to an annotated
+command line, and check the count.** One call, and it distinguishes the two
+states the tool cannot:
+
+```bash
+python3 - <<'PY'
+import json, re, pathlib
+pat = json.loads(pathlib.Path("renovate.json").read_text())["customManagers"][0]["matchStrings"][0]
+text = pathlib.Path(".github/workflows/validate.yml").read_text()
+print([m.group("currentValue") for m in re.finditer(pat.replace("(?<", "(?P<"), text)])
+PY
+```
+
+**Shape the pinned token, not the prefix.** `[A-Za-z][A-Za-z0-9._-]*@` is a
+package name; `\S+@` is also a URL. Because the repeat consumes whole
+space-separated words, a name can only begin where a word begins, so the `cli@`
+inside `git+https://…/cli@2843b87` is not a candidate and a `--from <source>` is
+excluded without enumerating the tool's flags. That matters: **Renovate runs the
+pattern through RE2, which has no lookahead**, so a flag allow-list would have to
+exclude the value-taking flags from its own generic branch to be safe.
+
+**Pin both directions in a test.** A case list that only asserts what *must*
+match cannot catch the second failure. Assert the shapes that must yield nothing
+as well, and note in the test that translating `(?<name>` to `(?P<name>` for
+Python's `re` is evidence about the pattern, not about RE2 — the proof for that
+half is the bump PR Renovate opens.
+
+## 12. A SAST job's interpreter bounds what it scans, and says nothing
+
+`python3 -m venv` in a CI job takes the runner image's interpreter. On
+`ubuntu-latest` that is 3.12.3 today — for most repositories the **oldest**
+version their matrix tests, not the newest. Bandit parses with the `ast` of the
+interpreter it runs on, and a file it cannot parse is skipped with a warning
+while the run still exits 0. The gate reports clean instead of reporting that it
+scanned nothing.
+
+Measured with bandit 1.9.4 on one file holding a PEP 696 type-parameter default
+and a shell-injection finding under it:
+
+| Interpreter | Result |
+|---|---|
+| 3.12.14 | `Files skipped (1): syntax error while parsing AST` · exit 0 · no `B602` |
+| 3.14.7 | `B602 subprocess call with shell=True` · exit 1 |
+
+```python
+import subprocess
+
+
+class Box[T = int]:  # PEP 696, 3.13+
+    def run(self, cmd: str) -> None:
+        subprocess.call(cmd, shell=True)  # B602
+```
+
+So derive the interpreter from what the caller tests rather than inheriting it,
+and assert the venv landed on it — a venv on the wrong interpreter runs fine and
+scans less:
+
+```bash
+BANDIT_PYTHON="$(printf '%s' "$PYTHON_VERSIONS" \
+  | jq -r 'max_by(split(".") | map(gsub("[^0-9]";"") | tonumber? // 0))')"
+uv python install "$BANDIT_PYTHON"
+uv venv --seed --python "$BANDIT_PYTHON" "$RUNNER_TEMP/bandit-env"
+"$RUNNER_TEMP/bandit-env/bin/python" -V
+```
+
+Two details that cost a round each. `--seed` is what puts a pip into the venv,
+which is what reads a hash-locked requirements file under `--require-hashes`
+(§10's lock installs unchanged on a newer interpreter — verify, do not assume).
+And `gsub` before `tonumber`: a caller may test a free-threaded build (`3.13t`),
+where a bare `tonumber` aborts the job. Compare on the digits and install the
+value as written — then compare the assertion on the numeric prefix too, since
+`python -V` answers `Python 3.13.x` for a `3.13t` request.
+
+## 13. A new script is committed `100755`, not just `chmod +x` locally
+
+ruff's `EXE001` fails the build on a file that carries a shebang and is committed
+`100644`, and a local ruff run does not reproduce it — the mode in the index is
+what CI reads. `validate-skill.sh` catches it with the exact fix, but only after
+a push, so the cheap moment is when the file is created:
+
+```bash
+chmod +x path/to/new-script.py && git update-index --chmod=+x path/to/new-script.py
+```
+
+Worth the one line: this cost two separate CI rounds in a single session, once on
+a maintainer's PR and once on a contributor's, both on freshly added test
+scripts. Drop the shebang instead where the file is genuinely only imported — a
+module is not a script, and making it executable settles the mismatch from the
+wrong side.
