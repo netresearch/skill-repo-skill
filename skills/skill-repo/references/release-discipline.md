@@ -57,6 +57,29 @@ then `git log -1 --format=%B` on the first repo the phase touches. The same
 applies to a vendored engine: a fleet driver on another host reads *its own*
 copy, so an upstream fix reaches it only after a re-vendor.
 
+**Read that commit from the PR, not from the branch — the bump phase arms
+auto-merge, so the branch is often already merged and deleted by the time you
+look.** Both branch-shaped reads then fail, and they fail in ways that read like
+the bump never happened rather than like it succeeded:
+`gh api repos/$O/$R/commits/release/v$V` answers `422 No commit found for SHA`
+and `gh api "repos/$O/$R/commits?sha=release/v$V"` answers `404`. The PR record
+survives the branch deletion:
+
+```bash
+N=$(fr_opened_lookup "$R")          # host-filtered, last record wins
+gh api "repos/$O/$R/pulls/$N/commits" --jq '.[].commit.message'
+```
+
+Take the id from `fr_opened_lookup`, not from a hand-written `jq` over
+`opened.jsonl`. That file accumulates across runs and can hold both hosts, so
+filtering on `.repo` alone yields several ids — which interpolate into a
+multi-line path that either queries the wrong PR or fails outright. The helper
+filters `.repo` *and* `.host` and keeps the last match.
+
+This is the one check standing between a missing trailer and a defect that
+cannot be fixed after the merge, so it must not be the step that gets skipped
+because the documented command returned an error.
+
 **Where a policy requires agent or tool disclosure on every commit, set
 `FR_COMMIT_TRAILERS`** — newline-separated `Key: value` lines that the bump
 commit carries as git trailers, alongside the `--signoff` it already writes.
