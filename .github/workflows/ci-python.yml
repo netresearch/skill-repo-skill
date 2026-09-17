@@ -12,7 +12,7 @@ on:
       python-versions:
         description: JSON array of Python versions to test
         type: string
-        default: '["3.12", "3.13"]'
+        default: '["3.12", "3.13", "3.14"]'
       test-command:
         description: >-
           Command to run for testing. The matrix interpreter is installed and
@@ -94,7 +94,43 @@ jobs:
       - name: Run Bandit
         env:
           BANDIT_ARGS: ${{ inputs.bandit-args }}
+          PYTHON_VERSIONS: ${{ inputs.python-versions }}
         run: |
+          # Bandit parses with the ast of the interpreter it RUNS on, and a file
+          # it cannot parse is skipped with a warning and exit 0 -- so the scan
+          # reports clean instead of reporting that it scanned nothing. Measured
+          # on 2026-09-17: a file using PEP 696 (`class Box[T = int]`, 3.13+)
+          # with a `subprocess.call(..., shell=True)` under it is reported as
+          # "Files skipped (1): syntax error while parsing AST" and B602 never
+          # fires; on 3.14 the same file fails as it should.
+          #
+          # `python3 -m venv` gave that interpreter to the runner image, which
+          # is 3.12.3 on ubuntu-latest today -- the OLDEST version most callers
+          # test, not the newest. Take the newest version the caller tests and
+          # install it, so the scan can parse everything the matrix accepts.
+          # gsub: a caller may test a free-threaded build ("3.13t"), and a bare
+          # tonumber on that part aborts the job -- which would be a scan lost
+          # to a version string, on callers this job used to serve by ignoring
+          # python-versions entirely. Compare on the digits, install the value
+          # as written.
+          BANDIT_PYTHON="$(printf '%s' "$PYTHON_VERSIONS" \
+            | jq -r 'max_by(split(".") | map(gsub("[^0-9]";"") | tonumber? // 0))')"
+          if [[ -z "$BANDIT_PYTHON" || "$BANDIT_PYTHON" == "null" ]]; then
+            echo "::error::python-versions yielded no interpreter for the bandit scan: $PYTHON_VERSIONS"; exit 1
+          fi
+          uv python install "$BANDIT_PYTHON"
+          uv venv --seed --python "$BANDIT_PYTHON" "$RUNNER_TEMP/bandit-env"
+          # Asserted rather than assumed, for the same reason as the test job's
+          # interpreter check below: a venv on the wrong interpreter still runs.
+          "$RUNNER_TEMP/bandit-env/bin/python" -V
+          # `python -V` reports 3.13.x for a "3.13t" request, so compare on the
+          # numeric prefix; matching the request verbatim would fail the job on
+          # exactly the free-threaded build the gsub above exists to allow.
+          want="${BANDIT_PYTHON%%[!0-9.]*}"
+          case "$("$RUNNER_TEMP/bandit-env/bin/python" -V)" in
+            "Python $want"|"Python $want".*) ;;
+            *) echo "::error::bandit venv is not on $BANDIT_PYTHON -- the scan would parse with a different ast than the matrix tests"; exit 1 ;;
+          esac
           # Hash-locked tool env: requirements compiled with
           # `uv pip compile --universal --generate-hashes --python-version 3.12`;
           # the floor matters: compiled on a newer interpreter, uv drops
@@ -103,7 +139,8 @@ jobs:
           # fails here, not at compile time. --require-hashes
           # rejects any artifact not pinned by digest, --only-binary blocks
           # sdist setup scripts. Bump via .github/requirements/bandit.txt.
-          python3 -m venv "$RUNNER_TEMP/bandit-env"
+          # `uv venv --seed` is what puts the pip that reads it into the venv;
+          # verified on 3.14 that the 3.12-compiled lock installs unchanged.
           "$RUNNER_TEMP/bandit-env/bin/pip" install --quiet --require-hashes --only-binary :all: -r .skill-repo-ci/.github/requirements/bandit.txt
           # shellcheck disable=SC2086  # intentional: BANDIT_ARGS is a list of flags
           "$RUNNER_TEMP/bandit-env/bin/bandit" $BANDIT_ARGS
