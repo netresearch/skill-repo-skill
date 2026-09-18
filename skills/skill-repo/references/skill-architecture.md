@@ -6,6 +6,7 @@
 - Budgets, and where each number comes from
 - The description is a router, not documentation
   - What a description can move, measured
+- What a reference reaches, measured
 - Flat discovery: one level, always
 - What belongs in SKILL.md and what does not
 - Long references need a Contents section
@@ -21,7 +22,7 @@ A skill is read in three stages, at three different moments. Putting a fact on t
 |---|---|---|---|
 | `name` + `description` | **always**, at startup, for every installed skill | ~100 tokens | **The only true skip.** The skill is never activated, so nothing else is ever read. |
 | `SKILL.md` body | when the skill is activated | < 5000 tokens recommended | A blind spot: the skill runs and does not know the thing exists. |
-| `references/`, `scripts/`, `assets/` | only when the agent decides to reach for one | unbounded | Nothing — until it is needed. |
+| `references/`, `scripts/`, `assets/` | only when the agent decides to reach for one | unbounded | Nothing for a lookup table. For a rule that prevents a mistake: measured at four of six runs never opening one — see below. |
 
 > *"Metadata (~100 tokens): The `name` and `description` fields are loaded at startup for all skills. Instructions (< 5000 tokens recommended): The full `SKILL.md` body is loaded when the skill is activated. Resources (as needed): Files … are loaded only when required."*
 
@@ -125,6 +126,49 @@ Put the three together and they name what to do with a rule about *how* to work:
 it belongs in the body, near the top, and it is worth nothing until something
 opens the skill. Getting it opened is a separate problem from writing it, and
 the description is the only lever on that problem.
+
+## What a reference reaches, measured
+
+The row above says a gap in `references/` costs "nothing — until it is needed".
+That holds for a lookup table. It does not hold for a rule that prevents a
+common mistake, and the difference is measurable.
+
+`OFR-TYPO3-UPGRADE-001`, 14 September 2026, Haiku 4.5, six trials on one fleet.
+This is a case where routing works: `skill_invoked` is 6 of 6, so every trial
+opened the skill and read the body. Counting `Read` calls against
+`references/` per trial:
+
+| trial | reference files read | outcome |
+|---|---|---|
+| 1 | 0 | passed both legs |
+| 2 | **0** | passed v14.3, lost v13.4 |
+| 3 | 3 | failed both legs |
+| 4 | 2 | passed both legs |
+| 5 | 0 | passed both legs |
+| 6 | 0 | passed both legs |
+
+Four of six opened no reference file at all. Trial 2 lost the leg that had been
+working to a rule that had been sitting in `references/upgrade-v13-to-v14.md`
+for nine days, written from an earlier occurrence of the same failure — and
+`SKILL.md` names the problem at exactly the right step and then points at the
+file: "`createMock` on one of them cannot be repaired by swapping the name — see
+`references/upgrade-v13-to-v14.md`". The agent was told a rule exists and not
+what it says.
+
+Reading is not what separates the outcomes here — trial 3 read three files and
+failed both legs, trials 5 and 6 read none and passed. Six trials say nothing
+about that either way. What they do say is the frequency: a reference is opened
+in a minority of runs even when the body points at it, so a sentence that has to
+land every time cannot live there.
+
+The rule that follows is about placement, not about length:
+
+- **A reference is for what an agent will look up once it knows it needs it** —
+  a mapping, a schema, the fiftieth edge case, the two honest answers to a
+  judgement call.
+- **A sentence that prevents a mistake belongs in the body**, even when the
+  surrounding treatment stays in the reference. The body is read whenever the
+  skill is activated; the reference is read when the agent decides to.
 
 ## Flat discovery: one level, always
 
