@@ -179,10 +179,23 @@ description, a reference. This one is about what the agent then *does*, and it
 is the one the stack's purpose turns on: a skill is a shortcut only where the
 step it names gets run.
 
+These are not this repository's answer-text evals. Every count below is read
+from tool-call telemetry: the `verifier/trajectory.json` Harbor records for each
+trial in `netresearch/agent-system-evals`, where a Skill invocation is a `Skill`
+tool call and "ran it" means a `Bash` tool call whose arguments carry the step's
+own signature — the block's `types='…'` prefix, the runner's script name, the
+grep's alternation. Model `claude-haiku-4-5-20251001` under Claude Code, one
+prompt, one cold start, one session per trial. Records:
+`experiments/OFR-TYPO3-UPGRADE-001-20260918-{073044,092803,121328,152227}.json`
+(rounds twenty-four to twenty-seven in that case's `RESULTS.md`) and
+`experiments/OFR-TYPO3-EXT-001-20260828-121312.json`. p-values are Fisher's
+exact test, two-sided, from that repository's `scripts/lib/stats.py`; a cost is
+the agent's `final_metrics.total_cost_usd` for the trial in USD.
+
 One case, one model, one position. `OFR-TYPO3-UPGRADE-001` under Haiku 4.5,
-routing 12 of 12 in every round below, and the same step of the same body
-carrying four shapes in turn, each measured on three to six trials against the
-one it replaced:
+`Skill` invoked in 12 of 12 trials in every round below, and the same step of
+the same body carrying four shapes in turn, each measured on three to six
+trials against the one it replaced:
 
 | step 9 carried | trials that ran it | note |
 |---|---|---|
@@ -204,8 +217,8 @@ variable.
 A second case says the same thing on a different skill. `OFR-TYPO3-EXT-001`,
 six-trial round with cost declared, `typo3-conformance` in the fleet: the
 fenced grep block in that body ran in six of six equipped trials and its
-equivalent in none of six bare ones, at $0.13 against $0.32 with the same
-outcome on both arms. That is one row and not a mechanism — the equipped arm
+equivalent in none of six bare ones, at $0.13 against $0.32, with the same
+task outcome on both arms despite the different block-execution rates. That is one row and not a mechanism — the equipped arm
 carries eight skills and a workflow besides the block — but it is the shape
 being run, again.
 
