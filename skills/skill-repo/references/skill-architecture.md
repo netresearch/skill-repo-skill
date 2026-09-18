@@ -239,10 +239,17 @@ Two consequences for writing a body, and one limit.
   overlapped in three declared rounds. The saving the stack is for appears
   where a check fires and replaces the test run — or the ten tool calls — that
   would have found the same thing by hand. Measure it there.
-- **This is one model at one budget.** Haiku at a benchmark's cold start. A
-  model with a larger budget may open references and follow instructions the
-  small one does not; the rows above say "this model", and the section stays
-  that narrow until another model has a row.
+- **This is one model at one budget, and the other model measured has the
+  opposite row.** Same case, same skill (`typo3-extension-upgrade`, v3.11.1
+  through v3.12.5, every one of them naming `scripts/scan-deprecations.sh` in
+  the body), one prompt, one cold start. `claude-opus-5` ran that script by its
+  printed path in 16 of 17 valid trials, on 20 August 2026 at $20–34 a trial.
+  `claude-haiku-4-5-20251001` ran it in 1 of 188, 31 August to 18 September,
+  under $2 a trial. Six Opus trials of 19 August are left out as invalid: two
+  steps each and no cost. The rows above are Haiku's. Whether a path
+  instruction is followed is a property of the model reading it, not of the
+  body, and the stack is measured on the model that does not follow it because
+  that is where a shortcut has something to shorten.
 
 ## Flat discovery: one level, always
 
