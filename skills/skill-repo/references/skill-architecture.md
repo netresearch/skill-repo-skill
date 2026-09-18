@@ -7,6 +7,7 @@
 - The description is a router, not documentation
   - What a description can move, measured
 - What a reference reaches, measured
+- What gets executed, measured
 - Flat discovery: one level, always
 - What belongs in SKILL.md and what does not
 - Long references need a Contents section
@@ -169,6 +170,61 @@ The rule that follows is about placement, not about length:
 - **A sentence that prevents a mistake belongs in the body**, even when the
   surrounding treatment stays in the reference. The body is read whenever the
   skill is activated; the reference is read when the agent decides to.
+
+
+## What gets executed, measured
+
+The two measured sections above are about what reaches the agent — a
+description, a reference. This one is about what the agent then *does*, and it
+is the one the stack's purpose turns on: a skill is a shortcut only where the
+step it names gets run.
+
+One case, one model, one position. `OFR-TYPO3-UPGRADE-001` under Haiku 4.5,
+routing 12 of 12 in every round below, and the same step of the same body
+carrying four shapes in turn, each measured on three to six trials against the
+one it replaced:
+
+| step 9 carried | trials that ran it | note |
+|---|---|---|
+| a rule, in the body | in context 3/3; the edit it names occurred 0/12 | untested on its own axis — nothing to prevent |
+| an instruction to run a script, via a variable the loader does not set | 0/3 | in context 3/3; no trial in twelve bound a variable of any kind |
+| the bare `grep` the script wraps, beside either | 2/6 | |
+| the check itself as a fenced block that runs as pasted | **5/6** | p 0.048 against the instruction; the sixth typed the grep by hand |
+| the body's other fenced block, step 10, for scale | 16/18 | p 1.000 against the block above |
+
+The line between the shapes is not position — step 10 sits below step 9 — and
+not length. It is whether the step can be executed as written. A command the
+agent already knows (`rector`, `phpstan`, `composer`) is run. A fenced block
+with nothing to look up and nothing to bind first is run at the same rate. A
+path that has to be assembled from the loader's output is not run at all:
+across twelve trials the agents used the printed absolute skill path verbatim,
+in five `ls`/`grep`/`find` calls against `references/`, and never once as a
+variable.
+
+A second case says the same thing on a different skill. `OFR-TYPO3-EXT-001`,
+six-trial round with cost declared, `typo3-conformance` in the fleet: the
+fenced grep block in that body ran in six of six equipped trials and its
+equivalent in none of six bare ones, at $0.13 against $0.32 with the same
+outcome on both arms. That is one row and not a mechanism — the equipped arm
+carries eight skills and a workflow besides the block — but it is the shape
+being run, again.
+
+Two consequences for writing a body, and one limit.
+
+- **A step that must happen is a block that runs as pasted.** Not a sentence
+  saying to do it, not a path to a script that does it. The runner in
+  `automated-assessment` is reached by `/assess <skill>`, one hop; the
+  sibling-path form of the same call measured 0/3 in a body and stays
+  documented as that.
+- **A block that finds nothing costs a call and saves none.** On the upgrade
+  case the edit the block catches arrives once in forty-two trials, and cost
+  overlapped in three declared rounds. The saving the stack is for appears
+  where a check fires and replaces the test run — or the ten tool calls — that
+  would have found the same thing by hand. Measure it there.
+- **This is one model at one budget.** Haiku at a benchmark's cold start. A
+  model with a larger budget may open references and follow instructions the
+  small one does not; the rows above say "this model", and the section stays
+  that narrow until another model has a row.
 
 ## Flat discovery: one level, always
 
