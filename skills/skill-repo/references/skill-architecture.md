@@ -218,9 +218,14 @@ A second case says the same thing on a different skill. `OFR-TYPO3-EXT-001`,
 six-trial round with cost declared, `typo3-conformance` in the fleet: the
 fenced grep block in that body ran in six of six equipped trials and its
 equivalent in none of six bare ones, at $0.13 against $0.32, with the same
-task outcome on both arms despite the different block-execution rates. That is one row and not a mechanism — the equipped arm
-carries eight skills and a workflow besides the block — but it is the shape
-being run, again.
+task outcome on both arms despite the different block-execution rates. That is
+one row and not a mechanism — the equipped arm carries eight skills and a
+workflow besides the block — but it is the shape being run, again. Measured
+since, by removing only that block from the body (record
+`experiments/OFR-TYPO3-EXT-001-20260918-170620.json`): cost did not rise, the
+arm without the block ran equivalent greps by hand from the tokens the body's
+numbered steps name in prose, and outcome held. The block is run; it is not
+where that case's saving lives.
 
 Two consequences for writing a body, and one limit.
 
