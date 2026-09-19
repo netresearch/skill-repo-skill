@@ -126,15 +126,23 @@ check() {
 		fail "$label: top-level entries [$(printf '%s' "$tops" | tr '\n' ' ')] — expected only $expected/"
 	fi
 
-	# the skill archives carry SKILL.md at the folder root; the plugin archive
-	# nests its skills, so its manifest lives one level deeper
-	local wanted="$expected/SKILL.md"
-	[ "$expected" = "demo-plugin" ] && wanted="$expected/skills/demo-one/SKILL.md"
-	if printf '%s\n' "$entries" | grep -qx "$wanted"; then
-		pass "$label: carries $wanted"
+	# The skill archives carry SKILL.md at the folder root. The plugin archive
+	# carries BOTH its own manifest and the nested skills: asserting only the
+	# nested SKILL.md would stay green if the workflow stopped copying
+	# .claude-plugin, which is the half a plugin consumer actually needs.
+	local wanted
+	if [ "$expected" = "demo-plugin" ]; then
+		wanted="$expected/.claude-plugin/plugin.json $expected/skills/demo-one/SKILL.md"
 	else
-		fail "$label: no $wanted"
+		wanted="$expected/SKILL.md"
 	fi
+	for want in $wanted; do
+		if printf '%s\n' "$entries" | grep -qx "$want"; then
+			pass "$label: carries $want"
+		else
+			fail "$label: no $want"
+		fi
+	done
 }
 
 REL="$REPO/dist/releases"

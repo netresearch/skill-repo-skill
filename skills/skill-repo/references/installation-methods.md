@@ -114,7 +114,15 @@ Download packaged skill files from GitHub Releases.
 1. Go to skill's GitHub repository
 2. Navigate to Releases page
 3. Download latest `.zip` or `.tar.gz`
-4. Extract to `~/.claude/skills/{skill-name}/`
+4. Extract into `~/.claude/skills/` — **not** into a `{skill-name}/` subdirectory
+   of it. The archive carries its own `{skill-name}/` folder, so extracting one
+   level deeper produces `~/.claude/skills/{skill-name}/{skill-name}/SKILL.md`,
+   which is not loaded.
+
+```bash
+unzip -d ~/.claude/skills {skill-name}-skill-vX.Y.Z.zip
+unzip -Z1 {skill-name}-skill-vX.Y.Z.zip | cut -d/ -f1 | sort -u   # one entry: {skill-name}
+```
 
 ### Package Contents
 
@@ -287,6 +295,6 @@ The npm path registers only `SKILL.md` content into `AGENTS.md`. **Slash command
 |--------|----------|
 | Marketplace | Managed by Claude Code |
 | Skills directory | `~/.claude/skills/{plugin-name}/` (loaded in place) |
-| Release | `~/.claude/skills/{skill-name}/` |
+| Release | extract into `~/.claude/skills/`; the archive supplies `{skill-name}/` |
 | Composer | `vendor/netresearch/{repo-name}/` |
 | npm | `node_modules/@netresearch/{repo-name}/` |
