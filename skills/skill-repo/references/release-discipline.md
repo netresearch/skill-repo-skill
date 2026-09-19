@@ -588,6 +588,19 @@ jobs:
 
 If any of those scopes is missing the job fails fast with `Resource not accessible by integration`; `contents: write` alone is not enough.
 
+### What a release archive contains
+
+Every archive unpacks into ONE top-level folder named after the artefact:
+`<skill>/SKILL.md`, `<plugin>/.claude-plugin/`. That is not cosmetic. The OpenAI
+skills API accepts "a .zip that contains a single top-level folder", so a flat
+archive is rejected with a bare *Invalid skill* and no reason
+(netresearch/german-technical-writing-skill#2), and every repo's README tells
+readers to "extract to your agent's skills directory" — a flat archive unpacks
+`SKILL.md` and `references/` straight into `~/.claude/skills/`, on top of
+whatever else is there. `tests/release-archive-layout.sh` runs the packaging
+step out of the workflow against a fixture repository and asserts the property,
+so it cannot regress silently.
+
 ### Verify a downloaded release archive
 
 Both commands below pin verification to the **specific repository** that's expected to have produced the release. `--owner netresearch` and `https://github.com/netresearch/.*` are tempting shortcuts but match every workflow run in the org — meaning a compromised or unrelated netresearch repo could mint a valid-looking attestation against an artefact that was never released from this repo. Always pin to the named repo.
