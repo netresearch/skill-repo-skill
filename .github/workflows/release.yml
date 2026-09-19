@@ -198,18 +198,32 @@ jobs:
             fi
 
             echo "=== Packaging standalone skill: $SKILL_NAME ==="
-            SKILL_DIST="dist/skill-$SKILL_NAME"
+            # The archive wraps its contents in ONE top-level folder named after
+            # the skill, and is built from the staging directory's parent so that
+            # folder is inside it. Archiving `.` from the staging directory put
+            # SKILL.md at the archive root, which is what "Invalid skill" meant
+            # when a release zip was uploaded to ChatGPT: the OpenAI skills API
+            # takes "a .zip that contains a single top-level folder"
+            # (developers.openai.com, Skills guide). It also made the README's
+            # "extract to your agent's skills directory" wrong - a flat archive
+            # unpacks SKILL.md and references/ straight into ~/.claude/skills/,
+            # on top of whatever else is there.
+            SKILL_STAGE="dist/skill-$SKILL_NAME"
+            SKILL_DIST="$SKILL_STAGE/$SKILL_NAME"
             mkdir -p "$SKILL_DIST"
             copy_skill "$SKILL_SRC" "$SKILL_DIST"
 
-            (cd "$SKILL_DIST" && zip -qr "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.zip" .)
-            (cd "$SKILL_DIST" && tar -czf "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.tar.gz" .)
+            (cd "$SKILL_STAGE" && zip -qr "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.zip" "$SKILL_NAME")
+            (cd "$SKILL_STAGE" && tar -czf "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.tar.gz" "$SKILL_NAME")
             echo "Created ${SKILL_NAME}-skill-${TAG_VERSION}.zip/.tar.gz"
           done <<< "$SKILL_PATHS"
 
           # --- Package full plugin ---
           echo "=== Packaging plugin: $PLUGIN_NAME ==="
-          PLUGIN_DIST="dist/plugin"
+          # Same wrapping rule as the skill archives above, for the same reason
+          # and so the two artefacts of one release do not unpack differently.
+          PLUGIN_STAGE="dist/plugin"
+          PLUGIN_DIST="$PLUGIN_STAGE/$PLUGIN_NAME"
           mkdir -p "$PLUGIN_DIST"
 
           while IFS= read -r skill_path; do
@@ -232,8 +246,8 @@ jobs:
             find "$PLUGIN_DIST/scripts" -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
           fi
 
-          (cd "$PLUGIN_DIST" && zip -qr "../releases/${PLUGIN_NAME}-plugin-${TAG_VERSION}.zip" .)
-          (cd "$PLUGIN_DIST" && tar -czf "../releases/${PLUGIN_NAME}-plugin-${TAG_VERSION}.tar.gz" .)
+          (cd "$PLUGIN_STAGE" && zip -qr "../releases/${PLUGIN_NAME}-plugin-${TAG_VERSION}.zip" "$PLUGIN_NAME")
+          (cd "$PLUGIN_STAGE" && tar -czf "../releases/${PLUGIN_NAME}-plugin-${TAG_VERSION}.tar.gz" "$PLUGIN_NAME")
           echo "Created ${PLUGIN_NAME}-plugin-${TAG_VERSION}.zip/.tar.gz"
 
           # --- Checksums ---
