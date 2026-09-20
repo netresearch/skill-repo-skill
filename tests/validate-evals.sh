@@ -239,6 +239,130 @@ case "$out" in
     *) check "both files are reported, in order" 0 1 ;;
 esac
 
+# --- samples on a new or tightened eval (retro-skill#92) ---------------------
+# Without a base copy nothing changes; with one, an eval that is new or whose
+# assertions changed must carry samples, and everything else must still pass.
+# padding-only.json is the base: 12 filler evals, pattern-bearing, no samples.
+BASE="$WORK/padding-only.json"
+
+suite "$WORK/new-no-samples.json" <<'EOF'
+{ "name": "added_without_samples", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}] }
+EOF
+out=$(EVALS_BASE_FILE="$BASE" bash "$SCRIPT" "$WORK/new-no-samples.json" 2>&1)
+check "a new eval without samples is rejected" 1 "$?"
+check "names the new eval in the FAIL line" yes "$(grep -q 'added_without_samples.*is new and carries no samples' <<<"$out" && echo yes || echo no)"
+check "leaves the untouched evals alone" no "$(grep -q 'filler_0.*carries no samples' <<<"$out" && echo yes || echo no)"
+
+# The same file with no base copy: the requirement is off, verdict unchanged.
+bash "$SCRIPT" "$WORK/new-no-samples.json" >/dev/null 2>&1
+check "without EVALS_BASE_FILE the same file still passes" 0 "$?"
+
+suite "$WORK/new-with-samples.json" <<'EOF'
+{ "name": "added_with_samples", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}],
+  "samples": {"passing": "alpha beta", "failing": ["gamma only"]} }
+EOF
+EVALS_BASE_FILE="$BASE" bash "$SCRIPT" "$WORK/new-with-samples.json" >/dev/null 2>&1
+check "a new eval with samples passes" 0 "$?"
+
+# An unchanged file compared against itself: every eval is known, none is
+# demanded samples. This is the direction a validator that rejects everything
+# would fail.
+EVALS_BASE_FILE="$WORK/new-no-samples.json" bash "$SCRIPT" "$WORK/new-no-samples.json" >/dev/null 2>&1
+check "a file compared against itself passes unchanged" 0 "$?"
+EVALS_BASE_FILE="$BASE" bash "$SCRIPT" "$BASE" >/dev/null 2>&1
+check "the base file compared against itself passes" 0 "$?"
+
+# Tightened: same eval name, a stricter assertion set, no samples.
+suite "$WORK/tightened-base.json" <<'EOF'
+{ "name": "tightened", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}] }
+EOF
+suite "$WORK/tightened-head.json" <<'EOF'
+{ "name": "tightened", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"},
+                 {"type": "must_not", "pattern": "gamma"}] }
+EOF
+out=$(EVALS_BASE_FILE="$WORK/tightened-base.json" bash "$SCRIPT" "$WORK/tightened-head.json" 2>&1)
+check "changed assertions without samples are rejected" 1 "$?"
+check "names the tightened eval" yes "$(grep -q 'tightened.*changed assertions' <<<"$out" && echo yes || echo no)"
+
+# Adding samples to an existing eval is not a change to its assertions.
+suite "$WORK/samples-added.json" <<'EOF'
+{ "name": "tightened", "prompt": "Anything.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}],
+  "samples": {"passing": "alpha beta", "failing": ["gamma only"]} }
+EOF
+EVALS_BASE_FILE="$WORK/tightened-base.json" bash "$SCRIPT" "$WORK/samples-added.json" >/dev/null 2>&1
+check "adding samples to an existing eval passes" 0 "$?"
+
+# An edit that leaves the assertions alone is not a tightening: the eval is
+# still graded by exactly what it was graded by before.
+suite "$WORK/prompt-edited.json" <<'EOF'
+{ "name": "tightened", "prompt": "Anything, reworded.",
+  "expected_output": "Something.",
+  "assertions": [{"type": "content", "pattern": "alpha"},
+                 {"type": "content", "pattern": "beta"}] }
+EOF
+EVALS_BASE_FILE="$WORK/tightened-base.json" bash "$SCRIPT" "$WORK/prompt-edited.json" >/dev/null 2>&1
+check "editing the prompt of an existing eval needs no samples" 0 "$?"
+
+# An expectations-only eval has no pattern for a sample to exercise, and this
+# validator fails samples no assertion backs - so it is exempt.
+suite "$WORK/new-expectations-only.json" <<'EOF'
+{ "name": "judged_by_expectations", "prompt": "Anything.",
+  "expectations": ["Names the file it changed.", "States the exit code."] }
+EOF
+EVALS_BASE_FILE="$BASE" bash "$SCRIPT" "$WORK/new-expectations-only.json" >/dev/null 2>&1
+check "a new expectations-only eval needs no samples" 0 "$?"
+
+# A base copy that cannot be read is an error, never an empty base: the second
+# would silently demand samples from every eval in the file.
+out=$(EVALS_BASE_FILE="$WORK/no-such-base.json" bash "$SCRIPT" "$WORK/new-with-samples.json" 2>&1)
+check "an unreadable base copy fails the run" 1 "$?"
+check "says the base could not be read" yes "$(grep -q 'cannot read base copy' <<<"$out" && echo yes || echo no)"
+
+# An eval identified only by `id` is keyed by that id, and format A requires
+# ids to be sequential - so an eval APPENDED to such a file shifts nothing and
+# only the appendee is flagged. (An eval INSERTED mid-list renumbers every
+# later id and those evals then compare against their neighbours: named evals
+# are immune, id-only files are not. Documented in the PR, not silently fixed.)
+python3 - "$WORK/id-base.json" "$WORK/id-head.json" <<'PYEOF'
+import json, sys
+evals = [
+    {"id": i + 1, "prompt": f"Filler prompt {i}.",
+     "assertions": [{"type": "content", "pattern": "(?i)filler"},
+                    {"type": "content", "pattern": r"\d"}]}
+    for i in range(12)
+]
+json.dump(evals, open(sys.argv[1], "w"), indent=2)
+appended = dict(evals[0], id=13, prompt="Appended prompt.")
+json.dump(evals + [appended], open(sys.argv[2], "w"), indent=2)
+PYEOF
+out=$(EVALS_BASE_FILE="$WORK/id-base.json" bash "$SCRIPT" "$WORK/id-head.json" 2>&1)
+check "an appended id-only eval is rejected" 1 "$?"
+check "only the appended id is named" 1 "$(grep -c 'carries no samples' <<<"$out")"
+
+# In discovery mode the run can cover several evals.json, so a base copy that
+# names none of them must not be applied to all of them.
+DISC="$WORK/discovery"
+mkdir -p "$DISC/skills/one/evals"
+cp "$WORK/new-no-samples.json" "$DISC/skills/one/evals/evals.json"
+out=$(cd "$DISC" && EVALS_BASE_FILE="$BASE" bash "$SCRIPT" 2>&1)
+check "a base copy is ignored in discovery mode" 0 "$?"
+check "and says so" yes "$(grep -q 'EVALS_BASE_FILE is set but no evals.json was named' <<<"$out" && echo yes || echo no)"
+
+printf 'not json at all' > "$WORK/base-broken.json"
+out=$(EVALS_BASE_FILE="$WORK/base-broken.json" bash "$SCRIPT" "$WORK/new-with-samples.json" 2>&1)
+check "a malformed base copy fails the run" 1 "$?"
+check "says the base is not valid JSON" yes "$(grep -q 'not valid JSON' <<<"$out" && echo yes || echo no)"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All validate-evals tests passed"

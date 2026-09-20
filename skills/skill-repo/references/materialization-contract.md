@@ -233,6 +233,17 @@ ignored the type and credited whichever arm *contained* the pattern, so a negati
 expectation could not be stated as an assertion at all and had to live in
 `samples.failing`. Both directions are now pinned in `tests/run-ab-evals.sh`.
 
+**On a new or tightened eval, `samples` are required, not optional** (decided in
+[retro-skill#92](https://github.com/netresearch/retro-skill/issues/92)). `eval-validate.yml`
+writes the base branch's copy of the `evals.json` out on a pull request and hands it to the
+validator as `EVALS_BASE_FILE`; every eval that is new there, or whose `assertions` value
+differs from the base copy, must carry `samples.passing`. An eval nobody touched is never
+looked at, so the fleet's existing evals are not retrofitted, and an eval carrying no
+pattern this validator can run against a sample — `expectations` only, plain-string
+assertions, or a single unparseable `*_contains` literal — is exempt, because samples no
+assertion backs are failed here. Without `EVALS_BASE_FILE` (a push build, a local run, a
+consumer on an older workflow) the requirement is off and the verdict is unchanged.
+
 Two things change for evals **without** a samples block: patterns are now checked to be
 parseable by `grep -E`, and an unparseable one fails — except under a `*_contains` type,
 where the value is usually a literal and the mismatch is the grader's, so it only warns.
