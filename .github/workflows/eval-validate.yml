@@ -58,9 +58,48 @@ jobs:
           echo "found=true" >> "$GITHUB_OUTPUT"
           echo "path=$EVALS_FILE" >> "$GITHUB_OUTPUT"
 
+      # The samples requirement (retro-skill#92) applies to an eval that is new
+      # or whose assertions changed, so the validator needs the same file as it
+      # stands on the target branch. The checkout above is the synthetic merge
+      # commit at depth 1, so no base is in the tree: fetch the PR's base
+      # commit and write that revision's copy of the file out for the
+      # validator. Only on pull_request - `github.event.before` is meaningless
+      # after a force-push and all-zeros on branch creation, so a push build
+      # has no honest base and the requirement stays off there.
+      - name: Resolve the base copy of evals.json
+        id: base
+        if: steps.find-evals.outputs.found == 'true' && github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          EVALS_PATH: ${{ steps.find-evals.outputs.path }}
+        run: |
+          set -euo pipefail
+          if ! git fetch --no-tags --depth=1 origin "$BASE_SHA"; then
+            echo "::notice::could not fetch base commit $BASE_SHA - the samples requirement for new or changed evals is off for this run"
+            exit 0
+          fi
+          BASE_COPY="$RUNNER_TEMP/evals-base.json"
+          if git show --end-of-options "$BASE_SHA:$EVALS_PATH" > "$BASE_COPY"; then
+            echo "base: $BASE_SHA:$EVALS_PATH"
+          else
+            # The file does not exist on the base branch, so every eval in it
+            # is new. An empty array says that, and says it distinguishably
+            # from a base that could not be read - which the validator fails
+            # on rather than silently treating as empty.
+            echo "[]" > "$BASE_COPY"
+            echo "$EVALS_PATH is new on this branch - every eval in it counts as new"
+          fi
+          echo "path=$BASE_COPY" >> "$GITHUB_OUTPUT"
+
       - name: Validate evals structure
         if: steps.find-evals.outputs.found == 'true'
-        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh "${{ steps.find-evals.outputs.path }}"
+        env:
+          EVALS_PATH: ${{ steps.find-evals.outputs.path }}
+          # Empty on a push build, and on a PR whose base could not be fetched:
+          # the validator then skips the comparison and behaves exactly as it
+          # did before this step existed.
+          EVALS_BASE_FILE: ${{ steps.base.outputs.path }}
+        run: bash .skill-repo-tools/skills/skill-repo/scripts/validate-evals.sh "$EVALS_PATH"
 
       - name: Enforce required evals for broad skills
         if: steps.find-evals.outputs.found == 'false' && inputs.require_evals == true

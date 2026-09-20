@@ -18,7 +18,7 @@ Located in `.github/workflows/`, these are called by other skill repos via `uses
 - **`release.yml`** -- Triggered on `v*` tags. Validates tag matches `plugin.json` version, packages each skill standalone and full plugin with checksums.
 - **`pr-quality.yml`** -- PR quality gates (auto-approve coordination, etc.).
 - **`harness-verify.yml`** -- Verifies AGENTS.md / harness consistency.
-- **`eval-validate.yml`** -- Validates skill evaluation files.
+- **`eval-validate.yml`** -- Validates skill evaluation files. On a pull request it also resolves the base branch's copy of the `evals.json` and requires `samples` on every eval that is new or whose assertions changed (retro-skill#92); untouched evals and push builds are unaffected.
 - **`validate-agents.yml`** -- Validates `AGENTS.md` content.
 - **`dependency-audit.yml`** -- Composer audit, SAST, dependency review.
 - **`npm-pack-smoke.yml`** -- Verifies the npm tarball ships the right files.

@@ -17,6 +17,30 @@
 # whatever its type, because the grader greps every one of them; `must_not` is
 # checked inverted here and graded inverted there.
 #
+# `samples` are OPTIONAL on an eval that already exists and is left alone, and
+# REQUIRED on one that is new or whose assertions changed — the half of
+# netresearch/retro-skill#92 that has to live here, because this is where the
+# fleet's eval gate runs. The comparison needs the same file at the base
+# revision, which the caller supplies:
+#
+#   EVALS_BASE_FILE=<path to the base copy of THIS evals.json>
+#
+# Unset or empty (every local run, every push build, every consumer that has
+# not updated its workflow): no comparison, no requirement, verdict byte for
+# byte what it was before. Set: every eval that is new, or whose `assertions`
+# value differs from the base copy, must carry `samples.passing`. Untouched
+# evals are never looked at — the 485 fleet evals without samples are not
+# retrofitted. An eval whose assertions carry no pattern this validator would
+# run against a sample is exempt, because it FAILS samples that no assertion
+# backs: that covers an eval graded by `expectations` alone, one whose
+# assertions are plain strings rather than {type, pattern} objects, and one
+# whose only pattern is a `*_contains` literal grep cannot parse. Plain-string
+# assertions ARE graded at run time (run-ab-evals.sh falls back to `str(a)`),
+# so that exemption follows this validator's samples machinery rather than the
+# grader's reach — 210 of the 518 evals installed on one host are in that
+# shape, and closing it would change what samples mean for evals that already
+# carry them.
+#
 # Usage: bash validate-evals.sh [path-to-evals.json] [--require-evals]
 #   If no path given, searches skills/*/evals/evals.json then evals/evals.json
 #
@@ -109,6 +133,18 @@ for arg in "$@"; do
   esac
 done
 
+EVALS_BASE_FILE="${EVALS_BASE_FILE:-}"
+if [[ -z "$EVALS_FILE" && -n "$EVALS_BASE_FILE" ]]; then
+  # A base copy belongs to one named file. In discovery mode the run can cover
+  # several evals.json, and the sub-invocations below inherit the environment,
+  # so an unqualified base would be compared against all of them.
+  echo "WARN: EVALS_BASE_FILE is set but no evals.json was named — the base"
+  echo "      copy belongs to one file, so the samples requirement is off for"
+  echo "      this run. Pass the path explicitly to enforce it."
+  EVALS_BASE_FILE=""
+  export EVALS_BASE_FILE
+fi
+
 if [[ -z "$EVALS_FILE" ]]; then
   # Every candidate, not the first: a repo shipping several skills ships several
   # evals.json, and stopping at the first left the rest unchecked — six repos in
@@ -162,7 +198,7 @@ fi
 pass "Valid JSON"
 
 # --- Run all structural checks via Python ---
-RESULT=$(python3 - "$EVALS_FILE" <<'PYEOF'
+RESULT=$(python3 - "$EVALS_FILE" "$EVALS_BASE_FILE" <<'PYEOF'
 import json
 import subprocess
 import sys
@@ -197,8 +233,59 @@ def grader_matches(pattern, text):
     return _grep(["-qiE", "--", _ere(pattern)], text) == 0
 
 
+def identity(record, index):
+    # Same key as retro-skill's check-eval-samples.py, so both halves of the
+    # rule name an eval the same way. Not the position: format A
+    # requires sequential ids, so inserting an eval renumbers every later one
+    # and an index- or id-first key would report the whole file as changed.
+    for key in ("eval_name", "name", "id"):
+        value = record.get(key)
+        if isinstance(value, (str, int)) and str(value).strip():
+            return f"{key}={value}"
+    return f"index={index}"
+
+
+def has_samples(record):
+    samples = record.get("samples")
+    if not isinstance(samples, dict):
+        return False
+    passing = samples.get("passing")
+    return isinstance(passing, str) and bool(passing.strip())
+
+
+def load_base(path):
+    """Index the base copy by eval identity, or return a reason it is unusable.
+
+    Returns (index, error). A base that cannot be read is an error, never an
+    empty index: "the base could not be read" and "the base had no evals" would
+    otherwise be the same state, and the second one silently demands samples
+    from every eval in the file.
+    """
+    try:
+        with open(path) as fh:
+            base_raw = json.load(fh)
+    except OSError as exc:
+        return None, f"cannot read base copy {path}: {exc.strerror or exc}"
+    except ValueError as exc:
+        return None, f"base copy {path} is not valid JSON: {exc}"
+    if isinstance(base_raw, dict) and isinstance(base_raw.get("evals"), list):
+        base_evals = base_raw["evals"]
+    elif isinstance(base_raw, list):
+        base_evals = base_raw
+    else:
+        return None, f"base copy {path} is neither an array nor an object with 'evals'"
+    return {
+        identity(r, i): r for i, r in enumerate(base_evals) if isinstance(r, dict)
+    }, None
+
+
 with open(sys.argv[1]) as f:
     raw = json.load(f)
+
+base_path = sys.argv[2] if len(sys.argv) > 2 else ""
+base_index, base_error = (None, None)
+if base_path:
+    base_index, base_error = load_base(base_path)
 
 # Detect format and normalize to list of evals
 if isinstance(raw, dict) and "evals" in raw:
@@ -215,6 +302,16 @@ else:
 
 print(f"INFO|Detected format {'A (object with evals key)' if fmt == 'A' else 'B (top-level array)'}")
 print(f"INFO|Total evals: {len(evals)}")
+
+if base_error:
+    print(f"FAIL|{base_error}")
+elif base_index is not None:
+    print(
+        f"INFO|Base comparison against {base_path} ({len(base_index)} evals): "
+        "samples required on evals that are new or whose assertions changed"
+    )
+else:
+    print("INFO|No base copy (EVALS_BASE_FILE unset): samples stay optional")
 
 if not isinstance(evals, list):
     print("FAIL|'evals' must be an array")
@@ -300,6 +397,12 @@ for i, ev in enumerate(evals):
             if invalid_exp == 0:
                 has_expectations = True
                 print(f"PASS|{label} ({name}): {len(expectations)} valid expectations")
+
+    # Assertions the grader can actually execute against a sample. Defined
+    # before the block that fills it: the samples requirement below reads it
+    # whatever path validation took, and an eval with no usable pattern is
+    # exempt from that requirement.
+    patterns = []
 
     # Validate assertions (object[] or string[], 2+ items)
     if assertions is not None:
@@ -428,6 +531,25 @@ for i, ev in enumerate(evals):
             if invalid_assertions == 0:
                 has_assertions = True
                 print(f"PASS|{label} ({name}): {len(assertions)} valid assertions")
+
+    # Samples required on a new or tightened eval (retro-skill#92). Only
+    # reached when a base copy was supplied, and only for an eval carrying a
+    # pattern the grader can run against a sample.
+    if base_index is not None and patterns and not has_samples(ev):
+        key = identity(ev, i)
+        previous = base_index.get(key)
+        state = None
+        if previous is None:
+            state = "is new"
+        elif previous.get("assertions") != ev.get("assertions"):
+            state = "has changed assertions"
+        if state:
+            print(
+                f"FAIL|{label} ({name}): {state} and carries no samples — add "
+                "samples.passing (and at least one samples.failing) so the "
+                "assertions are graded both ways here, not only at run time "
+                "(retro-skill#92). Untouched evals are unaffected."
+            )
 
     # Must have at least one grading mechanism
     if not has_expectations and not has_assertions:
