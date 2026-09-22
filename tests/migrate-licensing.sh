@@ -120,6 +120,31 @@ bash "$SCRIPT" "$repo" >/dev/null 2>&1
 check "an existing year range is extended, not nested" "Copyright (c) 2021-$NOW Someone" \
     "$(grep -o 'Copyright (c) [0-9-]* Someone' "$repo/LICENSE-MIT")"
 
+# Every notice is extended on its own: one already current must not stop the
+# others. And a notice that starts this year stays one year, not "now-now".
+repo=$(fixture two_notices mit)
+printf 'MIT License\n\nCopyright (c) 2019 Someone\nCopyright (c) %s Other\n' "$NOW" > "$repo/LICENSE"
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+check "a stale notice beside a current one is still extended" yes \
+    "$(grep -q "Copyright (c) 2019-$NOW Someone" "$repo/LICENSE-MIT" && echo yes || echo no)"
+check "a notice from this year stays a single year" yes \
+    "$(grep -qx "Copyright (c) $NOW Other" "$repo/LICENSE-MIT" && echo yes || echo no)"
+
+# A shallow clone hides the first commit, so the years cannot be derived. The
+# script refuses and writes nothing rather than stamping a wrong year.
+src=$(fixture shallow_src gpl)
+git -C "$src" init -q
+git -C "$src" -c user.name=t -c user.email=t@example.invalid \
+    commit -q --allow-empty --date='2020-01-01T12:00:00' -m first
+git -C "$src" -c user.name=t -c user.email=t@example.invalid \
+    commit -q --allow-empty -m second
+git clone -q --depth 1 "file://$src" "$WORK/shallow" 2>/dev/null
+cp "$src/LICENSE" "$src/README.md" "$WORK/shallow/"
+bash "$SCRIPT" "$WORK/shallow" >/dev/null 2>&1
+check "a shallow clone exits 2"        2  "$?"
+check "a shallow clone gets no LICENSE-MIT" yes \
+    "$([ -f "$WORK/shallow/LICENSE-MIT" ] && echo no || echo yes)"
+
 # --- 6. the source-of-truth manifest is edited, at its own indent (#341) ----
 repo=$(fixture manifest mit)
 mkdir -p "$repo/.claude-plugin"

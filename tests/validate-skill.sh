@@ -380,6 +380,9 @@ release_case gitlab_component_ok "$REAL_GITLAB_CI" no expect-present \
     "the claude-code-skill CI component creates the Release" "the component is recognised as the release path"
 release_case gitlab_no_component 'stages: [test]\n' no expect-present \
     "does not include the claude-code-skill CI component" "a GitLab repo without the component is an error"
+# The name in a comment is not an include: nothing would create the Release.
+release_case gitlab_comment_only '# claude-code-skill component removed\nstages: [test]\n' no expect-present \
+    "does not include the claude-code-skill CI component" "a comment naming the component is not an include"
 release_case github_missing - no expect-present \
     "release.yml not found" "a GitHub repo without release.yml is still an error"
 release_case github_present - yes expect-present \

@@ -20,7 +20,16 @@ fi
 # The copyright years come from the repository, not from this file: the year of
 # its first commit through the current year, or the current year alone when the
 # two are the same or the directory has no history.
+#
+# A shallow clone's oldest reachable commit is not the repository's first, so
+# the year would be wrong without anything saying so. Refuse rather than guess;
+# fetching the history is the caller's decision, not a side effect of this one.
 CURRENT_YEAR="$(date +%Y)"
+if [[ "$(git -C "$REPO_DIR" rev-parse --is-shallow-repository 2>/dev/null || true)" == "true" ]]; then
+    echo "shallow clone: the first commit is not available, so the copyright years cannot be derived." >&2
+    echo "Run: git -C $REPO_DIR fetch --unshallow" >&2
+    exit 2
+fi
 FIRST_YEAR="$(git -C "$REPO_DIR" log --reverse --format=%ad --date=format:%Y 2>/dev/null | head -n 1 || true)"
 FIRST_YEAR="${FIRST_YEAR:-$CURRENT_YEAR}"
 if [[ "$FIRST_YEAR" == "$CURRENT_YEAR" ]]; then
@@ -64,9 +73,20 @@ MITEOF
         # range already present is extended, not nested: 2024-2025 becomes
         # 2024-<current>, not 2024-<current>-2025.
         cp "$REPO_DIR/LICENSE" "$REPO_DIR/LICENSE-MIT"
-        if ! grep -qE "Copyright \(c\) ([0-9]{4}-)?$CURRENT_YEAR\b" "$REPO_DIR/LICENSE-MIT"; then
-            sed -i -E "s/Copyright \(c\) ([0-9]{4})(-[0-9]{4})?/Copyright (c) \1-$CURRENT_YEAR/" "$REPO_DIR/LICENSE-MIT"
-        fi
+        # Each notice on its own: a licence can carry several, and one that is
+        # already current must not stop the others from being extended. A
+        # notice that starts in the current year stays a single year.
+        python3 - "$REPO_DIR/LICENSE-MIT" "$CURRENT_YEAR" << 'PYEOF'
+import re, sys
+path, now = sys.argv[1], sys.argv[2]
+def extend(m):
+    start = m.group(1)
+    return m.group(0) if start == now else f"Copyright (c) {start}-{now}"
+with open(path) as f:
+    text = f.read()
+with open(path, "w") as f:
+    f.write(re.sub(r"Copyright \(c\) (\d{4})(?:-\d{4})?", extend, text))
+PYEOF
     fi
     # Stage removal of old LICENSE
     git -C "$REPO_DIR" rm -f LICENSE 2>/dev/null || rm -f "$REPO_DIR/LICENSE"
