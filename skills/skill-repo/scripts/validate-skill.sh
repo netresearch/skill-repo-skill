@@ -582,8 +582,21 @@ elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ ! -f "$REPO_DIR/LICENSE-MIT" ]]; then
     warning "Single LICENSE file found — migrate to LICENSE-MIT + LICENSE-CC-BY-SA-4.0"
 fi
 
-# Release workflow
-if [[ -f "$REPO_DIR/.github/workflows/release.yml" ]]; then
+# Release path. A GitHub repository releases through .github/workflows/release.yml.
+# A GitLab repository has no such file and must not have one: the claude-code-skill
+# CI component included from .gitlab-ci.yml creates the Release from the tag
+# pipeline (references/release-discipline.md, "GitLab (git.netresearch.de) skill
+# repos release on tag too").
+# Demanding release.yml there is an error nobody can act on.
+if [[ -f "$REPO_DIR/.gitlab-ci.yml" ]]; then
+    # A `component:` entry naming it, outside a comment. A bare text match
+    # would accept `# claude-code-skill component removed`.
+    if grep -qE '^[^#]*component:[^#]*claude-code-skill' "$REPO_DIR/.gitlab-ci.yml"; then
+        success "release path: the claude-code-skill CI component creates the Release from the tag pipeline"
+    else
+        error ".gitlab-ci.yml does not include the claude-code-skill CI component — nothing creates a Release when a tag is pushed"
+    fi
+elif [[ -f "$REPO_DIR/.github/workflows/release.yml" ]]; then
     success "release.yml exists"
 else
     error ".github/workflows/release.yml not found"
