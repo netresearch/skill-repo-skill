@@ -144,7 +144,7 @@ jobs:
 - SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, word count
 - Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`
 - No stale `LICENSE` file alongside `LICENSE-MIT`
-- `release.yml` workflow exists
+- A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)
 - No `composer.lock` committed
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct

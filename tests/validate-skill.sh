@@ -342,6 +342,50 @@ readme_case no_install "$NO_INSTALL" expect-present \
     "no plugin" "an add line without an install line warns"
 
 echo "----------------------------------------"
+echo "Release path checks (issue #341)"
+echo "----------------------------------------"
+# A GitLab skill repository has no release.yml and must not have one: the
+# claude-code-skill CI component creates the Release from the tag pipeline.
+# The validator used to demand the file there, an error nobody could act on.
+
+# release_case <name> <gitlab-ci-content|-> <with-release-yml:yes|no> <expect-present|expect-absent> <pattern> <label>
+release_case() {
+    local name="$1" ci="$2" rel="$3" want="$4" pat="$5" label="$6" dir out
+    dir="$TMP/rel_$name"
+    rm -rf "$dir"; mkdir -p "$dir"
+    [[ "$ci" == "-" ]] || printf '%b' "$ci" > "$dir/.gitlab-ci.yml"
+    if [[ "$rel" == yes ]]; then
+        mkdir -p "$dir/.github/workflows"
+        printf 'name: Release\n' > "$dir/.github/workflows/release.yml"
+    fi
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+
+# Copied from coding-ai/ecom-orocommerce-docker-skill, the repository #341 was
+# measured on — the real include line, not a reconstruction of it.
+# shellcheck disable=SC2016  # literal YAML fixture, $CI_SERVER_FQDN is not an expansion
+REAL_GITLAB_CI='# Pipeline = central component. See ci-components/claude-code-skill for jobs.\ninclude:\n  - component: $CI_SERVER_FQDN/ci-components/claude-code-skill/skill-pipeline@v1\n'
+release_case gitlab_component "$REAL_GITLAB_CI" no expect-absent \
+    "release.yml not found" "a GitLab repo with the component is not asked for release.yml"
+release_case gitlab_component_ok "$REAL_GITLAB_CI" no expect-present \
+    "the claude-code-skill CI component creates the Release" "the component is recognised as the release path"
+release_case gitlab_no_component 'stages: [test]\n' no expect-present \
+    "does not include the claude-code-skill CI component" "a GitLab repo without the component is an error"
+release_case github_missing - no expect-present \
+    "release.yml not found" "a GitHub repo without release.yml is still an error"
+release_case github_present - yes expect-present \
+    "release.yml exists" "a GitHub repo with release.yml passes"
+
+echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
 echo "All validator smoke tests passed"
