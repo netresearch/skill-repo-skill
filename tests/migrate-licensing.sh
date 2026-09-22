@@ -14,6 +14,7 @@ WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
 fail=0
+NOW="$(date +%Y)"
 check() { # check <name> <expected> <actual>
     if [ "$2" = "$3" ]; then
         echo "  ok   $1"
@@ -59,8 +60,8 @@ check "the bare LICENSE is gone"     yes "$([ -f "$repo/LICENSE" ] && echo no ||
 # notice must never be replaced by Netresearch's.
 check "the original copyright holder survives" yes \
     "$(grep -q 'Someone' "$repo/LICENSE-MIT" && echo yes || echo no)"
-check "the year range is extended to 2026" yes \
-    "$(grep -q 'Copyright (c) 2024-2026 Someone' "$repo/LICENSE-MIT" && echo yes || echo no)"
+check "the year range is extended to the current year" yes \
+    "$(grep -q "Copyright (c) 2024-$NOW Someone" "$repo/LICENSE-MIT" && echo yes || echo no)"
 check "the unrelated README section survives" yes \
     "$(grep -q '## Something else' "$repo/README.md" && echo yes || echo no)"
 
@@ -77,6 +78,61 @@ check "LICENSE-MIT is an MIT licence" yes \
 before=$(cat "$repo/LICENSE-MIT")
 bash "$SCRIPT" "$repo" >/dev/null 2>&1
 check "a second run leaves LICENSE-MIT unchanged" "$before" "$(cat "$repo/LICENSE-MIT")"
+
+# A rerun on a migrated MIT repo must keep the holder the first run preserved.
+# The bare LICENSE is gone by then, and the from-scratch branch used to rewrite
+# LICENSE-MIT with Netresearch as the copyright holder.
+repo=$(fixture rerun_mit mit)
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+check "a rerun keeps a foreign copyright holder" yes \
+    "$(grep -q 'Someone' "$repo/LICENSE-MIT" && echo yes || echo no)"
+
+# --- 4. --help prints usage and touches nothing (issue #341) ----------------
+# The flag used to be taken as the repository path: the script got as far as
+# writing into a directory named `--help`.
+cd "$WORK" || exit 1
+out=$(bash "$SCRIPT" --help 2>&1); rc=$?
+check "--help exits 0"                 0   "$rc"
+check "--help prints the usage line"   yes "$(grep -q 'Usage:' <<<"$out" && echo yes || echo no)"
+check "--help does not start a migration" yes "$(grep -q 'Migrating licensing' <<<"$out" && echo no || echo yes)"
+bash "$SCRIPT" --bogus >/dev/null 2>&1
+check "an unknown option exits 2"      2   "$?"
+bash "$SCRIPT" "$WORK/does-not-exist" >/dev/null 2>&1
+check "a missing directory exits 2"    2   "$?"
+
+# --- 5. the years come from the repository (issue #341) ---------------------
+# A repository whose first commit is from 2023 gets 2023-<now>, not a literal.
+repo=$(fixture history gpl)
+git -C "$repo" init -q
+git -C "$repo" -c user.name=t -c user.email=t@example.invalid \
+    commit -q --allow-empty --date='2023-05-01T12:00:00' -m first
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+check "LICENSE-MIT carries the repository's own years" yes \
+    "$(grep -q "Copyright (c) 2023-$NOW Netresearch DTT GmbH" "$repo/LICENSE-MIT" && echo yes || echo no)"
+check "LICENSE-CC-BY-SA-4.0 carries the same years" yes \
+    "$(grep -q "Copyright (c) 2023-$NOW Netresearch DTT GmbH" "$repo/LICENSE-CC-BY-SA-4.0" && echo yes || echo no)"
+
+# An existing range is extended, not nested.
+repo=$(fixture range mit)
+printf 'MIT License\n\nCopyright (c) 2021-2022 Someone\n' > "$repo/LICENSE"
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+check "an existing year range is extended, not nested" "Copyright (c) 2021-$NOW Someone" \
+    "$(grep -o 'Copyright (c) [0-9-]* Someone' "$repo/LICENSE-MIT")"
+
+# --- 6. the source-of-truth manifest is edited, at its own indent (#341) ----
+repo=$(fixture manifest mit)
+mkdir -p "$repo/.claude-plugin"
+printf '{\n  "name": "demo",\n  "version": "1.0.0",\n  "license": "MIT"\n}\n' > "$repo/plugin.json"
+printf '{\n  "name": "demo",\n  "version": "1.0.0",\n  "license": "MIT",\n  "skills": ["./skills/demo"]\n}\n' \
+    > "$repo/.claude-plugin/plugin.json"
+bash "$SCRIPT" "$repo" >/dev/null 2>&1
+check "the root plugin.json carries the new licence" '(MIT AND CC-BY-SA-4.0)' \
+    "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["license"])' "$repo/plugin.json")"
+check "the generated copy is regenerated to match" '(MIT AND CC-BY-SA-4.0)' \
+    "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["license"])' "$repo/.claude-plugin/plugin.json")"
+check "the root plugin.json keeps its 2-space indent" yes \
+    "$(grep -q '^  "name"' "$repo/plugin.json" && echo yes || echo no)"
 
 echo
 if [ "$fail" -eq 0 ]; then
