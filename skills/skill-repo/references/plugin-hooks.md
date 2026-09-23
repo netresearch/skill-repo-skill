@@ -10,7 +10,7 @@ and a live session (2026-09).
 
 - Pick the event that fires
 - Read the input the event actually carries
-- Output only reaches the model through additionalContext
+- Plain stdout does not reach the model
 - Verify live, not only in unit tests
 
 ## Pick the event that fires
@@ -32,13 +32,18 @@ There is no top-level `output` or `stdout`. Match only the lines the failing
 program prints (e.g. `bash: line 1: rg: command not found`), not a phrase
 anywhere in the text, or ordinary output that quotes it triggers the hook.
 
-## Output only reaches the model through additionalContext
+## Plain stdout does not reach the model
 
-Plain stdout from these events goes nowhere the model sees. Emit JSON:
+Plain stdout from these events goes nowhere the model sees. To add context
+without signalling an error, emit JSON:
 
 ```json
 {"hookSpecificOutput": {"hookEventName": "PostToolUseFailure", "additionalContext": "…"}}
 ```
+
+The other path is exit status 2: its stderr is shown to Claude as feedback on
+the failed or completed call. Use it for a genuine objection, not for advice
+on a call that behaved normally.
 
 Keep the text to what the hook knows: a shell's `command not found` means the
 name did not resolve on PATH, not that the tool is absent. Fail open — any

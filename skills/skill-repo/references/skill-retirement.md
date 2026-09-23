@@ -54,11 +54,13 @@ moved from `cli-tools-skill` into `coding_agent_cli_toolset` (2026-09):
    silently regresses them.
 2. **Ship the plugin from the new repository** (`.claude-plugin/plugin.json`
    with the same `name`, skill under `skills/<name>/`) and verify it loaded
-   live, e.g. `claude -p --plugin-dir <checkout>`, before touching the
-   marketplace.
+   live before touching the marketplace — `claude -p` needs a prompt, e.g.
+   `claude -p --plugin-dir <checkout> "List the skills you have loaded"`; for
+   a hook, see [plugin-hooks](plugin-hooks.md).
 3. **Decide the version source.** Without `version` in `plugin.json` *and* in
    the marketplace entry, Claude Code versions the plugin by the source's
-   commit SHA, so every merge to the default branch reaches users. That fits
+   commit SHA, so every merge to the default branch becomes available on the
+   user's next plugin update (see below for what that takes). That fits
    a repository with no release flow; a fixed `version` would freeze users
    until someone bumps it. Such a repository does not belong in the release
    fleet list either — say so there, or the next refresh re-adds it.
