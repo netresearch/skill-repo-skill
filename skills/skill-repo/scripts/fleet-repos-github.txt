@@ -17,10 +17,13 @@
 # repos by it on 2026-09-17 (coding-ai/gitlab-skill!142).
 # The survey dedupes rename redirects by resolved full_name, so a stale name
 # here becomes a DUPLICATE row, never a second bump PR.
+# One deliberate exception to "the manifest defines the fleet":
+# coding_agent_cli_toolset ships the cli-tools plugin but is versioned by
+# commit (no plugin.json version, no release tags), so a bump would be wrong.
+# It replaced cli-tools-skill, archived 2026-09.
 agent-harness-skill
 agent-rules-skill
 automated-assessment-skill
-cli-tools-skill
 concourse-ci-skill
 context7-skill
 data-tools-skill

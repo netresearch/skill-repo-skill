@@ -229,7 +229,7 @@ The `files` allowlist in `package.json` controls what npm packs. The default in 
 
 Add a top-level dir to `files` **only if your installed skill code reads from it at runtime** (e.g. via `$ROOT/<dir>/...` or `../<dir>/...` from a script under `skills/<name>/scripts/`). Common runtime data dirs:
 
-- `catalog/` — `cli-tools-skill` ships this because its installer scripts read `$ROOT/catalog/*.json`.
+- `catalog/` — ship it when installer scripts read `$ROOT/catalog/*.json`.
 - `hooks/` — Claude Code's plugin loader reads `hooks/hooks.json`. Ship it if your skill ships PreToolUse/PostToolUse hooks.
 - `commands/` — slash command definitions. Ship if present.
 - `outputStyles/` — output style definitions. Ship if present.
@@ -239,7 +239,6 @@ Add a top-level dir to `files` **only if your installed skill code reads from it
 
 - **Top-level `scripts/`** is typically **repo-maintenance only** (e.g. `verify-harness.sh`, `generate-dashboard.sh`). Keep it out unless your installed skill scripts read from `$ROOT/scripts/` at runtime. Runtime scripts belong under `skills/<name>/scripts/` (already covered by `skills/<name>/`).
   - Example: `context7-skill` does NOT ship top-level `scripts/` because its only file is `verify-harness.sh` (repo-maintenance).
-  - Example: `cli-tools-skill` DOES ship `catalog/` because its installer scripts read `$ROOT/catalog/*.json`.
 - `Build/` — dev-only build artifacts. Never ship.
 - `evals/`, `docs/` — repo-internal. Never ship.
 - `.github/`, lint configs (`.markdownlint*`, `.yamllint*`), `.envrc` — repo-internal. Never ship.
