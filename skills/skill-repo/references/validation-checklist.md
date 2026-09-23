@@ -88,7 +88,7 @@ Three checkers run over a skill repository and none of them is a superset of the
 |---|---|---|
 | `validate-skill.sh` | repo structure, required files, root `LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`, shared-field parity between `plugin.json` and `.claude-plugin/plugin.json` (`version` among them) | anything the Claude Code manifest schema defines; `SKILL.md` version metadata, tag parity and the `composer.json` version rule, which belong to `check-version-parity.sh` |
 | `claude plugin validate [--strict]` | unknown top-level manifest fields (`--strict` turns the warning into exit 1), malformed manifest | dangling symlinks, markup inside a `SKILL.md` description |
-| claude.ai marketplace import | unknown manifest fields, **symlinks whose target is not in the repository**, **angle brackets in a `SKILL.md` description** (reported as XML tags), **a `SKILL.md` description over 1024 characters**, **a plugin description over 500**, **a top-level `bin/`**, **a plugin source URL that is not `https://`** — see [claude.ai Organization settings sync](#claudeai-organization-settings-sync) | — |
+| claude.ai marketplace import | unknown manifest fields, **symlinks whose target is not in the repository**, **angle brackets in a `SKILL.md` description** (reported as XML tags), **a `SKILL.md` description over 1024 characters**, **a top-level `bin/`** — see [claude.ai Organization settings sync](#claudeai-organization-settings-sync) | — |
 
 The gap is not theoretical: on 2026-09-17 three `skills/*/LICENSE` symlinks in `netresearch/matrix-skill` had pointed at a file deleted six months earlier, and a description in `netresearch/orocommerce-skill` carried a literal `<Secret:>` placeholder. Both passed `validate-skill.sh` and `claude plugin validate --strict`; only the marketplace import named them. Run the import, or check symlinks and descriptions by hand, before assuming a repository is clean:
 
@@ -121,20 +121,17 @@ PY
 
 ## claude.ai Organization settings sync
 
-A marketplace distributed through claude.ai **Organization settings › Plugins** is packaged by a sync that applies rules no local tool enforces. `claude plugin validate` 2.1.281 passes all of them: it accepts a 2033-character description as `validate .` and as `validate skills`. Measured on 2026-09-23 against `coding-ai/marketplace` on git.netresearch.de, where the first sync skipped every plugin and the second reported 38 warnings across 13 plugins.
+A plugin distributed through claude.ai **Organization settings › Plugins** is packaged by a sync that applies rules to the skill repository's own files which no local tool enforces. `claude plugin validate` 2.1.281 passes all of them: it accepts a 2033-character description as `validate .` and as `validate skills`. Measured on 2026-09-23, when the sync of an internal marketplace reported 38 warnings across 13 plugins.
 
 | Rule | Sync message | Fix |
 |---|---|---|
-| Plugin source URL is `https://` | `Git source URL must use https://` | the scp form `git@host:path` is rejected even for a `url` source on the marketplace's own GitLab host |
 | `SKILL.md` description has no `<` | `SKILL.md description cannot contain XML tags` | write a placeholder as `{NAME}`, never `<NAME>` — same meaning, same length |
 | `SKILL.md` description ≤ 1024 characters | `field 'description' in SKILL.md must be at most 1024 characters` | cut process detail into the body; keep every backticked command and quoted example phrasing |
-| Plugin description ≤ 500 characters | `Plugin description must be at most 500 characters` | checked against the **marketplace entry** — the eight plugins reported were exactly the eight manifest entries over 500, while only three of their `plugin.json` copies were |
 | No top-level `bin/` | `Plugin contains a top-level bin/ directory` | the whole plugin is skipped and stays at its last synced version; move the executables to `scripts/` and call them by full path |
 
-Three properties of the sync decide how to check for these:
+Two properties of the sync decide how to check for these:
 
-- **It reports only the first failure per file.** A description that is both too long and bracketed shows only the length warning; the fleet had 18 reported bracket violations and 29 real ones. Fix the class, then re-check — do not fix the reported instance.
+- **It reports only the first failure per file.** A description that is both too long and bracketed shows only the length warning; the fleet had 18 reported bracket violations and 29 real ones. Fix every instance of the reported failure class — the reported one included — then re-check.
 - **Length is the parsed YAML value**, not the raw frontmatter line. A single-quoted scalar doubles every apostrophe it contains, so the raw slice runs long: 1029 raw against 1023 parsed on one description, which decides a 1024 limit. Measure with a YAML parser.
-- **A private `url` source is only readable on the marketplace's own GitLab host**, through the access token of the organization's GitLab configuration. A group access token with `read_repository` on the group holding the plugins covers all of them.
 
-Where a marketplace's CLI users rely on the SSH form, rewriting the URLs breaks every existing `/plugin marketplace add git@…` until each machine gains a credential helper or an `insteadOf` rule. Keep the SSH form in the source repository and point the sync at a generated mirror that differs only in the URL scheme; the mirror has to be regenerated after every manifest change. The internal GitLab fleet enforces the description and `bin/` rules in the `validate:descriptions` job of `ci-components/claude-code-skill`.
+Rules on the marketplace manifest itself — HTTPS plugin source URLs, the 500-character plugin description of each marketplace entry — are marketplace checks and live with the marketplace repository. The internal GitLab fleet enforces the three rules above in the `validate:descriptions` job of `ci-components/claude-code-skill`.
