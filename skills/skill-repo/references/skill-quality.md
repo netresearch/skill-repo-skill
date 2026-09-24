@@ -325,7 +325,7 @@ When a document states a rule in prose and also shows code, every example must f
 "See X below", "as the Y section covers", "§ Z" all assert that the target exists in this document. The pointer is easiest to get wrong exactly when the fact is familiar: it is real, but it lives in another file, another repo or your own notes. Grep the target before writing the pointer (`grep -n '<heading or phrase>' <file>`), then sweep the diff for pointers as a class before committing:
 
 ```bash
-git diff | grep -E '^\+' | grep -niE 'see |below|above|§'
+git diff HEAD | grep -E '^\+' | grep -niE 'see |below|above|section|§'
 ```
 
 Confirm every hit. A pointer that one grep cannot confirm gets deleted — a section that stands on its own beats one that leans on a neighbor that is not there.
