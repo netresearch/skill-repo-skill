@@ -45,7 +45,8 @@ name: Release Skill
 # job (in addition to `contents: write`). All netresearch skill-repo callers do;
 # fork this workflow only after granting those scopes.
 # Verify a downloaded archive:
-#   gh attestation verify <archive>.zip --repo <org>/<repo-name>
+#   gh attestation verify <archive>.zip --repo <org>/<repo-name> \
+#     --signer-workflow netresearch/skill-repo-skill/.github/workflows/release.yml
 #   sha256sum --check SHA256SUMS.txt   # after verifying the signature below
 # Verify the checksums signature with cosign. The cert SAN reflects the SIGNER
 # (this reusable workflow), NOT the caller; pin the regex to skill-repo-skill,
