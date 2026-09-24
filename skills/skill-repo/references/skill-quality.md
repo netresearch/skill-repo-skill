@@ -8,6 +8,7 @@
 - Description rules
 - Body rules
 - Reference patterns
+- Authoring checks before commit
 - Auditing
 - Sources
 
@@ -71,7 +72,7 @@ justifies skill content, in the dashboard, in a release note.
 Two consequences worth stating, because they cut in opposite directions:
 
 - **A stronger actor can erase a delta.** If a later model derives the same
-  content unaided, the skill stops buying behaviour and only costs context.
+  content unaided, the skill stops buying behavior and only costs context.
   That is a reason to re-measure on the current actor before defending a
   passage, not a reason to keep the old number.
 - **A weaker delta is not always a weaker skill.** A harness that is bad at
@@ -306,6 +307,38 @@ Multi-hop traversal isn't reliable. Anthropic's docs phrase the rule as "Referen
 ### Anti-pattern: Orphan refs
 
 Files in `references/` with no path to discovery from SKILL.md (no direct cite, no catalog mention, no list-and-pick instruction). The model never reads them. Either cite them or delete them — they consume disk and signal "stale" to readers without contributing to the skill's behavior.
+
+## Authoring checks before commit
+
+Four checks for any change to SKILL.md or a reference file. Each one targets a class of finding that reviewers otherwise catch one PR at a time.
+
+### Spell in US English
+
+Skill prose uses US spelling: `-ize`/`-ization`, `behavior`, `color`, `authorization`, `serialized`. File names in the skill repos already follow it (security-audit-skill's `error-message-sanitization.md`), so a British spelling in the prose splits every search in two — `grep sanitisation` misses the rest of the skill, `grep sanitization` misses the new text. When unsure, count the repo (`git grep -i 'behavior' | wc -l` against `git grep -i 'behaviour' | wc -l`) and follow the majority; a repo whose norm is British stays British. Code identifiers, API names and quoted output are not prose and keep their spelling.
+
+### Examples obey the rules of their own document
+
+When a document states a rule in prose and also shows code, every example must follow that rule. An example that contradicts its own page teaches the wrong rule, and the reader copies the example, not the sentence. Typical shapes: a page that says "never use strippable `assert()` for security checks" and then uses `assert()` in its PHP and Python samples; a helper defined as `Assertf` and called as `assertf`. Before committing, extract the rules from the prose as a checklist and read each example against it line by line. If a rule cannot be shown without breaking it, split the example or restate the rule.
+
+### A cross-reference is a claim
+
+"See X below", "as the Y section covers", "§ Z" all assert that the target exists in this document. The pointer is easiest to get wrong exactly when the fact is familiar: it is real, but it lives in another file, another repo or your own notes. Grep the target before writing the pointer (`grep -n '<heading or phrase>' <file>`), then sweep the diff for pointers as a class before committing:
+
+```bash
+git diff HEAD | grep -E '^\+' | grep -niE 'see |below|above|section|§'
+```
+
+Confirm every hit. A pointer that one grep cannot confirm gets deleted — a section that stands on its own beats one that leans on a neighbor that is not there.
+
+### Extending an enumerated set touches every surface that lists it
+
+Skills often enumerate a set of codes or concepts (pillars `G1`–`G3`, checks `R1`–`R6`, checkpoint IDs) in several files at once: the SKILL.md table, including the body cells of its rows, a lifecycle or workflow reference, an output template and its worked examples, a vocabulary reference. Adding a member to one of them leaves the others describing the old set, and a reader who follows any of those surfaces never learns the new member exists. Before opening the PR, pick one existing member as the anchor and grep the whole skill for it:
+
+```bash
+grep -rlw 'R1' skills/<name>/
+```
+
+Read every hit and decide whether the new member belongs there too. The same sweep applies in reverse when a member, option or helper is removed: `git grep -n '<name>'` across the repo finds the README feature lists, example configs and comments that still advertise it.
 
 ## Auditing
 
