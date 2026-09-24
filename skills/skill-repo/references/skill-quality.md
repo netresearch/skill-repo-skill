@@ -314,7 +314,7 @@ Four checks for any change to SKILL.md or a reference file. Each one targets a c
 
 ### Spell in US English
 
-Skill prose uses US spelling: `-ize`/`-ization`, `behavior`, `color`, `authorization`, `serialized`. File names already follow it (`error-message-sanitization.md`), so a British spelling in the prose splits every search in two — `grep sanitisation` misses the rest of the skill, `grep sanitization` misses the new text. When unsure, count the repo (`git grep -ci 'behavior'` against `git grep -ci 'behaviour'`) and follow the majority; a repo whose norm is British stays British. Code identifiers, API names and quoted output are not prose and keep their spelling.
+Skill prose uses US spelling: `-ize`/`-ization`, `behavior`, `color`, `authorization`, `serialized`. File names in the skill repos already follow it (security-audit-skill's `error-message-sanitization.md`), so a British spelling in the prose splits every search in two — `grep sanitisation` misses the rest of the skill, `grep sanitization` misses the new text. When unsure, count the repo (`git grep -i 'behavior' | wc -l` against `git grep -i 'behaviour' | wc -l`) and follow the majority; a repo whose norm is British stays British. Code identifiers, API names and quoted output are not prose and keep their spelling.
 
 ### Examples obey the rules of their own document
 
@@ -325,7 +325,7 @@ When a document states a rule in prose and also shows code, every example must f
 "See X below", "as the Y section covers", "§ Z" all assert that the target exists in this document. The pointer is easiest to get wrong exactly when the fact is familiar: it is real, but it lives in another file, another repo or your own notes. Grep the target before writing the pointer (`grep -n '<heading or phrase>' <file>`), then sweep the diff for pointers as a class before committing:
 
 ```bash
-git diff | grep -E '^\+' | grep -nE 'see |below|above|§'
+git diff | grep -E '^\+' | grep -niE 'see |below|above|§'
 ```
 
 Confirm every hit. A pointer that one grep cannot confirm gets deleted — a section that stands on its own beats one that leans on a neighbor that is not there.
