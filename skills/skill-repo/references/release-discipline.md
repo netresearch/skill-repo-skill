@@ -611,13 +611,17 @@ Both commands below pin verification to the **specific repository** that's expec
 # SLSA build provenance (GitHub-native attestation API)
 # Substitute <repo-name> with the actual skill repo, e.g. matrix-skill.
 # Archive name patterns: <skill>-skill-vX.Y.Z.zip and <plugin>-plugin-vX.Y.Z.zip.
-gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-name>
+# --signer-workflow is required: the attestation is signed by the shared
+# reusable workflow, and --repo alone checks the signer against the consumer.
+gh attestation verify <skill-name>-skill-vX.Y.Z.zip --repo netresearch/<repo-name> \
+  --signer-workflow netresearch/skill-repo-skill/.github/workflows/release.yml
+echo "rc=$?"   # success prints nothing when stdout is not a terminal
 
 # Cosign sign-blob signature on the checksums (no GitHub API needed).
 # The cert SAN reflects the SIGNER, which is the shared reusable release
 # workflow (`netresearch/skill-repo-skill`), NOT the consuming repo. Pin the
-# regex to skill-repo-skill, not the consumer. (`gh attestation verify` above
-# walks the chain automatically; cosign's verifier doesn't.) The org-wide form
+# regex to skill-repo-skill, not the consumer, for the same reason
+# `gh attestation verify` above needs `--signer-workflow`. The org-wide form
 # `https://github.com/netresearch/.*` would accept signatures from any repo,
 # branch, or workflow in the org — too loose for supply-chain verification.
 cosign verify-blob \
@@ -632,6 +636,7 @@ sha256sum --check SHA256SUMS.txt
 
 If verification fails:
 
+- `gh attestation verify` returns `Error: verifying with issuer "sigstore.dev"` when `--signer-workflow` is missing: `--repo` then also constrains the signer, and the signer is `skill-repo-skill`, not the consumer. Measured with gh 2.101.0 on github-release-skill v1.1.0 and v1.2.0; both pass with the flag, and a random file then fails with HTTP 404.
 - `gh attestation verify` returns `error: no attestations found` when `--repo` is wrong (or when the release predates this workflow).
 - `cosign verify-blob` returns `error: certificate identity does not match` when the regex is wrong, or `bundle verification failed` when `.sigstore.json` doesn't correspond to the file.
 
