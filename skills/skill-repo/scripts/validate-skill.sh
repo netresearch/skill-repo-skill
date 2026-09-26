@@ -956,6 +956,16 @@ if [[ -f "$REPO_DIR/README.md" ]]; then
         fi
     done
 
+    # --- Hand-typed version badge ------------------------------------------
+    # No release step reads README.md (bump-version.sh, check-version-parity.sh),
+    # so a static shields.io version badge is never updated. Measured
+    # 2026-09-26: 2 of 39 netresearch/*-skill repos carried one, and
+    # typo3-testing-skill showed 3.0.0 while the latest release was v5.22.1.
+    # Warning only: a stale badge misleads readers but breaks nothing.
+    if grep -qF -- 'img.shields.io/badge/version-' "$REPO_DIR/README.md"; then
+        warning "README.md has a static version badge (img.shields.io/badge/version-…) that no release step updates — use the live form https://img.shields.io/github/v/release/netresearch/<repo>?sort=semver linked to https://github.com/netresearch/<repo>/releases (see readme-template.md)"
+    fi
+
     # Every documented slash-command should be enumerated in the README so the
     # command (and mode) list does not silently drift when one is added. Warning
     # only: the name match is heuristic and a skill may intentionally omit one.
