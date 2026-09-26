@@ -18,6 +18,7 @@ Marketplace-only checks live in **`netresearch/claude-code-marketplace`/`AGENTS.
 - Optional extended validation
 - Which validator catches what
 - claude.ai Organization settings sync
+- Third-party install scanners
 
 ## README
 
@@ -89,6 +90,7 @@ Three checkers run over a skill repository and none of them is a superset of the
 | `validate-skill.sh` | repo structure, required files, root `LICENSE-MIT` + `LICENSE-CC-BY-SA-4.0`, shared-field parity between `plugin.json` and `.claude-plugin/plugin.json` (`version` among them) | anything the Claude Code manifest schema defines; `SKILL.md` version metadata, tag parity and the `composer.json` version rule, which belong to `check-version-parity.sh` |
 | `claude plugin validate [--strict]` | unknown top-level manifest fields (`--strict` turns the warning into exit 1), malformed manifest | dangling symlinks, markup inside a `SKILL.md` description |
 | claude.ai marketplace import | unknown manifest fields, **symlinks whose target is not in the repository**, **angle brackets in a `SKILL.md` description** (reported as XML tags), **a `SKILL.md` description over 1024 characters**, **a top-level `bin/`** — see [claude.ai Organization settings sync](#claudeai-organization-settings-sync) | — |
+| Hermes `skills_guard.py` (install-time scanner) | regex matches in the skill directory that block a community install — see [Third-party install scanners](#third-party-install-scanners) | what the matched text does; a pattern matches prose as readily as code |
 
 The gap is not theoretical: on 2026-09-17 three `skills/*/LICENSE` symlinks in `netresearch/matrix-skill` had pointed at a file deleted six months earlier, and a description in `netresearch/orocommerce-skill` carried a literal `<Secret:>` placeholder. Both passed `validate-skill.sh` and `claude plugin validate --strict`; only the marketplace import named them. Run the import, or check symlinks and descriptions by hand, before assuming a repository is clean:
 
@@ -135,3 +137,43 @@ Two properties of the sync decide how to check for these:
 - **Length is the parsed YAML value**, not the raw frontmatter line. A single-quoted scalar doubles every apostrophe it contains, so the raw slice runs long: 1029 raw against 1023 parsed on one description, which decides a 1024 limit. Measure with a YAML parser.
 
 Rules on the marketplace manifest itself — HTTPS plugin source URLs, the 500-character plugin description of each marketplace entry — are marketplace checks and live with the marketplace repository. The internal GitLab fleet enforces the three rules above in the `validate:descriptions` job of `ci-components/claude-code-skill`.
+
+## Third-party install scanners
+
+Some agents scan a skill before they install it. Hermes Agent scans community skills with `tools/skills_guard.py` in [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent). Everything below was read at commit [`26780d5`](https://github.com/NousResearch/hermes-agent/blob/26780d55ae5023817dc20e074e07127d5234d59e/tools/skills_guard.py) (`SCANNER_VERSION = "skills-guard-v6"`); rules and severities change between versions.
+
+The module uses only the Python standard library. Run it from the repository root; `scan_skill` takes a `pathlib.Path`, and a plain string raises `AttributeError`:
+
+```bash
+curl -fsSLo skills_guard.py https://raw.githubusercontent.com/NousResearch/hermes-agent/26780d55ae5023817dc20e074e07127d5234d59e/tools/skills_guard.py
+python3 - <<'PY'
+from pathlib import Path
+from skills_guard import scan_skill
+r = scan_skill(Path("skills/<name>"), source="community")
+print(r.verdict)
+for f in r.findings:
+    if f.severity in ("critical", "high"):
+        print(f.severity, f.pattern_id, f"{f.file}:{f.line}", f.match)
+PY
+```
+
+**Verdict.** Any `critical` finding makes the verdict `dangerous`, any `high` finding makes it `caution`, otherwise it is `safe`; `medium` and `low` findings never change it. A skill installed from a repository outside the scanner's trusted list is `community`: there `caution` blocks the install unless the user passes `--force`, and `dangerous` blocks it with no override.
+
+**Matching.** Every rule is a case-insensitive regex, applied line by line to `SKILL.md` and to every file with a scanned extension (`.md`, `.json`, `.sh`, `.py`, `.yaml` and others); paths listed in a `.skillignore` are skipped. A rule matches text, not what the text does:
+
+| Rule | Severity | Matches, for example |
+|---|---|---|
+| `env_exfil_curl` | critical | `curl` followed on the same line by `$…KEY`, `$…TOKEN`, `$…SECRET` or `$…PASSWORD`, such as a documented bearer-token request |
+| `dump_all_env` | high | `printenv` or `env` followed by a pipe — also the word `env` before a Markdown table pipe, and `venv\|` in a regex alternation |
+| `ssh_dir_access` | high | `~/.ssh` or `$HOME/.ssh` anywhere, including prose |
+| `git_clone`, `unpinned_pip_install` | medium | `git clone`, `pip install` without `==` |
+| `allowed_tools_field` | low | an `allowed-tools:` frontmatter line |
+
+**Reviewing a pull request that cites a scanner verdict.**
+
+- Verify each finding against the tree: open the file and line, and decide whether the text does what the rule name says.
+- Fix a real defect on its own merits, with the tests any other fix gets.
+- Decline a change whose only effect is moving the verdict, and give the reason in the review.
+- A verdict that follows from the skill's purpose does not move by rewording: a skill whose job is writing agent configuration keeps that capability whatever its files say.
+
+Precedents: [netresearch/agent-rules-skill#94](https://github.com/netresearch/agent-rules-skill/issues/94) reported a `dangerous` verdict; checking each claim against the tree turned up four real defects, fixed with regression tests, and the proposed restructuring was declined because it would not have changed the verdict. [netresearch/concourse-ci-skill#76](https://github.com/netresearch/concourse-ci-skill/pull/76) proposes clearing `ssh_dir_access` by writing the key to `deploy_key` in the task root, then running `cd source/ansible` and passing `--private-key=../deploy_key`, which resolves to `source/deploy_key` — a file that is never written.
