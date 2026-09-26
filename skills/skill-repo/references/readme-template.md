@@ -16,6 +16,14 @@ Without long scrolling, the reader must see answers to:
 4. **What inputs or project context does it need?**
 5. **How do I install it or find it in the marketplace?**
 
+**Version badge (optional):** a README that shows its version under the title uses the live release badge, linked to the releases page:
+
+```markdown
+[![Release](https://img.shields.io/github/v/release/netresearch/{repo-name}?sort=semver)](https://github.com/netresearch/{repo-name}/releases)
+```
+
+A static `img.shields.io/badge/version-X.Y.Z-…` URL is updated by no release step (`bump-version.sh` and `check-version-parity.sh` do not read `README.md`), so it drifts from the latest tag; `validate-skill.sh` warns on it.
+
 ---
 
 ## Required Markdown sections (English)
@@ -66,6 +74,7 @@ Reference docs (README, `SKILL.md`, reference files, module headers) describe **
 | `Example prompts` | ≥3 prompts. |
 | `Related skills` | ≥1 link/slug **or** justified none. |
 | `Installation` | Mentions marketplace **or** documents exclusive alternate with owner approval in README. |
+| Version badge (if any) | Uses `img.shields.io/github/v/release/…?sort=semver`; no `img.shields.io/badge/version-` URL. |
 | Present-tense voice | `grep -rin -e 'no longer' -e 'reframed' -e 'previously' -e 'used to' -e 'derive' -e 'downstream' -e 'not its source' -e 'is not a router'` over README/`SKILL.md` returns nothing — change-narration belongs in `CHANGELOG`/`UPGRADING`. |
 | `Commands` (if `commands/` exists) | Every `commands/<name>.md`, and each mode/flag it documents, is enumerated in the README. |
 

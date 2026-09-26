@@ -561,5 +561,38 @@
         "pattern": "(?i)uv venv|--seed|newest"
       }
     ]
+  },
+  {
+    "name": "readme_static_version_badge",
+    "prompt": "Our skill README starts with [![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/netresearch/typo3-testing-skill). Does validate-skill.sh say anything about it, and what should the badge be?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "(?i)warn",
+        "description": "Knows the validator reports the static badge as a warning"
+      },
+      {
+        "type": "content_regex",
+        "value": "img\\.shields\\.io/github/v/release/netresearch/",
+        "description": "Names the live release badge form"
+      },
+      {
+        "type": "content_regex",
+        "value": "sort=semver",
+        "description": "Keeps the semver sort so a pre-release or an old maintenance tag does not win by date"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(no|not|never).{0,40}(release step|bump-version|check-version-parity|updated)",
+        "description": "Explains the drift: no release step updates README.md"
+      }
+    ],
+    "samples": {
+      "passing": "Yes: validate-skill.sh warns on an img.shields.io/badge/version- URL, because no release step updates README.md (bump-version.sh and check-version-parity.sh never read it), so the hand-typed 3.0.0 drifts from the latest tag. Use the live form [![Release](https://img.shields.io/github/v/release/netresearch/typo3-testing-skill?sort=semver)](https://github.com/netresearch/typo3-testing-skill/releases).",
+      "failing": [
+        "The badge is fine; just remember to edit the version number in the README whenever you cut a release.",
+        "Badges are cosmetic and the validator ignores README content apart from the headings, so leave it as it is."
+      ]
+    }
   }
 ]

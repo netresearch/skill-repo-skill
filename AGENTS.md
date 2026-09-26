@@ -148,7 +148,7 @@ jobs:
 - No `composer.lock` committed
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
-- `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`)
+- `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`); a **warning** for a static `img.shields.io/badge/version-` badge, which no release step updates (the live form is `img.shields.io/github/v/release/netresearch/<repo>?sort=semver`)
 - `checkpoints.yaml` presence in the skill directory — **warning** only, never fails; suppress by adding a line `Checkpoints: none (justified — <reason>)` to `SKILL.md` or `README.md` for skills that are not suitable per the add-checkpoints skill's suitability criteria (e.g. purely conceptual skills)
 
 ## Structure docs drift as a set — update all six together

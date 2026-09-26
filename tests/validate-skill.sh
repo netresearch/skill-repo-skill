@@ -341,6 +341,17 @@ NO_INSTALL='## Install\n\n```text\n/plugin marketplace add netresearch/claude-co
 readme_case no_install "$NO_INSTALL" expect-present \
     "no plugin" "an add line without an install line warns"
 
+# A hand-typed shields.io version badge is updated by no release step and
+# drifts: typo3-testing-skill showed 3.0.0 while the latest release was v5.22.1.
+# Both directions: the live release badge must stay quiet, or a check that
+# fires on any shields.io URL would pass.
+STATIC_BADGE='# Demo\n\n[![Version](https://img.shields.io/badge/version-3.0.0-blue.svg)](https://github.com/netresearch/demo-skill/releases)\n'
+readme_case static_badge "$STATIC_BADGE" expect-present \
+    "static version badge" "a hand-typed version badge warns"
+LIVE_BADGE='# Demo\n\n[![Release](https://img.shields.io/github/v/release/netresearch/demo-skill?sort=semver)](https://github.com/netresearch/demo-skill/releases)\n'
+readme_case live_badge "$LIVE_BADGE" expect-absent \
+    "static version badge" "the live release badge does not warn"
+
 echo "----------------------------------------"
 echo "Release path checks (issue #341)"
 echo "----------------------------------------"
