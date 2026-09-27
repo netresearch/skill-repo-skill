@@ -103,6 +103,17 @@ takes an `sha` pin (`gh api -X PUT .../pulls/N/merge -f merge_method=merge
 `--watch` over repeated status reads, and stop any watcher whose answer is
 already known.
 
+**A batch that waits on a prerequisite PR runs in its own `--workdir`.** The
+lock is per workdir and covers every phase, and a `finish` run holds it until
+each of its merge gates closes — up to `FR_MERGE_TIMEOUT` per repo. Repos held
+back for a prerequisite (an `EMPTY` changelog, a CI fix) therefore cannot be
+bumped next to a running `finish`: the second call dies with `workdir locked by
+running pid …`. Copy their plan rows into a fresh workdir and run `bump` and
+`finish` there. That is the intended shape, not a workaround — one workdir per
+batch keeps `opened.jsonl` and the logs from interleaving, which is what the
+lock exists to prevent. (2026-09-27: five repos with an empty `[Unreleased]`
+ran as a second batch while the first batch's `finish` held the lock.)
+
 ## Canonical Order: Bump PR Merged → Tag Pushed
 
 **Tag a version only after the version-bump PR is merged to the default branch.** Tagging first causes the Release workflow to run against the old code, fail CI, and produce an immutable GitHub release locked to a bad tag.
@@ -157,6 +168,21 @@ It deliberately does not commit, tag or push. A helper that bumps and tags in on
 ## Changelog Rollover in the Bump Commit
 
 If the repo maintains a `CHANGELOG.md`, the version-bump commit moves the `[Unreleased]` content under a new `## [X.Y.Z] - YYYY-MM-DD` heading and leaves a fresh empty `[Unreleased]` section. A bump commit that skips this leaves shipped content labeled `[Unreleased]` — the next release then has to relabel history after the fact (typo3-upgrade-estimator-skill shipped its entire v2.2.0 changelog block as `[Unreleased]` and it was only relabeled in v2.2.1).
+
+**An `EMPTY` manifest row is a prerequisite PR, not a bump.** The roll refuses
+an empty `[Unreleased]`, so such a repo needs its entries on the default branch
+first:
+
+1. Open one `docs(changelog)` PR per repo that fills `[Unreleased]` from what
+   shipped since the last tag — the merged PR bodies *and* their diffs, since
+   follow-up commits often change what a body describes.
+2. Check each entry's scope claim against the shipped reference file, not the PR
+   body alone. Of five such PRs on 2026-09-27, two overstated their scope ("a
+   `vcs` entry" where the reference says a `vcs` entry with a GitHub URL; "a bare
+   `@login`" where the script strips inline links only), and only a bot review
+   caught them.
+3. Merge it, then bump the repo in its own workdir (see "A batch that waits on a
+   prerequisite PR" above).
 
 **Five heading shapes exist in the fleet**, not the two this page claimed until
 v1.29.0 — the 2026-08-08 sweep hit all of them across 63 repos:
