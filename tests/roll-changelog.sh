@@ -335,6 +335,64 @@ check "check-unreleased: fenced lookalike is no heading; fence body counts as co
 
 check "no version without --check-unreleased still refused" 1 "$(roll "$f")"
 
+# --- --seed-entry: a stabilization release has no new content of its own ----
+# The fleet driver passes the 1.0.0 promise; the roll must land it whether the
+# section is missing, empty or already holds entries, and never twice.
+SEED='First stable release. From 1.0.0 on, breaking changes need a new major.'
+
+printf '# C\n\n## [Unreleased]\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: empty section is seeded and rolled" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: entry sits under the new heading" "- $SEED" \
+    "$(awk '/^## \[1\.0\.0\] - 2026-09-29$/ { on = 1; next } on && /^- / { print; exit }' "$f")"
+check "seed: entry carries a Changed subsection" yes \
+    "$(awk '/^## \[1\.0\.0\]/ { on = 1; next } on && /^## / { exit } on && /^### Changed$/ { print "yes"; exit }' "$f")"
+check "seed: a fresh empty Unreleased remains" empty \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+
+printf '# C\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: missing Unreleased heading is created, then rolled" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: new heading placed above the old release" "## [1.0.0] - 2026-09-29|## [0.3.0] - 2026-01-01" \
+    "$(grep -E '^## \[[0-9]' "$f" | head -2 | paste -sd'|')"
+check "seed: created Unreleased stays above everything" "## [Unreleased]" \
+    "$(grep -m1 '^## ' "$f")"
+
+printf '# C\n\n## [Unreleased]\n\n### Fixed\n\n- a fix\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: section with content keeps it and adds the entry" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: existing entry kept" yes "$(grep -qx -- '- a fix' "$f" && echo yes || echo no)"
+check "seed: promise added once" 1 "$(grep -cxF -- "- $SEED" "$f")"
+
+printf '# C\n\n## [Unreleased]\n\n### Changed\n\n- other\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: roll into an existing Changed succeeds" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: joins an existing Changed subsection instead of a second one" 1 \
+    "$(awk '/^## \[1\.0\.0\]/ { on = 1; next } on && /^## / { exit } on && /^### Changed$/ { n++ } END { print n + 0 }' "$f")"
+
+printf '# C\n\n## [Unreleased]\n\n### Changed\n\n- %s\n\n## [0.3.0] - 2026-01-01\n\n- b\n' "$SEED" > "$f"
+check "seed: roll with the entry already present succeeds" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: an entry already present is not duplicated" 1 "$(grep -cxF -- "- $SEED" "$f")"
+
+printf '# C\n\n## \\[Unreleased\\]\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: an escaped \\[Unreleased\\] heading is recognized, not duplicated" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: escaped heading file still has one Unreleased heading" 1 "$(grep -ci 'unreleased' "$f")"
+
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '# C\n\n## [Unreleased]\n\n### Fixed\n\n- a fix\n\n```\n### Changed\n\n- %s\n```\n\n## [0.3.0] - 2026-01-01\n\n- b\n' "$SEED" > "$f"
+check "seed: fenced example in the section rolls" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
+check "seed: fenced lookalike neither receives nor suppresses the promise" 2 \
+    "$(grep -cxF -- "- $SEED" "$f")"
+check "seed: the visible promise sits above the fence" yes \
+    "$(awk -v b="- $SEED" '/^```/ { fence = !fence; next } !fence && $0 == b { print "yes"; exit }' "$f")"
+
+printf '# C\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: --dry-run writes nothing" 0 "$(roll "$f" 1.0.0 --dry-run --seed-entry "$SEED")"
+check "seed: --dry-run left the file alone" 0 "$(grep -c 'Unreleased' "$f")"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All roll-changelog tests passed"

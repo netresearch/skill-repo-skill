@@ -594,5 +594,38 @@
         "Badges are cosmetic and the validator ignores README content apart from the headings, so leave it as it is."
       ]
     }
+  },
+  {
+    "name": "fleet_sweep_stabilizes_0x_repos",
+    "prompt": "Release all our skill repos, and lift every one still on 0.x to 1.0. Several of the 0.x repos have no new commits since their last tag. How do I plan that with the fleet driver?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "STABILIZE",
+        "description": "Uses the STABILIZE plan class instead of retyping rows or writing a session-local script"
+      },
+      {
+        "type": "content_regex",
+        "value": "plan\\.stabilize\\.jsonl",
+        "description": "Takes the ready rows the manifest writes for 0.x repos"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(promise|new major|incompatible|breaking)",
+        "description": "Says the 1.0.0 release carries the stability promise, which the roll seeds into the changelog"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(opt-in|operator|decision|approv)",
+        "description": "Keeps stabilization an operator decision; the rows are offered, not planned automatically"
+      }
+    ],
+    "samples": {
+      "passing": "Run survey and manifest as usual. For every 0.x repo that is BUMP, UP-TO-DATE or SKIP-CI-ONLY the manifest notes a stabilization candidate and writes a ready STABILIZE row (version 1.0.0) to plan.stabilize.jsonl. After approval, copy the rows you want into plan.jsonl, replacing that repo's skeleton row if it has one. bump then seeds the 1.0.0 promise (incompatible changes only in a new major) into [Unreleased] before the roll, even when there are no new commits, and uses it as the body when the row has none.",
+      "failing": [
+        "The driver skips repos without new commits, so edit plan.skeleton.jsonl by hand, change their class to BUMP and write the CHANGELOG entries in separate PRs first.",
+        "Write a small script that builds the plan from the survey and sets version 1.0.0 for every repo below 1.0."
+      ]
+    }
   }
 ]

@@ -9,6 +9,7 @@
 - A reformatting hook aborts the first bump commit
 - Cache Safety: Never Edit the Installed Copy
 - Multi-Skill-Repo Release Dry-Run
+- Lifting 0.x repos to 1.0.0: the STABILIZE class
 - GitLab (`git.netresearch.de`) skill repos release on tag too
 - A pushed tag is not a release — check the pattern the release job matches
 - Release notes: the generated body is the default — do not curate it away
@@ -474,6 +475,40 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
   `git tag` takes any commit-ish, and it does not touch the index or the working
   tree — so this is safe even in a plain (non-bare) checkout that is mid-edit.
   Keep switch-then-pull only for the repos where you genuinely need files on disk.
+
+## Lifting 0.x repos to 1.0.0: the STABILIZE class
+
+A "bring everything to at least 1.0" sweep needs releases that have no new
+content of their own. The classification cannot produce them — a quiet 0.x repo
+is `UP-TO-DATE` or `SKIP-CI-ONLY` and gets no plan row — and the rollover refuses
+an empty `[Unreleased]`. The 2026-09-23 sweep lifted 20 repos to 1.0.0 by
+retyping plan rows in a session-local script and by opening a CHANGELOG PR per
+repo first, which is the hand-written driver this page warns against. The class
+now does it:
+
+- **manifest** notes `0.x: stabilization candidate` on every 0.x row that is
+  `BUMP`, `UP-TO-DATE` or `SKIP-CI-ONLY`, and writes a ready row
+  (`classification: STABILIZE`, `version: 1.0.0`) to `plan.stabilize.jsonl`.
+  Stabilizing is opt-in: the rows are not in the skeleton. Copy the ones you
+  want into `plan.jsonl`, replacing the repo's skeleton row if it has one — the
+  duplicate-row guard refuses both.
+- **plan validation** accepts `STABILIZE` only for a 0.x `last` and a target of
+  1.0.0 or above; any other pair would ship the promise on a release that is
+  not the first stable one.
+- **bump** passes `--seed-entry` to `roll-changelog.py`, which puts the promise
+  as a `### Changed` bullet into `[Unreleased]` — creating the heading when the
+  file has none, joining an existing `### Changed`, never twice — and then
+  rolls as usual. A row with an empty `body` gets the same sentence as its PR
+  body. The sentence is `FR_STABILIZE_ENTRY`; override it in the environment for
+  a fleet whose promise reads differently.
+- **finish** tags and verifies like any other bump.
+
+A repo without a `CHANGELOG.md` carries the promise only in the bump PR body:
+GitHub's generated release notes list PR titles, not bodies. The rest of what a
+first stable release owes — every shipped test suite invoked by CI, dependency
+ranges that still allow a sibling's 0.x — is github-release-skill's
+`release-process.md`, "The 0.x → 1.0 Release"; a suite that no CI runs goes into
+that repo's `body` as a sentence.
 
 ## GitLab (`git.netresearch.de`) skill repos release on tag too
 
