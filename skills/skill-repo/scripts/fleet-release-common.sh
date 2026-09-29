@@ -58,6 +58,12 @@ FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
 # is deliberate.
 # shellcheck disable=SC2034  # consumed by the host drivers' survey callbacks
 FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-config\.yaml$|^\.markdownlint(-cli2)?\.jsonc$|^\.yamllint\.yml$|^\.editorconfig$'
+# STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
+# use it as the release body when the plan row leaves `body` empty: a first
+# stable release ships a promise, and the promise has to be written where a
+# consumer reads it (github-release-skill, "The 0.x -> 1.0 Release").
+# shellcheck disable=SC2034  # read by fr_bump_one and the tests
+FR_STABILIZE_ENTRY="${FR_STABILIZE_ENTRY:-First stable release. From 1.0.0 on, an incompatible change to what this plugin exposes — skill names, trigger descriptions, the arguments and output of its scripts — ships only in a new major version.}"
 # The only files a bump commit may touch.
 FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\.md|CHANGELOG\.md)$'
 # Version-aware compare/sort, shared by every jq call site. Extracts the
@@ -444,9 +450,11 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
 fr_manifest() {
     local survey="$FR_WORKDIR/survey.jsonl" manifest="$FR_WORKDIR/manifest.md"
     local skeleton="$FR_WORKDIR/plan.skeleton.jsonl" row cls
+    local stabilize="$FR_WORKDIR/plan.stabilize.jsonl"
     [[ -s "$survey" ]] || fr_die "no survey at $survey — run: $FR_DRIVER survey first"
     [[ -n "$FR_SELF_LOGIN" ]] || fr_die "FR_SELF_LOGIN unresolved — cannot apply the foreign-PR author gate"
     : > "$skeleton"
+    : > "$stabilize"
     {
         echo "# Fleet Release Manifest ($FR_HOST, $(date +%F))"
         echo
@@ -475,6 +483,10 @@ fr_manifest() {
                  (if (.last_tag // "") != "" and ((.last_tag | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+")) | not)
                   then "nonstandard tag convention" else empty end),
                  (if .files_truncated == true then "compare file list truncated" else empty end),
+                 (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY"))
+                     and (.claude_plugin // "") != "" and ((.claude_plugin | vparse)[0] == 0)
+                  then "0.x: stabilization candidate — STABILIZE row in plan.stabilize.jsonl"
+                  else empty end),
                  (if $cls == "NO-RELEASE-JOB"
                   then "no tag-triggered release job — adopt the shared release CI first; this driver does not write CI files"
                   else empty end),
@@ -522,6 +534,20 @@ fr_manifest() {
                       subjects: (.subjects // [])}' <<< "$row" >> "$skeleton"
                 ;;
         esac
+        # Stabilization is opt-in: a 0.x repo that is otherwise releasable (or
+        # merely quiet) gets a ready STABILIZE row in a SEPARATE file. Copying
+        # it into the plan is the operator's decision — replace the repo's
+        # skeleton row if it has one, the duplicate-row guard refuses both.
+        case "$cls" in
+            BUMP|UP-TO-DATE|SKIP-CI-ONLY)
+                jq -c "$FR_JQ_VPARSE"'
+                    select(((.claude_plugin // "") | vparse)[0] == 0 and (.claude_plugin // "") != "")
+                    | {repo, classification: "STABILIZE", default: (.default // "main"),
+                       last: .claude_plugin, last_tag: (.last_tag // ""),
+                       head: (.head // ""), version: "1.0.0",
+                       body: "", tag: "", subjects: (.subjects // [])}' <<< "$row" >> "$stabilize"
+                ;;
+        esac
     done 3< "$survey"
     {
         echo
@@ -538,6 +564,10 @@ fr_manifest() {
     fr_note "next: 1. review the manifest with the operator/user and get approval"
     fr_note "      2. cp $skeleton $FR_WORKDIR/plan.jsonl"
     fr_note "      3. fill 'version' (and 'body') for every BUMP/FIRST-RELEASE row; drop rows to skip"
+    if [[ -s "$stabilize" ]]; then
+        fr_note "      3a. 0.x repos to lift to 1.0.0: take their rows from $stabilize"
+        fr_note "          (replacing any skeleton row for the same repo)"
+    fi
     fr_note "      4. $FR_DRIVER bump --workdir $FR_WORKDIR"
 }
 
@@ -556,7 +586,7 @@ fr_plan_validate() { # PLAN — refuse the whole phase before mutating anything
     # PRs against one repo.
     bad=$(jq -r '.repo' < "$plan" | sort | uniq -d)
     [[ -z "$bad" ]] || fr_die "duplicate plan rows for: $(tr '\n' ' ' <<< "$bad")"
-    bad=$(jq -r 'select((.classification == "BUMP" or .classification == "FIRST-RELEASE" or .classification == "TAG-ONLY" or .classification == "OWN-PR-OPEN")
+    bad=$(jq -r 'select((.classification == "BUMP" or .classification == "FIRST-RELEASE" or .classification == "TAG-ONLY" or .classification == "OWN-PR-OPEN" or .classification == "STABILIZE")
                   and ((.version // "") == "")) | .repo' < "$plan")
     [[ -z "$bad" ]] || fr_die "plan rows without a version: $(tr '\n' ' ' <<< "$bad")— fill them or drop them"
     bad=$(jq -r 'select((.version // "") != "")
@@ -585,6 +615,9 @@ fr_plan_validate() { # PLAN — refuse the whole phase before mutating anything
           elif .classification == "FIRST-RELEASE"
           then select((.version | vparse) < (.last | vparse))
                | "\(.repo) (FIRST-RELEASE may tag or exceed the committed \(.last), not fall below it with \(.version))"
+          elif .classification == "STABILIZE"
+          then select(((.last | vparse)[0] != 0) or ((.version | vparse)[0] < 1))
+               | "\(.repo) (STABILIZE lifts a 0.x repo to >=1.0.0; \(.last) -> \(.version) is not that)"
           else select((.version | vparse) <= (.last | vparse))
                | "\(.repo) (\(.version) is not above the surveyed \(.last))"
           end' < "$plan")
@@ -616,6 +649,7 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
     default=$(jq -r '.default // "main"' <<< "$row")
     last=$(jq -r '.last // ""' <<< "$row")
     cls=$(jq -r '.classification // "BUMP"' <<< "$row")
+    [[ "$cls" == "STABILIZE" && -z "$body" ]] && body="$FR_STABILIZE_ENTRY"
     local branch="${FR_BRANCH_PREFIX}${version}"
     echo "=== $(host_display "$repo") v$version ($cls) ==="
     [[ -n "$version" ]] || { echo "FAIL $repo: plan row has no version"; return 1; }
@@ -626,7 +660,7 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
     fi
     # OWN-PR-OPEN re-enters here on purpose: the remote-reality checks below
     # find the sweep's own open PR and record it instead of double-bumping.
-    if [[ "$cls" != "BUMP" && "$cls" != "FIRST-RELEASE" && "$cls" != "OWN-PR-OPEN" ]]; then
+    if [[ "$cls" != "BUMP" && "$cls" != "FIRST-RELEASE" && "$cls" != "OWN-PR-OPEN" && "$cls" != "STABILIZE" ]]; then
         echo "FAIL $repo: classification $cls does not belong in the bump phase"
         return 1
     fi
@@ -714,7 +748,9 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
             || { echo "FAIL $repo: bump"; return 1; }
         if [[ -f "$wt/CHANGELOG.md" ]]; then
             roll_tool=$(fr_tool roll-changelog.py) || { echo "FAIL $repo: roll-changelog.py not found"; return 1; }
-            python3 "$roll_tool" "$wt/CHANGELOG.md" "$version" \
+            local -a seed=()
+            [[ "$cls" == "STABILIZE" ]] && seed=(--seed-entry "$FR_STABILIZE_ENTRY")
+            python3 "$roll_tool" "$wt/CHANGELOG.md" "$version" "${seed[@]}" \
                 || { echo "FAIL $repo: changelog roll"; return 1; }
             fr_lint_changelog "$wt"
         fi
@@ -962,7 +998,7 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
     echo "=== $(host_display "$repo") $tag ($cls) ==="
     [[ -n "$version" ]] || { echo "FAIL $repo: plan row has no version"; return 1; }
     case "$cls" in
-        BUMP|FIRST-RELEASE|TAG-ONLY|OWN-PR-OPEN) ;;
+        BUMP|FIRST-RELEASE|TAG-ONLY|OWN-PR-OPEN|STABILIZE) ;;
         *)
             echo "FAIL $repo: classification $cls does not belong in the finish phase — resolve it first"
             return 1

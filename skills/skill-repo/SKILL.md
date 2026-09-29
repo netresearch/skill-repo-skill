@@ -95,7 +95,7 @@ Callers: `validate.yml`, `release.yml` (here); `auto-merge-deps.yml` (`netresear
 
 ## Releasing
 
-Bump root `plugin.json` → sync → PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Multi-repo (>3) needs dry-run + approval. Never edit installed paths — [release-discipline](references/release-discipline.md).
+Bump root `plugin.json` → sync → PR → merge → pull main → verify parity → signed tag → push → monitor Release. **Tag only after bump PR merges.** Multi-repo (>3) needs dry-run + approval; 0.x → 1.0.0 goes through `STABILIZE` rows, not retyped plans. Never edit installed paths — [release-discipline](references/release-discipline.md).
 
 ## Installation
 

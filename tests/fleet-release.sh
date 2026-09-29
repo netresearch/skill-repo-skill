@@ -318,6 +318,23 @@ check "plan: FIRST-RELEASE ordering is NUMERIC (1.10.0 over 1.9.0)" yes \
 printf '%s\n' '{"repo":"h","classification":"OWN-PR-OPEN","version":"","default":"main","last":"1.3.0"}' > "$PLAN"
 check "plan: OWN-PR-OPEN needs its version filled" no \
     "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+# STABILIZE lifts a 0.x repo to its first stable major, with or without new
+# content. Anything that is not 0.x -> >=1.0.0 is some other release wearing
+# the class, and the seeded promise would then be false.
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"1.0.0","default":"main","last":"0.9.3"}' > "$PLAN"
+check "plan: STABILIZE 0.9.3 -> 1.0.0 accepted" yes \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"0.10.0","default":"main","last":"0.9.3"}' > "$PLAN"
+check "plan: STABILIZE to another 0.x refused" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"2.0.0","default":"main","last":"1.4.0"}' > "$PLAN"
+check "plan: STABILIZE from a repo already >=1.0 refused" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"","default":"main","last":"0.9.3"}' > "$PLAN"
+check "plan: STABILIZE needs its version filled" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+check "stabilize entry states the major-version promise" yes \
+    "$(grep -q 'only in a new major version' <<< "$FR_STABILIZE_ENTRY" && echo yes || echo no)"
 
 # --- opened.jsonl: the author-gate record ------------------------------------
 fr_record_opened repo-x 42 https://example.invalid/pr/42 release/v1.0.0
@@ -545,6 +562,8 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "blipped" | .resolved = "o/blipped" | .ahead = -1 | .nonci = -1'
         row '.repo = "ruled" | .resolved = "o/ruled" | .ci_tag_rules = "12: rules | if CI_COMMIT_TAG;30:release_job:"'
         row '.repo = "cl-empty" | .resolved = "o/cl-empty" | .changelog_unreleased = "empty"'
+        row '.repo = "zero-quiet" | .resolved = "o/zero-quiet" | .claude_plugin = "0.3.4" | .root_plugin = "0.3.4" | .last_tag = "v0.3.4" | .last_release = "v0.3.4" | .ahead = 0 | .nonci = 0'
+        row '.repo = "zero-busy" | .resolved = "o/zero-busy" | .claude_plugin = "0.9.3" | .root_plugin = "0.9.3" | .last_tag = "v0.9.3" | .last_release = "v0.9.3"'
     } > "$MWD/survey.jsonl"
     out=$(FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
     check "manifest: runs offline on a fixture survey" yes \
@@ -581,6 +600,16 @@ if command -v gh > /dev/null 2>&1; then
         "$(grep -q 'tag rules: 12:' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: pipe chars in rules are escaped so the table survives" yes \
         "$(grep -q 'rules ¦ if CI_COMMIT_TAG' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: a quiet 0.x repo is offered for stabilization" "STABILIZE 1.0.0 0.3.4" \
+        "$(jq -r 'select(.repo == "zero-quiet") | "\(.classification) \(.version) \(.last)"' "$MWD/plan.stabilize.jsonl")"
+    check "manifest: a 0.x repo with a delta is offered too" STABILIZE \
+        "$(jq -r 'select(.repo == "zero-busy") | .classification' "$MWD/plan.stabilize.jsonl")"
+    check "manifest: a 1.x repo is not a stabilization candidate" "" \
+        "$(jq -r 'select(.repo == "bump-me") | .repo' "$MWD/plan.stabilize.jsonl")"
+    check "manifest: stabilization stays opt-in (quiet 0.x repo not in the skeleton)" "" \
+        "$(jq -r 'select(.repo == "zero-quiet") | .repo' "$MWD/plan.skeleton.jsonl")"
+    check "manifest: 0.x rows carry the stabilization note" yes \
+        "$(grep -q '| zero-quiet | UP-TO-DATE |.*0.x: stabilization candidate' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: stops for approval (bump command only in 'next' steps)" yes \
         "$(grep -q 'review the manifest' <<< "$out" && echo yes || echo no)"
 else

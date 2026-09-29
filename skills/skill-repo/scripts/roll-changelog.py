@@ -3,7 +3,7 @@
 new released heading, reproducing the repo's own heading shape.
 
 Usage:
-    roll-changelog.py FILE VERSION [--date YYYY-MM-DD] [--dry-run]
+    roll-changelog.py FILE VERSION [--date YYYY-MM-DD] [--dry-run] [--seed-entry TEXT]
 
 Why this exists (references/release-discipline.md, "Changelog Rollover"):
 five released-heading shapes coexist in the fleet, and a roll anchored on one
@@ -126,6 +126,15 @@ def parse_args():
         help="print the new heading and moved-section size, write nothing",
     )
     parser.add_argument(
+        "--seed-entry",
+        metavar="TEXT",
+        help="put TEXT as a '### Changed' bullet into Unreleased before rolling, "
+        "creating the heading when the file has none; an existing section keeps "
+        "its entries and TEXT is added once. For a release whose content is a "
+        "statement rather than a change — the 0.x -> 1.0.0 stabilization, where "
+        "the promise has to be in the changelog and nothing else is new",
+    )
+    parser.add_argument(
         "--check-unreleased",
         action="store_true",
         help="report the Unreleased section's state (no-unreleased | empty | "
@@ -246,6 +255,63 @@ def unreleased_state(lines):
     return "empty"
 
 
+def seed_unreleased(lines, text):
+    """Return lines with `- text` under a '### Changed' in Unreleased.
+
+    Creates the Unreleased heading above the first released heading when the
+    file has none (after the title block otherwise), joins an existing
+    '### Changed' subsection rather than opening a second one (MD024), and is
+    a no-op when the bullet is already there. Fence-aware like every scan here.
+    """
+    bullet = f"- {text}"
+    unreleased = None
+    first_heading = None
+    for i, line, in_fence in scan(lines):
+        if in_fence:
+            continue
+        if UNRELEASED_RE.match(line):
+            unreleased = i
+            break
+        if first_heading is None and line.startswith("## "):
+            first_heading = i
+    lines = list(lines)
+    if unreleased is None:
+        at = first_heading if first_heading is not None else len(lines)
+        block = ["## [Unreleased]", ""]
+        if at == len(lines) and lines and lines[-1].strip():
+            block = [""] + block
+        lines[at:at] = block
+        unreleased = at if block[0] else at + 1
+    end = next(
+        (
+            i
+            for i, line, f in scan(lines)
+            if i > unreleased and not f and line.startswith("## ")
+        ),
+        len(lines),
+    )
+    section = lines[unreleased + 1 : end]
+    if bullet in section:
+        return lines
+    changed = next(
+        (
+            unreleased + 1 + k
+            for k, line in enumerate(section)
+            if line.strip() == "### Changed"
+        ),
+        None,
+    )
+    if changed is not None:
+        # first line after the subsection heading and its blank line
+        at = changed + 1
+        while at < end and not lines[at].strip():
+            at += 1
+        lines[at:at] = [bullet]
+    else:
+        lines[unreleased + 1 : unreleased + 1] = ["", "### Changed", "", bullet]
+    return lines
+
+
 def main() -> None:
     args = parse_args()
     if args.check_unreleased:
@@ -254,6 +320,8 @@ def main() -> None:
         return
     version = args.version
     lines, eol, trailing_newline = read_changelog(args.file)
+    if args.seed_entry:
+        lines = seed_unreleased(lines, args.seed_entry.strip())
     idx, first_released = locate_headings(lines)
 
     if first_released is None:
