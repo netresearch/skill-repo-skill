@@ -31,6 +31,7 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `skills/skill-repo/templates/` | Templates for new skill repos (README, licenses, workflows, composer.json) |
 | `Build/hooks/` | Git hooks (pre-commit, pre-push) |
 | `Build/Scripts/check-plugin-version.sh` | Version validation script |
+| `docs/SECURITY-ASSURANCE.md` | Security assurance case: what the scripts and reusable workflows guarantee, and what they do not |
 
 ## Commands
 

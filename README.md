@@ -201,6 +201,7 @@ skill-repo-skill/
 │   └── hooks/
 ├── docs/
 │   ├── ARCHITECTURE.md
+│   ├── SECURITY-ASSURANCE.md
 │   └── dashboard/
 ├── scripts/
 ├── tests/
