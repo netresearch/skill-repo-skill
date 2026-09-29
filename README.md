@@ -235,6 +235,48 @@ Contributions welcome. Please open PRs for:
 - Additional validation checks
 - Documentation updates
 
+### Tests
+
+The suite lives in `tests/`: one Bash script per area plus `tests/renovate-custom-manager.py`. It needs Bash 4.3+, Python 3 (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
+
+```bash
+for t in tests/*.sh; do bash "$t" || echo "FAILED: $t"; done
+for t in tests/*.py; do python3 "$t" || echo "FAILED: $t"; done
+```
+
+- `validate-skill.sh`, `validate-skill-architecture.sh`, `portable-manifest.sh`, `mechanical-coverage.sh`: the validator's verdicts (frontmatter parsing on both parser paths, multi-skill discovery, size budgets, dangling paths, `allowed-tools`, README install lines, release path, script-test lookup, `plugin.json`) and `sync-plugin-manifest.sh`, `bump-version.sh`, `check-version-parity.sh`.
+- `validate-evals.sh`, `run-ab-evals.sh`: the eval validator on the three eval formats, and the A/B runner's provenance, sampling, gates and argument handling.
+- `fleet-release.sh`, `roll-changelog.sh`, `migrate-licensing.sh`, `release-archive-layout.sh`: the fleet release driver offline, the changelog roll, the licensing migration on throwaway repositories, and the archive layout `release.yml` builds.
+- `usage-text.sh`, `audit-skills.sh`, `renovate-custom-manager.py`: `--help` output of the shipped scripts, `scripts/audit-skills.sh`, and the Renovate regex manager in `renovate.json`.
+
+Each file prints one `ok`/`FAIL` line per check (or `PASS`/`FAIL`), ends with a summary line, and exits non-zero on any failure. The `FAIL` line names the check that did not hold.
+
+In CI, every push to `main` and every pull request runs Skill Tests (`tests-caller.yml` calls the local `tests.yml`, which runs `tests/**/*.sh` and `tests/**/*.py`, each in its own log group) and Self-test (`self-test.yml`: the validator and manifest tests, this repository validated with the validator from the pull request, version parity, and the full Skill Validation job at ShellCheck severity `style`).
+
+**Test policy:** a pull request that adds or changes behaviour of a script under `skills/skill-repo/scripts/` or `scripts/`, or of a check in a reusable workflow, adds or updates a test in `tests/` that fails without the change. Passing the existing suite is not enough for new functionality.
+
+### Dependencies
+
+- **Shipped package:** `composer.json` requires `netresearch/composer-agent-skill-plugin`, which registers the skill in a PHP project; `package.json` declares `@netresearch/agent-skill-coordinator` as a peer dependency for the same job in Node projects. Neither has a lock file: a skill package pins nothing for its consumers (see [AGENTS.md](AGENTS.md)).
+- **Scripts:** Bash, Python 3 standard library, Git and `jq`; PyYAML is optional for `validate-skill.sh`; the fleet driver needs `gh`; `scripts/run-ab-evals.sh` needs the `claude` CLI. None is installed by this repository.
+- **CI tools:** third-party GitHub Actions are pinned to commit SHAs. `validate.yml` downloads ShellCheck 0.11.0 and checks its SHA-256, and runs `ruff` 0.16.9 and `pyyaml` 6.0.3 through `uv`. bandit and pip-audit are installed with `--require-hashes` from `.github/requirements/*.txt`, generated with `uv pip compile --generate-hashes`. Pre-commit hooks are pinned by `rev:` in `.pre-commit-config.yaml`. `ab-evals-schedule.yml` installs `@anthropic-ai/claude-code` at a fixed version.
+- **Tracking and updates:** Renovate (`renovate.json`: `config:recommended`, pre-commit hooks enabled, and a regex manager for the `uvx …@version` and `uv run --with …==version` pins in workflows, tested by `tests/renovate-custom-manager.py`) opens update pull requests; `auto-merge-deps-caller.yml` hands them to the organisation's auto-merge workflow, which merges them after their checks pass. The ShellCheck version and checksum, the `pyyaml` and `claude-code` pins and the files in `.github/requirements/` have no Renovate rule and are updated by hand.
+- **Selection:** a new dependency is added in a pull request that changes the manifest or workflow that uses it, and is reviewed there, including its licence against the organisation policy below. Dependency review and Composer Audit run on that pull request (see below).
+
+### Governance and policies
+
+This repository follows the Netresearch organisation policies:
+
+- [Governance](https://github.com/netresearch/.github/blob/main/GOVERNANCE.md): ownership, roles, how decisions are made and disputes resolved, and continuity.
+- [Roadmap](https://github.com/netresearch/.github/blob/main/ROADMAP.md): planned and explicitly excluded work for the coming year.
+- [Handling of dependency and code analysis findings](https://github.com/netresearch/.github/blob/main/SECURITY.md#handling-of-dependency-and-code-analysis-findings): thresholds, deadlines and the exception process for dependency (SCA) and static analysis (SAST) findings.
+- [Secret management](https://github.com/netresearch/.github/blob/main/SECURITY.md#secret-management): how CI and release credentials are stored, accessed and rotated.
+- [Access roster](https://github.com/netresearch/.github/blob/main/docs/access-roster.md): who holds administrative access to this repository and the organisation.
+
+The security assurance case for this repository (threat model, trust boundaries, countermeasures and limits) is in [docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
+
+Checks that run on every pull request in this repository: Skill Validation (`lint.yml`, the reusable `validate.yml` from `main`: skill structure, plugin manifest sync, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff, checkpoint schemas), Self-test, Skill Tests, Eval Validation, npm Pack Smoke, the template drift check, and Security (`security.yml`, for pull requests against `main`): Betterleaks secret scanning, zizmor on the workflows, dependency review, and Composer Audit with an Opengrep SAST scan. CodeQL default setup, SonarCloud and the DCO check also report on pull requests; they are configured in the repository settings, not in this repository.
+
 ## License
 
 This project uses split licensing:
