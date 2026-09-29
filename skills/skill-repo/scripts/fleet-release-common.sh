@@ -63,7 +63,7 @@ FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-conf
 # stable release ships a promise, and the promise has to be written where a
 # consumer reads it (github-release-skill, "The 0.x -> 1.0 Release").
 # shellcheck disable=SC2034  # read by fr_bump_one and the tests
-FR_STABILIZE_ENTRY="${FR_STABILIZE_ENTRY:-First stable release. From 1.0.0 on, an incompatible change to what this plugin exposes — skill names, trigger descriptions, the arguments and output of its scripts — ships only in a new major version.}"
+FR_STABILIZE_ENTRY="${FR_STABILIZE_ENTRY:-First stable release. From 1.0.0 on, an incompatible change to what this plugin exposes — skill names, slash commands, trigger descriptions, hook behaviour, the arguments and output of its scripts — ships only in a new major version.}"
 # The only files a bump commit may touch.
 FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\.md|CHANGELOG\.md)$'
 # Version-aware compare/sort, shared by every jq call site. Extracts the
@@ -592,6 +592,18 @@ fr_plan_validate() { # PLAN — refuse the whole phase before mutating anything
     bad=$(jq -r 'select((.version // "") != "")
                  | select((.version | test("^[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?$")) | not) | .repo' < "$plan")
     [[ -z "$bad" ]] || fr_die "plan rows with a non-semver version: $(tr '\n' ' ' <<< "$bad")"
+    # STABILIZE is checked before the ordering filter below, which skips rows
+    # without a surveyed `last`: the class claims "first stable release", so
+    # it needs evidence of a 0.x start, and a prerelease target (1.0.0-rc.1)
+    # is not stable.
+    bad=$(jq -r "$FR_JQ_VPARSE"'
+        select(.classification == "STABILIZE")
+        | select(((.last // "") == "")
+                 or ((.last | vparse)[0] != 0)
+                 or ((.version // "") | test("^[0-9]+\\.[0-9]+\\.[0-9]+$") | not)
+                 or (((.version // "0") | vparse)[0] < 1))
+        | "\(.repo) (STABILIZE lifts a surveyed 0.x repo to a stable >=1.0.0; \(.last // "no last") -> \(.version // "") is not that)"' < "$plan")
+    [[ -z "$bad" ]] || fr_die "plan STABILIZE rows: $(tr '\n' ';' <<< "$bad")"
     # Monotonicity: a planned version below or equal to the surveyed one would
     # ship a parity-consistent version REGRESSION that no later gate can see.
     # Two classes are exceptions, for opposite reasons:
@@ -615,9 +627,6 @@ fr_plan_validate() { # PLAN — refuse the whole phase before mutating anything
           elif .classification == "FIRST-RELEASE"
           then select((.version | vparse) < (.last | vparse))
                | "\(.repo) (FIRST-RELEASE may tag or exceed the committed \(.last), not fall below it with \(.version))"
-          elif .classification == "STABILIZE"
-          then select(((.last | vparse)[0] != 0) or ((.version | vparse)[0] < 1))
-               | "\(.repo) (STABILIZE lifts a 0.x repo to >=1.0.0; \(.last) -> \(.version) is not that)"
           else select((.version | vparse) <= (.last | vparse))
                | "\(.repo) (\(.version) is not above the surveyed \(.last))"
           end' < "$plan")
@@ -750,7 +759,7 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
             roll_tool=$(fr_tool roll-changelog.py) || { echo "FAIL $repo: roll-changelog.py not found"; return 1; }
             local -a seed=()
             [[ "$cls" == "STABILIZE" ]] && seed=(--seed-entry "$FR_STABILIZE_ENTRY")
-            python3 "$roll_tool" "$wt/CHANGELOG.md" "$version" "${seed[@]}" \
+            python3 "$roll_tool" "$wt/CHANGELOG.md" "$version" ${seed[@]+"${seed[@]}"} \
                 || { echo "FAIL $repo: changelog roll"; return 1; }
             fr_lint_changelog "$wt"
         fi

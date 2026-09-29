@@ -40,7 +40,9 @@ import re
 import sys
 import tempfile
 
-UNRELEASED_RE = re.compile(r"^##\s+\[?unreleased\]?\s*$", re.IGNORECASE)
+# `\[Unreleased\]` is the same heading with escaped brackets, valid Markdown
+# that some formatters emit; missing it would seed a second heading above it.
+UNRELEASED_RE = re.compile(r"^##\s+\\?\[?unreleased\\?\]?\s*$", re.IGNORECASE)
 FENCE_RE = re.compile(r"^ {0,3}(```|~~~)")
 # Newest released heading, one regex per shape. Order matters: the linked form
 # also starts with "## [" and must win over plain bracketed.
@@ -282,25 +284,14 @@ def seed_unreleased(lines, text):
             block = [""] + block
         lines[at:at] = block
         unreleased = at if block[0] else at + 1
-    end = next(
-        (
-            i
-            for i, line, f in scan(lines)
-            if i > unreleased and not f and line.startswith("## ")
-        ),
-        len(lines),
-    )
-    section = lines[unreleased + 1 : end]
-    if bullet in section:
+    # Only lines outside fences count: a fenced example holding "### Changed"
+    # or the bullet itself must neither receive the promise nor suppress it.
+    visible = [(i, line) for i, line, f in scan(lines) if not f and i > unreleased]
+    end = next((i for i, line in visible if line.startswith("## ")), len(lines))
+    section = [(i, line) for i, line in visible if i < end]
+    if any(line == bullet for _, line in section):
         return lines
-    changed = next(
-        (
-            unreleased + 1 + k
-            for k, line in enumerate(section)
-            if line.strip() == "### Changed"
-        ),
-        None,
-    )
+    changed = next((i for i, line in section if line.strip() == "### Changed"), None)
     if changed is not None:
         # first line after the subsection heading and its blank line
         at = changed + 1

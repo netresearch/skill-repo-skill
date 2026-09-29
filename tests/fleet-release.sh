@@ -333,6 +333,12 @@ check "plan: STABILIZE from a repo already >=1.0 refused" no \
 printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"","default":"main","last":"0.9.3"}' > "$PLAN"
 check "plan: STABILIZE needs its version filled" no \
     "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"1.0.0","default":"main","last":""}' > "$PLAN"
+check "plan: STABILIZE without a surveyed version refused (no evidence of 0.x)" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
+printf '%s\n' '{"repo":"s","classification":"STABILIZE","version":"1.0.0-rc.1","default":"main","last":"0.9.3"}' > "$PLAN"
+check "plan: STABILIZE to a prerelease refused (not a stable release)" no \
+    "$( (fr_plan_validate "$PLAN" > /dev/null 2>&1) && echo yes || echo no)"
 check "stabilize entry states the major-version promise" yes \
     "$(grep -q 'only in a new major version' <<< "$FR_STABILIZE_ENTRY" && echo yes || echo no)"
 
