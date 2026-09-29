@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # fleet-release-github.sh — fleet release driver for the PUBLIC GitHub skill
 # repos (github.com/<org>, default netresearch).
@@ -51,7 +53,7 @@ FR_DRIVER="$0"
 FR_ORG="${FR_ORG:-netresearch}"
 
 usage() {
-    sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
+    grep -v '^# SPDX-' "$0" | sed -n '2,32p' | sed 's/^# \{0,1\}//'
     exit "${1:-1}"
 }
 

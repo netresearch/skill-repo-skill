@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # validate-evals.sh - Structural validation of evals.json files
 # Supports three formats:
 #   Unified (recommended): {"skill_name": "...", "evals": [{id, eval_name, prompt,

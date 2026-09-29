@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 name: A/B Evals (reusable)
 
 # Hosted reusable that runs the A/B eval sweep (issue #146): runs

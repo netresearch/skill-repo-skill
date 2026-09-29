@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 # Python tests and an optional Bandit scan for skill repos that ship Python.
 #
 # Scope: Python only. Shell linting is NOT here -- validate.yml already runs

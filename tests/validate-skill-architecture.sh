@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Regression test: validate-skill.sh enforces the Agent Skills budgets and the
 # flat-discovery rule.
 #

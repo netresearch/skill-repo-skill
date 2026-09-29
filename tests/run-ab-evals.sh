@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/run-ab-evals.sh — the two things run-ab-evals.sh reports beyond a pass
 # rate:
 #

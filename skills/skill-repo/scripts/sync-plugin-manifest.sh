@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # sync-plugin-manifest.sh — project the portable Agent Plugins manifest
 # (./plugin.json) into the Claude Code manifest (.claude-plugin/plugin.json).
@@ -35,7 +37,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     --repo=*) REPO_DIR="${1#--repo=}"; shift ;;
     -h|--help)
-      grep -E '^#' "$0" | sed -e '1d' -e 's/^# \{0,1\}//'
+      grep -E '^#' "$0" | grep -v '^# SPDX-' | sed -e '1d' -e 's/^# \{0,1\}//'
       exit 0
       ;;
     *) echo "ERROR: unknown argument: $1" >&2; exit 1 ;;

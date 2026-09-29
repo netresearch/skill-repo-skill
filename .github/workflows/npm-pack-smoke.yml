@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 # Reusable workflow: asserts `npm pack` produces a clean, complete tarball.
 #
 # Two checks:

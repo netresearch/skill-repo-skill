@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # audit-skills.sh - Per-skill content quality audit for Claude Code skill directories
 # Usage: ./audit-skills.sh [--help] [--json] [DIR ...]
 #

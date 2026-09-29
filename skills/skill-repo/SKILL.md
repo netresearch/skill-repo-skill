@@ -1,4 +1,6 @@
 ---
+# SPDX-License-Identifier: CC-BY-SA-4.0
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 name: skill-repo
 description: "Use when creating skill repositories, standardizing or validating skill repo structure, setting up composer/release workflows, configuring split licensing (MIT + CC-BY-SA-4.0), fixing plugin.json / SKILL.md validation or version-parity errors, or releasing a skill version (version bump, tagging)."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"

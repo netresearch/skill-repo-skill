@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/validate-evals.sh — exercises scripts/validate-evals.sh against the
 # three eval formats it claims to support.
 #

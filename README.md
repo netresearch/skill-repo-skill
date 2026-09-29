@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Skill Repository Structure Guide
 
 A Claude Code skill for standardizing Netresearch skill repository layout, distribution channels, packaging, and validation.

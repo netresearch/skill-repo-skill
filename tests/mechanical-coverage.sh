@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/mechanical-coverage.sh — the two checks that make a skill's executable
 # surface visible to CI:
 #

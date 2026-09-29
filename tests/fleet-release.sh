@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/fleet-release.sh — exercises the fleet-release driver set:
 #   skills/skill-repo/scripts/fleet-release-common.sh   (shared engine)
 #   skills/skill-repo/scripts/fleet-release-github.sh   (public GitHub driver)

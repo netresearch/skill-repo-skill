@@ -1,10 +1,12 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # migrate-licensing.sh - Migrate a skill repo from single LICENSE to split licensing
 # Usage: ./migrate-licensing.sh [<repo-root-path>]
 #        ./migrate-licensing.sh --help
 set -euo pipefail
 
-usage() { sed -n '2,4p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { grep -v '^# SPDX-' "$0" | sed -n '2,4p' | sed 's/^# \{0,1\}//'; }
 
 case "${1:-}" in
     -h|--help) usage; exit 0 ;;

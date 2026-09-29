@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Plugin Hooks
 
 A skill repository can ship Claude Code hooks in `hooks/hooks.json`. A hook

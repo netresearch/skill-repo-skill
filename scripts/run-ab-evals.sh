@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # run-ab-evals.sh - A/B test evals WITHOUT vs WITH skill context
 # Usage: ./scripts/run-ab-evals.sh [--no-llm] [--samples=N]
 #            [--min-evidence-ratio=P] [--require-delta] [concurrency]

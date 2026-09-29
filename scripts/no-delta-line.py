@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Print one markdown bullet naming a skill's evals that carry no delta.
 
 Reads an ab-results.json (as written by run-ab-evals.sh) and prints nothing at

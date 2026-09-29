@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/validate-skill.sh — smoke tests for the description-scalar parsing in
 # skills/skill-repo/scripts/validate-skill.sh (regression cover for issue #119:
 # single-quoted and block scalars were wrongly rejected).

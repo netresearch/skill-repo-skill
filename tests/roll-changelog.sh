@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/roll-changelog.sh — exercises skills/skill-repo/scripts/roll-changelog.py.
 #
 # The five released-heading shapes documented in release-discipline.md each get

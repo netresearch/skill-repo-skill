@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/portable-manifest.sh — cover the Agent Plugins 1.0.0 portable manifest:
 #   * validate-skill.sh verdicts for ./plugin.json (schema, name, closed field
 #     set, parity with .claude-plugin/plugin.json, skills/ discoverability)

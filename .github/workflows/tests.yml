@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 name: Skill Tests
 
 # Runs a skill repo's own test suite. Skill repos ship executable surface —

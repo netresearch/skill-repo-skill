@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # README structure for Netresearch skill repositories
 
 Human-facing documentation for a skill repo. **Marketplace** pages may summarize this content but must not become the only place where these facts exist.
