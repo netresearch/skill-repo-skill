@@ -3,7 +3,13 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # run-ab-evals.sh - A/B test evals WITHOUT vs WITH skill context
 # Usage: ./scripts/run-ab-evals.sh [--no-llm] [--samples=N]
-#            [--min-evidence-ratio=P] [--require-delta] [concurrency]
+#            [--min-evidence-ratio=P] [--require-delta]
+#            [--evals=FILE] [--skill=FILE] [concurrency]
+#        ./scripts/run-ab-evals.sh --help
+# Every run calls the claude CLI (a paid model call per arm and sample); an
+# unknown option exits 2 before any call.
+# --evals=FILE, --skill=FILE: the evals.json and SKILL.md to measure (default:
+#   this repository's skills/skill-repo files)
 # Default concurrency: 4 (parallel eval pairs)
 # --no-llm: Skip LLM-based grading of expectations (regex assertions only)
 # --samples=N: completions per arm (default 1). Every per-assertion verdict is
@@ -45,8 +51,10 @@ MIN_EVIDENCE_RATIO=""
 CONCURRENCY=4
 EVALS_FILE=""
 SKILL_FILE=""
+usage() { grep -v '^# SPDX-' "$0" | sed -n '2,/^$/p' | sed -e '/^$/d' -e 's/^# \{0,1\}//'; }
 for arg in "$@"; do
     case "$arg" in
+        -h|--help) usage; exit 0 ;;
         --no-llm) NO_LLM=true ;;
         --require-delta) REQUIRE_DELTA=true ;;
         --samples=*) SAMPLES="${arg#--samples=}" ;;
@@ -54,6 +62,9 @@ for arg in "$@"; do
         --evals=*) EVALS_FILE="${arg#--evals=}" ;;
         --skill=*) SKILL_FILE="${arg#--skill=}" ;;
         [0-9]*) CONCURRENCY="$arg" ;;
+        # An unrecognised argument used to be ignored, so `--help` or a typo
+        # such as `--no-lmm` started a full run of paid model calls.
+        *) echo "unknown argument: $arg" >&2; usage >&2; exit 2 ;;
     esac
 done
 

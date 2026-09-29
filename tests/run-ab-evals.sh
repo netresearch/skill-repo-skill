@@ -329,6 +329,23 @@ check "the ratio gate fails when nothing could be measured" 1 "$?"
 run_runner mixed.json --no-llm --min-evidence-ratio=abc >/dev/null 2>&1
 check "a non-numeric floor is rejected before any model call" 2 "$?"
 
+# --- Help and unknown arguments start no run ---------------------------------
+# An unrecognised argument used to be ignored, so `--help` started a full run
+# of paid model calls. Both must exit before the first call.
+calls_before=$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)
+rm -rf "$WORK/repo/scripts/ab-results"
+out=$(run_runner mixed.json --help)
+rc=$?
+check "--help exits 0" 0 "$rc"
+contains "--help prints the usage line" "Usage: ./scripts/run-ab-evals.sh" "$out"
+check "--help prints no SPDX notice" no "$(grep -qF 'SPDX-' <<<"$out" && echo yes || echo no)"
+run_runner mixed.json --no-lmm >/dev/null 2>&1
+check "an unknown argument exits 2" 2 "$?"
+check "neither calls the model" "$calls_before" \
+    "$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)"
+check "neither writes results" no \
+    "$([[ -e "$WORK/repo/scripts/ab-results" ]] && echo yes || echo no)"
+
 echo ""
 if [ "$fail" -eq 0 ]; then
     echo "All run-ab-evals tests passed"
