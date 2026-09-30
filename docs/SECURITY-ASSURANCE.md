@@ -55,7 +55,7 @@ The scripts have no network listener and store no credentials. Only the fleet dr
 
 ## Secure design principles applied
 
-- **Least privilege:** every workflow except two either sets `permissions: {}` at the top and grants per job, or grants `contents: read`. The exceptions: `release.yml` grants `contents: write` at the top, and `pr-quality.yml` has no top-level block and grants its one job `pull-requests: write`. Write permissions appear only in jobs that publish something: `release.yml` (`contents: write`, `id-token: write`, `attestations: write`), `ab-evals-schedule.yml` (a results pull request), `pr-quality.yml`, the auto-merge and labeler callers, and `security-events: write` for the scans that upload results (`security.yml`, `scorecard.yml`).
+- **Least privilege:** every workflow except `release.yml` either sets `permissions: {}` at the top and grants per job, or grants `contents: read`. The exception: `release.yml` grants `contents: write` at the top. Write permissions appear only in jobs that publish something: `release.yml` (`contents: write`, `id-token: write`, `attestations: write`), `ab-evals-schedule.yml` (a results pull request), `pr-quality.yml`, the auto-merge and labeler callers, and `security-events: write` for the scans that upload results (`security.yml`, `scorecard.yml`).
 - **Fail-safe defaults:** `bump-version.sh` previews unless told to apply; the fleet driver refuses the whole phase when one plan row is invalid.
 - **Separation of data and code:** the check scripts hand data to Python as arguments or environment, not as source text.
 - **Economy of mechanism:** the scripts need Bash, Python's standard library, `git` and `jq`; PyYAML is optional in `validate-skill.sh`, which falls back to a standard-library parser.
