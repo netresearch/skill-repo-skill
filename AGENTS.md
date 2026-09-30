@@ -61,7 +61,7 @@ Copyright entity: `Netresearch DTT GmbH`
 - Optional fields allowed by `validate-skill.sh` when needed: `license`, `compatibility`, `metadata`, `allowed-tools` (Agent Skills–compatible)
 - `name`: lowercase, hyphens only, max 64 characters
 - `description`: must start with `"Use when"`
-- Body: max 500 words (use `references/` for extended content)
+- Body: at most 500 lines, frontmatter not counted — `validate-skill.sh` errors above 500 and warns above 300 (use `references/` for extended content). Checkpoint SR-21 in `skills/skill-repo/checkpoints.yaml` separately caps the whole file at 500 words
 
 ### Versioning and Releases
 
@@ -141,7 +141,7 @@ jobs:
 
 `validate-skill.sh` checks:
 
-- SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, word count
+- SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, body line count (error above 500 lines, warning above 300)
 - Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`
 - No stale `LICENSE` file alongside `LICENSE-MIT`
 - A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)

@@ -2,7 +2,7 @@
 # validate-skill.sh - Validate Netresearch skill repository structure
 # Usage: ./validate-skill.sh [repo-root-path]
 #
-# Checks: SKILL.md frontmatter, word count, composer.json, plugin.json,
+# Checks: SKILL.md frontmatter, body line count, composer.json, plugin.json,
 #          cross-file consistency, required files
 # Env:    STRICT_README=1 (also true/yes, case-insensitive) promotes README heading misses from warnings to errors
 # Exit: 0 = valid, 1 = errors found

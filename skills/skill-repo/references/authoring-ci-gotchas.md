@@ -24,8 +24,9 @@ Each item is a habit that prevents a costly redo, not a structural rule.
 
 ## 1. Word-budget-first authoring
 
-This repo enforces a **hard 500-word cap on `SKILL.md`** (`scripts/validate-skill.sh`
-fails above 500; this repo's SKILL.md sits at ~495). The body also persists in context
+Checkpoint SR-21 (`checkpoints.yaml`) caps `SKILL.md` at **500 words**, counted over
+the whole file including the frontmatter; `scripts/validate-skill.sh` measures the body
+in lines instead (error above 500, warning above 300). The body also persists in context
 for the whole session, so every word is paid on each invocation — see
 [`skill-quality.md`](skill-quality.md) for the full cost model.
 
