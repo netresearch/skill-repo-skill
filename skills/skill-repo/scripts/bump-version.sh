@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # bump-version.sh — set the release version on every surface check-version-parity
 # validates, and nothing else.

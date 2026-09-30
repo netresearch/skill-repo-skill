@@ -1,4 +1,6 @@
 # shellcheck shell=bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # fleet-release-common.sh — shared engine for the fleet-release drivers.
 #
 # Sourced by a host driver (fleet-release-github.sh here; a private-host fleet

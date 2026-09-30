@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/validate-skill.sh — smoke tests for the description-scalar parsing in
 # skills/skill-repo/scripts/validate-skill.sh (regression cover for issue #119:
 # single-quoted and block scalars were wrongly rejected).
@@ -398,6 +400,47 @@ release_case github_missing - no expect-present \
     "release.yml not found" "a GitHub repo without release.yml is still an error"
 release_case github_present - yes expect-present \
     "release.yml exists" "a GitHub repo with release.yml passes"
+
+echo "----------------------------------------"
+echo "Script test lookup"
+echo "----------------------------------------"
+# A repository may keep its tests next to the scripts, under
+# skills/<name>/scripts/tests/ (github-release-skill does). The lookup used to
+# read only a root tests/ directory, so every such script was reported as
+# untested although a test named it.
+
+# script_test_case <name> <test-location: root|beside|none> <expect-present|expect-absent> <pattern> <label>
+script_test_case() {
+    local name="$1" where="$2" want="$3" pat="$4" label="$5" dir out
+    dir="$TMP/st_$name"
+    rm -rf "$dir"; mkdir -p "$dir/skills/d/scripts"
+    printf '%b' "${hdr}description: Use when doing X\n---\n# D\n" > "$dir/skills/d/SKILL.md"
+    printf '#!/usr/bin/env bash\necho hi\n' > "$dir/skills/d/scripts/x.sh"
+    case "$where" in
+        root)   mkdir -p "$dir/tests"; printf 'bash skills/d/scripts/x.sh\n' > "$dir/tests/x.sh" ;;
+        beside) mkdir -p "$dir/skills/d/scripts/tests"; printf 'bash ../x.sh\n' > "$dir/skills/d/scripts/tests/x.test.sh" ;;
+        none)   ;;
+    esac
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+
+script_test_case beside beside expect-absent \
+    "no test references these script(s)" "a test under skills/*/scripts/tests/ counts"
+script_test_case beside_ok beside expect-present \
+    "is referenced by a test" "a script tested beside itself is reported as tested"
+script_test_case root root expect-absent \
+    "no test references these script(s)" "a test under tests/ still counts"
+script_test_case none none expect-present \
+    "no test references these script(s): x.sh" "a script no test names still warns"
 
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"

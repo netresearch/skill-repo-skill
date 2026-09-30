@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Reviewer-Reply Boilerplate
 
 Canonical responses to recurring reviewer comments on Netresearch skill PRs (Copilot, Gemini Code Assist, peer review). Lift the fenced block verbatim or paraphrase to context. Each entry includes the criteria for whether to accept or decline.

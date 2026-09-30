@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Regression tests for the Renovate customManager in renovate.json.
 
 The manager pins ad-hoc tool versions in .github/workflows (`uvx ruff@0.16.0`,

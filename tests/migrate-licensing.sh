@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/migrate-licensing.sh — exercises scripts/migrate-licensing.sh, which
 # rewrites a repo's licensing in place (creates the split files, deletes the
 # bare LICENSE, rewrites the README's License section).

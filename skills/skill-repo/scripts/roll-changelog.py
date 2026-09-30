@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """roll-changelog.py — move the [Unreleased] section of a CHANGELOG.md under a
 new released heading, reproducing the repo's own heading shape.
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Regression test for scripts/audit-skills.sh get_description().
 # Guards issue #160: exit-in-a-rule used to trigger the END block, printing
 # the description twice and inflating the reported char count ~2x.

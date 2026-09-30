@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # pre-commit hook: validate skill repo structure
 # Installed via: git config core.hooksPath Build/hooks
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # Every release archive must unpack into ONE top-level folder.
 #
 # `zip -qr ... .` from a staging directory that WAS the content root put SKILL.md

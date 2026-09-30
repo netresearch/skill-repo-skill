@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 # Default repo list for fleet-release-github.sh survey (--repos/--repos-file
 # override it). One repo per line, org-relative; '#' and blank lines ignored.
 #

@@ -1,7 +1,18 @@
+<!-- SPDX-License-Identifier: CC-BY-SA-4.0 -->
+<!-- SPDX-FileCopyrightText: Netresearch DTT GmbH -->
+
 # Skill Discovery Metadata (repository scope)
 
 Defines **skill-repo-local** discovery and classification data.\
 **Does not** replace the marketplace catalog — the marketplace aggregates and may normalize display. Governance for marketplace listings is in **`netresearch/claude-code-marketplace`/`AGENTS.md`**.
+
+## Contents
+
+- Where metadata lives
+- Recommended discovery YAML (optional file)
+- Action level
+- Risk level
+- Sync with marketplace
 
 ---
 

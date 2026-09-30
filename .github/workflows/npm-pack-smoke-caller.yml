@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
 # Dogfood caller: runs the org-reusable npm-pack-smoke workflow against
 # this repo's own tarball on every PR and main push. If this repo's
 # package.json `files` allowlist drifts (leaks repo-maintenance, or omits

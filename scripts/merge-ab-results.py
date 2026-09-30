@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 """Merge one run-ab-evals.sh ab-results.json into the dashboard data file.
 
 Updates (or inserts) the entry for a single skill in

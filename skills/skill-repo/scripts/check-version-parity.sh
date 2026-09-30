@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 #
 # check-version-parity.sh — verify plugin.json, composer.json, and SKILL.md
 # versions are consistent before a release.
@@ -41,7 +43,7 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     -h|--help)
-      sed -n '3,16p' "$0" | sed 's/^# \{0,1\}//'
+      grep -v '^# SPDX-' "$0" | sed -n '3,16p' | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *)
