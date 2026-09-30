@@ -34,6 +34,10 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No step talks to the remote (git ls-files is local); the token in
+          # .git/config would only be exposed to later steps.
+          persist-credentials: false
 
       - name: Checkout validation tools
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,6 +45,7 @@ jobs:
           repository: netresearch/skill-repo-skill
           ref: main
           path: .skill-repo-tools
+          persist-credentials: false
           sparse-checkout: skills/skill-repo/scripts/
           sparse-checkout-cone-mode: false
 

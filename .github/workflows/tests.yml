@@ -14,15 +14,21 @@ on:
   workflow_call:
     inputs:
       shell_glob:
-        description: "Glob for shell test files, relative to the repo root."
+        description: >-
+          Glob(s) for shell test files, relative to the repo root; several
+          globs are separated by spaces. The default covers the root tests/
+          directory and tests kept next to the scripts they exercise, under
+          skills/*/scripts/tests/.
         required: false
         type: string
-        default: "tests/**/*.sh"
+        default: "tests/**/*.sh skills/*/scripts/tests/**/*.sh"
       python_glob:
-        description: "Glob for Python test files, relative to the repo root."
+        description: >-
+          Glob(s) for Python test files, relative to the repo root; several
+          globs are separated by spaces. Same two locations as shell_glob.
         required: false
         type: string
-        default: "tests/**/*.py"
+        default: "tests/**/*.py skills/*/scripts/tests/**/*.py"
       php_glob:
         description: >-
           Glob for PHP test entrypoints, relative to the repo root. Every match
@@ -39,8 +45,8 @@ on:
         default: "8.3"
       require_tests:
         description: >-
-          Fail when the repo ships scripts under skills/*/scripts/ but matches
-          no test files. Default false: a repo without tests only gets a
+          Fail when the repo ships scripts (under skills/*/scripts/, a root
+          scripts/ directory or skills/*/checker/) but matches no test files. Default false: a repo without tests only gets a
           warning, so adopting this workflow never breaks a repo on day one.
         required: false
         type: boolean
@@ -68,6 +74,31 @@ jobs:
           # Nothing here talks to the remote; leaving the token in .git/config
           # only exposes it to later steps and artifacts.
           persist-credentials: false
+
+      # Counted here, before any test runs: a test leg can leave by-products
+      # next to the scripts (__pycache__/, coverage data, scratch files), and a
+      # count taken after the legs reported those as shipped code. A shipped
+      # script is a regular file directly under skills/*/scripts/, under a
+      # root scripts/ directory (which release.yml packs into the plugin
+      # archive) or under skills/*/checker/, that one of the legs below could
+      # exercise: it ends in .sh, .bash, .py or .php, or it is executable.
+      # Directories (tests/, __pycache__/) and data files (JSON, Markdown,
+      # fixtures) are not scripts.
+      - name: Count shipped scripts
+        id: shipped
+        run: |
+          shopt -s nullglob
+          count=0
+          for f in skills/*/scripts/* scripts/* skills/*/checker/*; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.sh | *.bash | *.py | *.php) ;;
+              *) [ -x "$f" ] || continue ;;
+            esac
+            count=$((count + 1))
+          done
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "shipped scripts: $count"
 
       # PHP first: the toolchain and dependencies are installed before any leg
       # runs, so a shell test that shells out to php finds them too. A shell
@@ -175,20 +206,20 @@ jobs:
       - name: Report coverage of shipped scripts
         if: always()
         env:
+          SHIPPED_COUNT: ${{ steps.shipped.outputs.count }}
           SHELL_COUNT: ${{ steps.shell.outputs.count }}
           PYTHON_COUNT: ${{ steps.python.outputs.count }}
           PHP_COUNT: ${{ steps.detect_php.outputs.count }}
           REQUIRE_TESTS: ${{ inputs.require_tests }}
         run: |
-          shopt -s nullglob globstar
-          scripts=(skills/*/scripts/*)
           # Defaulted because `if: always()` can reach this step while an
           # earlier one never wrote its `count=`. Bash reads an empty variable
           # as 0 here, so this is explicitness, not a crash guard.
+          shipped=${SHIPPED_COUNT:-0}
           total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} + ${PHP_COUNT:-0} ))
-          echo "shipped scripts: ${#scripts[@]} | test files run: $total"
-          if [ ${#scripts[@]} -gt 0 ] && [ "$total" -eq 0 ]; then
-            msg="repo ships ${#scripts[@]} script(s) under skills/*/scripts/ but no test file was run"
+          echo "shipped scripts: $shipped | test files run: $total"
+          if [ "$shipped" -gt 0 ] && [ "$total" -eq 0 ]; then
+            msg="repo ships $shipped script(s) under skills/*/scripts/, scripts/ or skills/*/checker/ but no test file was run"
             if [ "$REQUIRE_TESTS" = "true" ]; then
               echo "::error::$msg"
               exit 1

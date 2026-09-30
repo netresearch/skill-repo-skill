@@ -27,7 +27,11 @@ jobs:
         with:
           egress-policy: audit
 
-      - name: Checkout repository
+      # Keeps the persisted token on purpose: "Resolve the base copy of
+      # evals.json" runs `git fetch origin "$BASE_SHA"`, which needs it in a
+      # private caller. Without it that fetch fails into the ::notice branch
+      # and silently switches the samples requirement off.
+      - name: Checkout repository # zizmor: ignore[artipacked]
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Checkout validation tools
@@ -36,6 +40,7 @@ jobs:
           repository: netresearch/skill-repo-skill
           ref: main
           path: .skill-repo-tools
+          persist-credentials: false
           sparse-checkout: skills/skill-repo/scripts/
           sparse-checkout-cone-mode: false
 

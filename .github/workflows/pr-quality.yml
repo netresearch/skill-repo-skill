@@ -30,6 +30,9 @@ name: PR Quality Gates (reusable)
 on:
     workflow_call:
 
+# Nothing by default; the job below grants itself the one scope it uses.
+permissions: {}
+
 jobs:
     auto-approve:
         name: Auto-approve (collaborators)

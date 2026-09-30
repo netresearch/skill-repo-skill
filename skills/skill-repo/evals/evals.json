@@ -237,7 +237,7 @@
   },
   {
     "name": "skillmd_word_limit",
-    "prompt": "What is the word limit for SKILL.md, how is it counted, and where does the rest of the content go?",
+    "prompt": "What size limits apply to SKILL.md, how is each one counted, and where does the rest of the content go?",
     "assertions": [
       {
         "type": "content_regex",
@@ -251,20 +251,42 @@
       },
       {
         "type": "content_regex",
-        "value": "(?i)(whole file|entire file|including|frontmatter)",
-        "description": "Knows the count covers the whole file including frontmatter, which is what makes an added table row overflow it"
+        "value": "(?i)validate-skill",
+        "description": "Names the validator that enforces the body limit, rather than describing it as a guideline"
       },
       {
         "type": "content_regex",
-        "value": "(?i)(validate-skill|audit-skills)",
-        "description": "Names the script that enforces it, rather than describing it as a guideline"
+        "value": "(?i)500 lines",
+        "description": "Knows validate-skill.sh counts body lines and errors above 500 lines, not words"
+      },
+      {
+        "type": "content_regex",
+        "value": "\\b300\\b",
+        "description": "Knows validate-skill.sh warns above 300 lines"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)lines[^.]*(frontmatter|front matter)[^.]*(excluded|not counted)|lines[^.]*(excluding|without)[^.]*(frontmatter|front matter)|(excluding|without)[^.]*(frontmatter|front matter)[^.]*lines",
+        "description": "Knows the frontmatter is excluded from the validator's line count, in the same sentence as the lines"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(whole|entire) file|(frontmatter|front matter) included|including (the )?(frontmatter|front matter)[^.]*words|words[^.]*including (the )?(frontmatter|front matter)",
+        "description": "Knows the SR-21 word count covers the whole file, frontmatter included"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(SR-21|wc -w)",
+        "description": "Knows the 500-word cap is checkpoint SR-21 (wc -w over the whole file), separate from the validator"
       }
     ],
     "samples": {
-      "passing": "500 words, counted by validate-skill.sh over the whole file including the frontmatter — which is why adding one references-table row can push a passing SKILL.md over. Extended content goes to references/*.md, and every reference must be reachable from SKILL.md or audit-skills.sh reports it as an orphan.",
+      "passing": "validate-skill.sh counts the body of SKILL.md in lines, frontmatter excluded: it errors above 500 lines and warns above 300. Separately, checkpoint SR-21 in checkpoints.yaml runs wc -w over the whole file, frontmatter included, and caps it at 500 words. Extended content goes to references/*.md, and every reference must be reachable from SKILL.md or audit-skills.sh reports it as an orphan.",
       "failing": [
+        "500 words, counted by validate-skill.sh over the whole file including the frontmatter — which is why adding one references-table row can push a passing SKILL.md over. Extended content goes to references/*.md.",
         "Keep SKILL.md under 500 words of body text and move anything longer into references/.",
-        "There is no hard limit, but shorter is better — aim for a page or two."
+        "There is no hard limit, but shorter is better — aim for a page or two.",
+        "validate-skill.sh limits SKILL.md to 500 lines including frontmatter. SR-21 limits the body to 500 words excluding frontmatter. Move overflow to references/."
       ]
     }
   },

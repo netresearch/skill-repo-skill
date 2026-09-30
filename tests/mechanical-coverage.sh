@@ -103,6 +103,19 @@ check "a referencing test clears the script" 1 \
     "$(grep -c 'OK:.*every script under skills/demo/scripts is referenced by a test' <<<"$out")"
 check "no untested-script warning remains" 0 "$(grep -c 'no test references' <<<"$out")"
 
+# --- 2b. a test kept next to the scripts clears it too -----------------------
+# github-release-skill keeps its tests in skills/<name>/scripts/tests/ and has
+# no root tests/ directory; the tests.yml reusable runs both locations, so the
+# validator must not warn that nothing references the script.
+repo=$(new_repo tested-near)
+rm -rf "$repo/tests"
+mkdir -p "$repo/skills/demo/scripts/tests"
+printf '#!/usr/bin/env bash\n# exercises demo-tool.sh\n' > "$repo/skills/demo/scripts/tests/demo-tool.test.sh"
+out=$(verdicts "$repo")
+check "a test under skills/*/scripts/tests/ clears the script" 1 \
+    "$(grep -c 'OK:.*every script under skills/demo/scripts is referenced by a test' <<<"$out")"
+check "no untested-script warning with skill-local tests" 0 "$(grep -c 'no test references' <<<"$out")"
+
 # --- 3. a runnable command inside an llm_review ----------------------------
 repo=$(new_repo misclassified)
 printf '#!/usr/bin/env bash\n# exercises demo-tool.sh\n' > "$repo/tests/demo.sh"
