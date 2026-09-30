@@ -256,13 +256,23 @@
       },
       {
         "type": "content_regex",
-        "value": "(?i)lines",
-        "description": "Knows validate-skill.sh counts body lines (error above 500, warning above 300), not words"
+        "value": "(?i)500 lines",
+        "description": "Knows validate-skill.sh counts body lines and errors above 500 lines, not words"
       },
       {
         "type": "content_regex",
-        "value": "(?i)(frontmatter|front matter)",
-        "description": "Knows where the frontmatter counts: excluded from the validator's line count, included in the SR-21 word count"
+        "value": "\\b300\\b",
+        "description": "Knows validate-skill.sh warns above 300 lines"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)lines[^.]*(frontmatter|front matter)[^.]*(excluded|not counted)|lines[^.]*(excluding|without)[^.]*(frontmatter|front matter)|(excluding|without)[^.]*(frontmatter|front matter)[^.]*lines",
+        "description": "Knows the frontmatter is excluded from the validator's line count, in the same sentence as the lines"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(whole|entire) file|(frontmatter|front matter) included|including (the )?(frontmatter|front matter)[^.]*words|words[^.]*including (the )?(frontmatter|front matter)",
+        "description": "Knows the SR-21 word count covers the whole file, frontmatter included"
       },
       {
         "type": "content_regex",
@@ -275,7 +285,8 @@
       "failing": [
         "500 words, counted by validate-skill.sh over the whole file including the frontmatter — which is why adding one references-table row can push a passing SKILL.md over. Extended content goes to references/*.md.",
         "Keep SKILL.md under 500 words of body text and move anything longer into references/.",
-        "There is no hard limit, but shorter is better — aim for a page or two."
+        "There is no hard limit, but shorter is better — aim for a page or two.",
+        "validate-skill.sh limits SKILL.md to 500 lines including frontmatter. SR-21 limits the body to 500 words excluding frontmatter. Move overflow to references/."
       ]
     }
   },
