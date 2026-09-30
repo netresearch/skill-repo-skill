@@ -51,6 +51,26 @@ for i in range(start + 1, len(lines)):
 PY
 }
 
+# input_default <input name> — prints the workflow_call input's default
+input_default() {
+    python3 - "$WORKFLOW" "$1" <<'PY'
+import sys
+
+path, name = sys.argv[1], sys.argv[2]
+lines = open(path).read().splitlines()
+start = next((i for i, l in enumerate(lines) if l.strip() == f"{name}:"), None)
+if start is None:
+    sys.exit(0)
+indent = len(lines[start]) - len(lines[start].lstrip())
+for line in lines[start + 1:]:
+    if line.strip() and len(line) - len(line.lstrip()) <= indent:
+        break
+    if line.strip().startswith("default:"):
+        print(line.split(":", 1)[1].strip().strip('"'))
+        break
+PY
+}
+
 # run_step <step name> <repo dir> [VAR=value ...] — runs the step in <repo dir>
 # with GITHUB_OUTPUT pointed at <repo dir>/.out; prints the step's output
 run_step() {
@@ -93,6 +113,31 @@ report="$(run_step "Report coverage of shipped scripts" "$repo" \
     SHIPPED_COUNT="$(output_of "$repo" count)" SHELL_COUNT=1 PYTHON_COUNT=0 PHP_COUNT=0 REQUIRE_TESTS=false)"
 check "the report names three shipped scripts" 1 "$(grep -c '^shipped scripts: 3 |' <<<"$report")"
 grep -q '^shipped scripts: 3 |' <<<"$report" || echo "       report said: $(grep '^shipped scripts' <<<"$report")"
+
+# --- 2. the default globs find tests next to the scripts ---------------------
+# github-release-skill keeps its tests in skills/github-release/scripts/tests/;
+# a default that looked only under tests/ ran none of them. Each fixture test
+# leaves a marker, so the assertion is on what ran, not on what matched.
+repo="$WORK/discover"
+mkdir -p "$repo/tests" "$repo/skills/a/scripts/tests/nested"
+for rel in tests/root.sh skills/a/scripts/tests/near.sh skills/a/scripts/tests/nested/deep.sh; do
+    printf 'touch "%s.ran"\n' "$rel" > "$repo/$rel"
+done
+for rel in tests/root_test.py skills/a/scripts/tests/near_test.py; do
+    printf 'open("%s.ran", "w").close()\n' "$rel" > "$repo/$rel"
+done
+
+run_step "Shell tests" "$repo" SHELL_GLOB="$(input_default shell_glob)" > "$WORK/shell.log"
+check "the shell leg runs root and skill-local tests" 3 "$(output_of "$repo" count)"
+for rel in tests/root.sh skills/a/scripts/tests/near.sh skills/a/scripts/tests/nested/deep.sh; do
+    check "ran $rel" yes "$([ -f "$repo/$rel.ran" ] && echo yes || echo no)"
+done
+
+run_step "Python tests" "$repo" PYTHON_GLOB="$(input_default python_glob)" > "$WORK/python.log"
+check "the python leg runs root and skill-local tests" 2 "$(output_of "$repo" count)"
+for rel in tests/root_test.py skills/a/scripts/tests/near_test.py; do
+    check "ran $rel" yes "$([ -f "$repo/$rel.ran" ] && echo yes || echo no)"
+done
 
 echo
 if [ "$fail" -eq 0 ]; then

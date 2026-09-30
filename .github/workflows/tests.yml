@@ -14,15 +14,21 @@ on:
   workflow_call:
     inputs:
       shell_glob:
-        description: "Glob for shell test files, relative to the repo root."
+        description: >-
+          Glob(s) for shell test files, relative to the repo root; several
+          globs are separated by spaces. The default covers the root tests/
+          directory and tests kept next to the scripts they exercise, under
+          skills/*/scripts/tests/.
         required: false
         type: string
-        default: "tests/**/*.sh"
+        default: "tests/**/*.sh skills/*/scripts/tests/**/*.sh"
       python_glob:
-        description: "Glob for Python test files, relative to the repo root."
+        description: >-
+          Glob(s) for Python test files, relative to the repo root; several
+          globs are separated by spaces. Same two locations as shell_glob.
         required: false
         type: string
-        default: "tests/**/*.py"
+        default: "tests/**/*.py skills/*/scripts/tests/**/*.py"
       php_glob:
         description: >-
           Glob for PHP test entrypoints, relative to the repo root. Every match
