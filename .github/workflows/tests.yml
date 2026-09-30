@@ -69,6 +69,29 @@ jobs:
           # only exposes it to later steps and artifacts.
           persist-credentials: false
 
+      # Counted here, before any test runs: a test leg can leave by-products
+      # next to the scripts (__pycache__/, coverage data, scratch files), and a
+      # count taken after the legs reported those as shipped code. A shipped
+      # script is a regular file directly under skills/*/scripts/ that one of
+      # the legs below could exercise: it ends in .sh, .bash, .py or .php, or
+      # it is executable. Directories (tests/, __pycache__/) and data files
+      # (JSON, Markdown, fixtures) are not scripts.
+      - name: Count shipped scripts
+        id: shipped
+        run: |
+          shopt -s nullglob
+          count=0
+          for f in skills/*/scripts/*; do
+            [ -f "$f" ] || continue
+            case "$f" in
+              *.sh | *.bash | *.py | *.php) ;;
+              *) [ -x "$f" ] || continue ;;
+            esac
+            count=$((count + 1))
+          done
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "shipped scripts: $count"
+
       # PHP first: the toolchain and dependencies are installed before any leg
       # runs, so a shell test that shells out to php finds them too. A shell
       # wrapper around a PHP suite otherwise reports green while the suite
@@ -175,20 +198,20 @@ jobs:
       - name: Report coverage of shipped scripts
         if: always()
         env:
+          SHIPPED_COUNT: ${{ steps.shipped.outputs.count }}
           SHELL_COUNT: ${{ steps.shell.outputs.count }}
           PYTHON_COUNT: ${{ steps.python.outputs.count }}
           PHP_COUNT: ${{ steps.detect_php.outputs.count }}
           REQUIRE_TESTS: ${{ inputs.require_tests }}
         run: |
-          shopt -s nullglob globstar
-          scripts=(skills/*/scripts/*)
           # Defaulted because `if: always()` can reach this step while an
           # earlier one never wrote its `count=`. Bash reads an empty variable
           # as 0 here, so this is explicitness, not a crash guard.
+          shipped=${SHIPPED_COUNT:-0}
           total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} + ${PHP_COUNT:-0} ))
-          echo "shipped scripts: ${#scripts[@]} | test files run: $total"
-          if [ ${#scripts[@]} -gt 0 ] && [ "$total" -eq 0 ]; then
-            msg="repo ships ${#scripts[@]} script(s) under skills/*/scripts/ but no test file was run"
+          echo "shipped scripts: $shipped | test files run: $total"
+          if [ "$shipped" -gt 0 ] && [ "$total" -eq 0 ]; then
+            msg="repo ships $shipped script(s) under skills/*/scripts/ but no test file was run"
             if [ "$REQUIRE_TESTS" = "true" ]; then
               echo "::error::$msg"
               exit 1
