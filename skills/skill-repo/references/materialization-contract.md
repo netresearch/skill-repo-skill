@@ -320,7 +320,7 @@ For `new-skill` destination, use the templates in `skills/skill-repo/templates/`
 - `LICENSE-MIT.template`, `LICENSE-CC-BY-SA-4.0.template`
 - `README.md.template`
 - `release.yml.template` (GitHub Actions release workflow)
-- `validate.yml.template` (CI caller for the reusable skill-validation workflow — without it the SKILL.md word cap, plugin.json schema, and markdown/yaml/action lints run only in local pre-commit, never in CI)
+- `validate.yml.template` (CI caller for the reusable skill-validation workflow — without it the SKILL.md body line limit, plugin.json schema, and markdown/yaml/action lints run only in local pre-commit, never in CI)
 - `pr-quality.yml.template` (PR validation)
 - `auto-merge-deps.yml.template` (Dependabot/Renovate auto-merge)
 - `pre-commit.template`
