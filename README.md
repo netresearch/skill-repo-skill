@@ -249,7 +249,7 @@ for t in tests/*.py; do python3 "$t" || echo "FAILED: $t"; done
 - `fleet-release.sh`, `roll-changelog.sh`, `migrate-licensing.sh`, `release-archive-layout.sh`: the fleet release driver offline, the changelog roll, the licensing migration on throwaway repositories, and the archive layout `release.yml` builds.
 - `usage-text.sh`, `audit-skills.sh`, `renovate-custom-manager.py`: `--help` output of the shipped scripts, `scripts/audit-skills.sh`, and the Renovate regex manager in `renovate.json`.
 
-Each file prints one `ok`/`FAIL` line per check (or `PASS`/`FAIL`), ends with a summary line, and exits non-zero on any failure. The `FAIL` line names the check that did not hold.
+Each file prints a `FAIL` line naming each check that did not hold, ends with a summary line, and exits non-zero on any failure. Some files also print a line for each passing check (`ok`, `PASS` or `[OK]`).
 
 In CI, every push to `main` and every pull request runs Skill Tests (`tests-caller.yml` calls the local `tests.yml`, which runs `tests/**/*.sh` and `tests/**/*.py`, each in its own log group) and Self-test (`self-test.yml`: the validator and manifest tests, this repository validated with the validator from the pull request, version parity, and the full Skill Validation job at ShellCheck severity `style`).
 
