@@ -102,6 +102,21 @@ check "rejects an assertion pattern that does not compile" 1 "$?"
 check "names the uncompilable eval in the FAIL line" yes \
     "$(grep -qE 'FAIL.*broken_pattern.*(valid|ERE|regex)' <<<"$out" && echo yes || echo no)"
 
+# --- a pattern that starts with a dash is a pattern, not a grep option -------
+# The validator passes patterns after `--`; without it grep reads "--apply" as
+# an option and the eval is reported as an invalid regex.
+suite "$WORK/dash-pattern.json" <<'EOF'
+{ "name": "dash_pattern", "prompt": "Which flag writes the change?",
+  "assertions": [{"type": "content", "pattern": "--apply"},
+                 {"type": "content", "pattern": "(?i)dry run"}],
+  "samples": {
+    "passing": "It is a dry run until you pass --apply.",
+    "failing": ["It writes the change at once."]
+  } }
+EOF
+bash "$SCRIPT" "$WORK/dash-pattern.json" >/dev/null 2>&1
+check "accepts a pattern that starts with a dash" 0 "$?"
+
 # --- samples: the self-check that tells a discriminating eval from a vacuous one
 suite "$WORK/samples-good.json" <<'EOF'
 { "name": "discriminating",
