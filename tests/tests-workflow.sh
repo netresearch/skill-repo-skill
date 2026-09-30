@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/tests-workflow.sh — the shell steps of the tests.yml reusable, run
 # against fixture repositories.
 #
