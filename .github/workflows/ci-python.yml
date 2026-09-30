@@ -223,7 +223,8 @@ jobs:
         # zizmor: ignore[template-injection] -- caller-supplied test command; this reusable
         # workflow runs it verbatim by design. Input comes from the trusted calling repo, not
         # external/untrusted context, and may be a compound command (a && b) so env indirection
-        # would change behaviour.
+        # would change behaviour. Same reason for Opengrep:
+        # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection
         run: ${{ inputs.test-command }}
 
       - name: Upload coverage
