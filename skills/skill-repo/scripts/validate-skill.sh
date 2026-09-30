@@ -461,13 +461,23 @@ PYEOF
     # that ship scripts had no test file at all. Referenced-by-name is a coarse
     # signal on purpose — it costs nothing and catches the "no test whatsoever"
     # case, which is the one that actually occurs.
+    #
+    # Tests live in the root tests/ directory or next to the scripts, under
+    # skills/*/scripts/tests/ (github-release-skill) -- the two places the
+    # tests.yml reusable runs by default. Looking only at tests/ warned about
+    # every script of a repository that uses the second layout.
     if [[ -d "$skill_dir/scripts" ]]; then
         untested=$(
             shopt -s nullglob
+            test_dirs=()
+            [[ -d "$REPO_DIR/tests" ]] && test_dirs+=("$REPO_DIR/tests")
+            for d in "$REPO_DIR"/skills/*/scripts/tests; do
+                [[ -d "$d" ]] && test_dirs+=("$d")
+            done
             for s in "$skill_dir"/scripts/*; do
                 [[ -f "$s" ]] || continue
                 base="$(basename "$s")"
-                if [[ -d "$REPO_DIR/tests" ]] && grep -rqF -- "$base" "$REPO_DIR/tests" 2>/dev/null; then
+                if [[ ${#test_dirs[@]} -gt 0 ]] && grep -rqF -- "$base" "${test_dirs[@]}" 2>/dev/null; then
                     continue
                 fi
                 printf '%s ' "$base"
@@ -477,7 +487,7 @@ PYEOF
         if [[ -z "$untested" ]]; then
             success "every script under ${skill_dir_rel}/scripts is referenced by a test"
         else
-            warning "no test references these script(s): ${untested} — add a test under tests/ (run by the tests.yml reusable) or the script ships unexercised"
+            warning "no test references these script(s): ${untested} — add a test under tests/ or skills/*/scripts/tests/ (both run by the tests.yml reusable) or the script ships unexercised"
         fi
     fi
 
