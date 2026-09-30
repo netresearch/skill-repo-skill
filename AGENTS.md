@@ -111,49 +111,11 @@ The `release.yml` workflow triggers on `v*` tags, validates that the tag matches
 
 ### Caller Workflow Pattern
 
-Each consuming skill repo needs a thin caller workflow. Example for validation:
-
-```yaml
-# .github/workflows/validate.yml
-name: Validate
-on:
-  push:
-    branches: [main]
-  pull_request:
-jobs:
-  validate:
-    uses: netresearch/skill-repo-skill/.github/workflows/validate.yml@main
-```
-
-Example for auto-merge:
-
-```yaml
-# .github/workflows/auto-merge-deps.yml
-name: Auto-merge dependency PRs
-on:
-  pull_request_target:
-permissions: {}
-jobs:
-  auto-merge:
-    uses: netresearch/.github/.github/workflows/auto-merge-deps.yml@main
-    permissions:
-      contents: write
-      pull-requests: write
-```
+Each consuming skill repo needs a thin caller workflow. Examples for validation and auto-merge: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#caller-workflow-pattern).
 
 ## Validation Script Details
 
-`validate-skill.sh` checks:
-
-- SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, body line count (error above 500 lines, warning above 300)
-- Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`
-- No stale `LICENSE` file alongside `LICENSE-MIT`
-- A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)
-- No `composer.lock` committed
-- `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
-- `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
-- `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`); a **warning** for a static `img.shields.io/badge/version-` badge, which no release step updates (the live form is `img.shields.io/github/v/release/netresearch/<repo>?sort=semver`)
-- `checkpoints.yaml` presence in the skill directory — **warning** only, never fails; suppress by adding a line `Checkpoints: none (justified — <reason>)` to `SKILL.md` or `README.md` for skills that are not suitable per the add-checkpoints skill's suitability criteria (e.g. purely conceptual skills)
+The full list of what `validate-skill.sh` checks, and which findings are warnings: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#what-validate-skillsh-checks).
 
 ## Structure docs drift as a set — update all six together
 
