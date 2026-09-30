@@ -142,6 +142,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ steps.version.outputs.tag }}
+          # Nothing below pushes: the gh api calls and action-gh-release take
+          # GITHUB_TOKEN from their own env, cosign and attest use OIDC.
+          persist-credentials: false
 
       - name: Validate version and build packages
         env:
