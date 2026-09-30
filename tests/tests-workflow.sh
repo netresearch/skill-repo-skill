@@ -72,7 +72,8 @@ PY
 }
 
 # run_step <step name> <repo dir> [VAR=value ...] — runs the step in <repo dir>
-# with GITHUB_OUTPUT pointed at <repo dir>/.out; prints the step's output
+# with GITHUB_OUTPUT pointed at <repo dir>/.out; prints the step's output and
+# a last line `step exit: <status>`
 run_step() {
     local step="$1" dir="$2" body
     shift 2
@@ -82,7 +83,9 @@ run_step() {
         return 0
     fi
     : > "$dir/.out"
-    (cd "$dir" && env GITHUB_OUTPUT="$dir/.out" "$@" bash --noprofile --norc -eo pipefail -c "$body" 2>&1) || true
+    local rc=0
+    (cd "$dir" && env GITHUB_OUTPUT="$dir/.out" "$@" bash --noprofile --norc -eo pipefail -c "$body" 2>&1) || rc=$?
+    echo "step exit: $rc"
 }
 
 output_of() { # output_of <repo dir> <key>
@@ -137,6 +140,24 @@ run_step "Python tests" "$repo" PYTHON_GLOB="$(input_default python_glob)" > "$W
 check "the python leg runs root and skill-local tests" 2 "$(output_of "$repo" count)"
 for rel in tests/root_test.py skills/a/scripts/tests/near_test.py; do
     check "ran $rel" yes "$([ -f "$repo/$rel.ran" ] && echo yes || echo no)"
+done
+
+# --- 3. require_tests covers every place a skill repo ships scripts ---------
+# data-tools-skill ships its scripts in a root scripts/ directory,
+# typo3-site-conformance-skill in skills/<name>/checker/. With no test run,
+# require_tests must fail for both, as it does for skills/*/scripts/.
+for layout in scripts skills/a/checker; do
+    repo="$WORK/require-${layout//\//-}"
+    mkdir -p "$repo/$layout"
+    printf 'print(1)\n' > "$repo/$layout/check.py"
+    run_step "Count shipped scripts" "$repo" > "$WORK/require.log"
+    check "$layout/: counted as a shipped script" 1 "$(output_of "$repo" count)"
+    report="$(run_step "Report coverage of shipped scripts" "$repo" \
+        SHIPPED_COUNT="$(output_of "$repo" count)" SHELL_COUNT=0 PYTHON_COUNT=0 PHP_COUNT=0 REQUIRE_TESTS=true)"
+    check "$layout/: require_tests fails without a test" 1 "$(grep -c '^step exit: 1$' <<<"$report")"
+    report="$(run_step "Report coverage of shipped scripts" "$repo" \
+        SHIPPED_COUNT="$(output_of "$repo" count)" SHELL_COUNT=1 PYTHON_COUNT=0 PHP_COUNT=0 REQUIRE_TESTS=true)"
+    check "$layout/: require_tests passes once a test ran" 1 "$(grep -c '^step exit: 0$' <<<"$report")"
 done
 
 echo

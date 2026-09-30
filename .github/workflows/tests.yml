@@ -45,8 +45,8 @@ on:
         default: "8.3"
       require_tests:
         description: >-
-          Fail when the repo ships scripts under skills/*/scripts/ but matches
-          no test files. Default false: a repo without tests only gets a
+          Fail when the repo ships scripts (under skills/*/scripts/, a root
+          scripts/ directory or skills/*/checker/) but matches no test files. Default false: a repo without tests only gets a
           warning, so adopting this workflow never breaks a repo on day one.
         required: false
         type: boolean
@@ -78,16 +78,18 @@ jobs:
       # Counted here, before any test runs: a test leg can leave by-products
       # next to the scripts (__pycache__/, coverage data, scratch files), and a
       # count taken after the legs reported those as shipped code. A shipped
-      # script is a regular file directly under skills/*/scripts/ that one of
-      # the legs below could exercise: it ends in .sh, .bash, .py or .php, or
-      # it is executable. Directories (tests/, __pycache__/) and data files
-      # (JSON, Markdown, fixtures) are not scripts.
+      # script is a regular file directly under skills/*/scripts/, under a
+      # root scripts/ directory (which release.yml packs into the plugin
+      # archive) or under skills/*/checker/, that one of the legs below could
+      # exercise: it ends in .sh, .bash, .py or .php, or it is executable.
+      # Directories (tests/, __pycache__/) and data files (JSON, Markdown,
+      # fixtures) are not scripts.
       - name: Count shipped scripts
         id: shipped
         run: |
           shopt -s nullglob
           count=0
-          for f in skills/*/scripts/*; do
+          for f in skills/*/scripts/* scripts/* skills/*/checker/*; do
             [ -f "$f" ] || continue
             case "$f" in
               *.sh | *.bash | *.py | *.php) ;;
@@ -217,7 +219,7 @@ jobs:
           total=$(( ${SHELL_COUNT:-0} + ${PYTHON_COUNT:-0} + ${PHP_COUNT:-0} ))
           echo "shipped scripts: $shipped | test files run: $total"
           if [ "$shipped" -gt 0 ] && [ "$total" -eq 0 ]; then
-            msg="repo ships $shipped script(s) under skills/*/scripts/ but no test file was run"
+            msg="repo ships $shipped script(s) under skills/*/scripts/, scripts/ or skills/*/checker/ but no test file was run"
             if [ "$REQUIRE_TESTS" = "true" ]; then
               echo "::error::$msg"
               exit 1
