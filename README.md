@@ -240,8 +240,10 @@ Contributions welcome. Please open PRs for:
 The suite lives in `tests/`: one Bash script per area plus `tests/renovate-custom-manager.py`. It needs Bash 4.3+, Python 3 (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
 
 ```bash
-for t in tests/*.sh; do bash "$t" || echo "FAILED: $t"; done
-for t in tests/*.py; do python3 "$t" || echo "FAILED: $t"; done
+rc=0
+for t in tests/*.sh; do bash "$t" || { echo "FAILED: $t"; rc=1; }; done
+for t in tests/*.py; do python3 "$t" || { echo "FAILED: $t"; rc=1; }; done
+(exit "$rc")
 ```
 
 - `validate-skill.sh`, `validate-skill-architecture.sh`, `portable-manifest.sh`, `mechanical-coverage.sh`: the validator's verdicts (frontmatter parsing on both parser paths, multi-skill discovery, size budgets, dangling paths, `allowed-tools`, README install lines, release path, script-test lookup, `plugin.json`) and `sync-plugin-manifest.sh`, `bump-version.sh`, `check-version-parity.sh`.
@@ -249,7 +251,7 @@ for t in tests/*.py; do python3 "$t" || echo "FAILED: $t"; done
 - `fleet-release.sh`, `roll-changelog.sh`, `migrate-licensing.sh`, `release-archive-layout.sh`: the fleet release driver offline, the changelog roll, the licensing migration on throwaway repositories, and the archive layout `release.yml` builds.
 - `usage-text.sh`, `audit-skills.sh`, `renovate-custom-manager.py`: `--help` output of the shipped scripts, `scripts/audit-skills.sh`, and the Renovate regex manager in `renovate.json`.
 
-Each file prints a `FAIL` line naming each check that did not hold, ends with a summary line, and exits non-zero on any failure. Some files also print a line for each passing check (`ok`, `PASS` or `[OK]`).
+Each file prints a `FAIL` line naming each check that did not hold, ends with a summary line (except `audit-skills.sh`, whose failure output is its `FAIL` lines), and exits non-zero on any failure. The loop above runs every file and returns non-zero if any of them failed. Some files also print a line for each passing check (`ok`, `PASS` or `[OK]`).
 
 In CI, every push to `main` and every pull request runs Skill Tests (`tests-caller.yml` calls the local `tests.yml`, which runs `tests/**/*.sh` and `tests/**/*.py`, each in its own log group) and Self-test (`self-test.yml`: the validator and manifest tests, this repository validated with the validator from the pull request, version parity, and the full Skill Validation job at ShellCheck severity `style`).
 
