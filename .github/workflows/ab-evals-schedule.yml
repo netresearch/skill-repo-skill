@@ -129,14 +129,29 @@ jobs:
           import datetime
           import json
           import os
+          import re
+
+          # Names become directory and file names below and the repo goes
+          # into a clone URL, so both must have the plain shape the catalog
+          # uses; anything else is skipped with a warning.
+          NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+          REPO = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+")
+          CATEGORY = re.compile(r"[A-Za-z0-9 ._-]*")
 
           with open("/tmp/marketplace.json") as f:
               catalog = json.load(f)
-          plugins = sorted(
-              (p["name"], p["source"]["repo"], p.get("category", ""))
-              for p in catalog["plugins"]
-              if isinstance(p.get("source"), dict) and p["source"].get("repo")
-          )
+          plugins = []
+          for p in catalog["plugins"]:
+              if not (isinstance(p.get("source"), dict) and p["source"].get("repo")):
+                  continue
+              name, repo, category = p.get("name"), p["source"]["repo"], p.get("category", "")
+              if not (isinstance(name, str) and NAME.fullmatch(name)
+                      and isinstance(repo, str) and REPO.fullmatch(repo)
+                      and isinstance(category, str) and CATEGORY.fullmatch(category)):
+                  print(f"::warning::skipping catalog entry with an unexpected name, repo or category: {name!r}")
+                  continue
+              plugins.append((name, repo, category))
+          plugins.sort()
           requested = [
               s for s in os.environ.get("INPUT_SKILLS", "").replace(",", " ").split() if s
           ]
@@ -192,6 +207,13 @@ jobs:
             done
             if [[ -z "$skill" ]]; then
               echo "::warning::${name}: evals.json without SKILL.md, skipping"
+              failed+=("$name"); echo "::endgroup::"; continue
+            fi
+            # Both files are read from the clone; a symlink must not point
+            # the run at a file outside it.
+            root="$(realpath -e "$dir")"
+            if [[ "$(realpath -e "$evals")" != "$root"/* || "$(realpath -e "$skill")" != "$root"/* ]]; then
+              echo "::warning::${name}: evals.json or SKILL.md resolves outside the clone, skipping"
               failed+=("$name"); echo "::endgroup::"; continue
             fi
             rm -rf scripts/ab-results
@@ -256,6 +278,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SAMPLES_PER_ARM: ${{ inputs.samples }}
+          # This step holds a write token. Every git call in it ignores hooks
+          # and fsmonitor commands configured in the workspace (environment
+          # config has command-line precedence over .git/config).
+          GIT_CONFIG_COUNT: "2"
+          GIT_CONFIG_KEY_0: core.hooksPath
+          GIT_CONFIG_VALUE_0: /dev/null
+          GIT_CONFIG_KEY_1: core.fsmonitor
+          GIT_CONFIG_VALUE_1: "false"
         run: |
           if git diff --quiet -- docs/dashboard/data/results.json; then
             echo "No changes to dashboard data; skipping PR."
