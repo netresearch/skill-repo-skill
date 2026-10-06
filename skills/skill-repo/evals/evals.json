@@ -276,7 +276,7 @@
       },
       {
         "type": "must_not",
-        "value": "(?i)SR-21[^.]*\\bwords?\\b|\\bwords?\\b[^.]*SR-21",
+        "value": "(?i)SR-21[^.,;]*\\b[0-9]+[ -]words?\\b|\\b[0-9]+[ -]words?\\b[^.,;]*SR-21",
         "description": "Does not tie checkpoint SR-21 to a word count"
       }
     ],

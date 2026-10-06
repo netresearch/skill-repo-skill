@@ -142,7 +142,8 @@ jobs:
               catalog = json.load(f)
           plugins = []
           for p in catalog["plugins"]:
-              if not (isinstance(p.get("source"), dict) and p["source"].get("repo")):
+              if not (isinstance(p, dict) and isinstance(p.get("source"), dict)
+                      and p["source"].get("repo")):
                   continue
               name, repo, category = p.get("name"), p["source"]["repo"], p.get("category", "")
               if not (isinstance(name, str) and NAME.fullmatch(name)
