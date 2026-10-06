@@ -159,16 +159,19 @@ mechanical:
   # SKILL.md checks
   - id: SR-21
     type: command
-    # Rewritten to satisfy the runner's command allowlist (no `;`, no `$()`):
-    # pipe `find` → `head` → `xargs wc -w` → `awk` for the threshold check.
-    # awk uses {if ($1<=500) ok=1} END {exit !ok} so empty input (no SKILL.md
-    # found, or one filtered out by `-not -path`) exits non-zero — preventing
-    # the previous vacuous-pass when no SKILL.md existed.
+    # The same limit validate-skill.sh enforces: the BODY may hold at most 500
+    # lines. Like the validator's awk, every `---` line is skipped and only
+    # lines after the second one count, so the frontmatter is excluded. This
+    # checkpoint used to cap the whole file at 500 WORDS (`wc -w`), a different
+    # and far tighter rule than the validator's.
+    # No `;`, `&&`, `||` or `$()`, for the runner's command allowlist. Empty
+    # input (no SKILL.md found, or one filtered out by `-not -path`) leaves NR
+    # at 0 and exits non-zero, so a missing file is not a vacuous pass.
     # `-not -path './node_modules/*'` matches the precondition filter so SKILL.md
     # files inside dependencies don't trigger false positives.
-    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' -not -path './node_modules/*' | head -1 | xargs -r wc -w | awk '{if ($1<=500) ok=1} END {exit !ok}'"
+    pattern: "find . -path '*/SKILL.md' -not -path './.skill-repo-tools/*' -not -path './node_modules/*' | head -1 | xargs -r cat | awk '/^---$/{d++} !/^---$/{if(d>1)n++} END{exit (NR==0)+(n>500)}'"
     severity: error
-    desc: "SKILL.md must be under 500 words"
+    desc: "SKILL.md body must be at most 500 lines, frontmatter excluded (the validate-skill.sh limit)"
 
   # SKILL.md frontmatter checks
   - id: SR-22

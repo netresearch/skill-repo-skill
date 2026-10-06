@@ -271,22 +271,23 @@
       },
       {
         "type": "content_regex",
-        "value": "(?i)(whole|entire) file|(frontmatter|front matter) included|including (the )?(frontmatter|front matter)[^.]*words|words[^.]*including (the )?(frontmatter|front matter)",
-        "description": "Knows the SR-21 word count covers the whole file, frontmatter included"
+        "value": "(?i)SR-21",
+        "description": "Knows checkpoint SR-21 checks the same body-line limit"
       },
       {
-        "type": "content_regex",
-        "value": "(?i)(SR-21|wc -w)",
-        "description": "Knows the 500-word cap is checkpoint SR-21 (wc -w over the whole file), separate from the validator"
+        "type": "must_not",
+        "value": "(?i)500[ -]words?",
+        "description": "Does not state a 500-word cap; no check counts words"
       }
     ],
     "samples": {
-      "passing": "validate-skill.sh counts the body of SKILL.md in lines, frontmatter excluded: it errors above 500 lines and warns above 300. Separately, checkpoint SR-21 in checkpoints.yaml runs wc -w over the whole file, frontmatter included, and caps it at 500 words. Extended content goes to references/*.md, and every reference must be reachable from SKILL.md or audit-skills.sh reports it as an orphan.",
+      "passing": "validate-skill.sh counts the body of SKILL.md in lines, frontmatter excluded: it errors above 500 lines and warns above 300. Checkpoint SR-21 in checkpoints.yaml checks the same limit. Extended content goes to references/*.md, and every reference must be reachable from SKILL.md or audit-skills.sh reports it as an orphan.",
       "failing": [
         "500 words, counted by validate-skill.sh over the whole file including the frontmatter — which is why adding one references-table row can push a passing SKILL.md over. Extended content goes to references/*.md.",
         "Keep SKILL.md under 500 words of body text and move anything longer into references/.",
         "There is no hard limit, but shorter is better — aim for a page or two.",
-        "validate-skill.sh limits SKILL.md to 500 lines including frontmatter. SR-21 limits the body to 500 words excluding frontmatter. Move overflow to references/."
+        "validate-skill.sh limits SKILL.md to 500 lines including frontmatter. SR-21 limits the body to 500 words excluding frontmatter. Move overflow to references/.",
+        "validate-skill.sh counts the body of SKILL.md in lines, frontmatter excluded: it errors above 500 lines and warns above 300. Checkpoint SR-21 also caps the whole file at 500 words. Extended content goes to references/*.md."
       ]
     }
   },
