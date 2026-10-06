@@ -65,7 +65,7 @@ Copyright entity: `Netresearch DTT GmbH`
 - Optional fields allowed by `validate-skill.sh` when needed: `license`, `compatibility`, `metadata`, `allowed-tools` (Agent Skills–compatible)
 - `name`: lowercase, hyphens only, max 64 characters
 - `description`: must start with `"Use when"`
-- Body: at most 500 lines, frontmatter not counted — `validate-skill.sh` errors above 500 and warns above 300 (use `references/` for extended content). Checkpoint SR-21 in `skills/skill-repo/checkpoints.yaml` separately caps the whole file at 500 words
+- Body: at most 500 lines, frontmatter not counted — `validate-skill.sh` errors above 500 and warns above 300 (use `references/` for extended content). Checkpoint SR-21 in `skills/skill-repo/checkpoints.yaml` checks the same 500-line body limit
 
 ### Versioning and Releases
 

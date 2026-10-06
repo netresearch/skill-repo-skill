@@ -27,9 +27,9 @@ Each item is a habit that prevents a costly redo, not a structural rule.
 
 ## 1. Word-budget-first authoring
 
-Checkpoint SR-21 (`checkpoints.yaml`) caps `SKILL.md` at **500 words**, counted over
-the whole file including the frontmatter; `scripts/validate-skill.sh` measures the body
-in lines instead (error above 500, warning above 300). The body also persists in context
+`scripts/validate-skill.sh` limits the `SKILL.md` body, frontmatter excluded, to
+**500 lines** (error above 500, warning above 300); checkpoint SR-21 (`checkpoints.yaml`)
+checks the same limit. The body also persists in context
 for the whole session, so every word is paid on each invocation — see
 [`skill-quality.md`](skill-quality.md) for the full cost model.
 
