@@ -276,8 +276,8 @@
       },
       {
         "type": "must_not",
-        "value": "(?i)500[ -]words?",
-        "description": "Does not state a 500-word cap; no check counts words"
+        "value": "(?i)SR-21[^.]*\\bwords?\\b|\\bwords?\\b[^.]*SR-21",
+        "description": "Does not tie checkpoint SR-21 to a word count"
       }
     ],
     "samples": {
