@@ -20,17 +20,20 @@ trap 'rm -rf "$WORK"' EXIT
 
 fail=0
 check() { # check <name> <expected> <actual>
-    if [ "$2" = "$3" ]; then
-        echo "  ok   $1"
+    local name="$1" expected="$2" actual="$3"
+    if [[ "$expected" = "$actual" ]]; then
+        echo "  ok   $name"
     else
-        echo "  FAIL $1: expected '$2', got '$3'"
+        echo "  FAIL $name: expected '$expected', got '$actual'"
         fail=1
     fi
+    return 0
 }
 
 # step_body <step name> — prints the `run: |` block of that step, or nothing
 step_body() {
-    python3 - "$WORKFLOW" "$1" <<'PY'
+    local step="$1"
+    python3 - "$WORKFLOW" "$step" <<'PY'
 import sys
 
 path, step = sys.argv[1], sys.argv[2]
@@ -51,11 +54,13 @@ for i in range(start + 1, len(lines)):
         print("\n".join(body))
         break
 PY
+    return
 }
 
 # input_default <input name> — prints the workflow_call input's default
 input_default() {
-    python3 - "$WORKFLOW" "$1" <<'PY'
+    local input="$1"
+    python3 - "$WORKFLOW" "$input" <<'PY'
 import sys
 
 path, name = sys.argv[1], sys.argv[2]
@@ -71,6 +76,7 @@ for line in lines[start + 1:]:
         print(line.split(":", 1)[1].strip().strip('"'))
         break
 PY
+    return
 }
 
 # run_step <step name> <repo dir> [VAR=value ...] — runs the step in <repo dir>
@@ -80,7 +86,7 @@ run_step() {
     local step="$1" dir="$2" body
     shift 2
     body="$(step_body "$step")"
-    if [ -z "$body" ]; then
+    if [[ -z "$body" ]]; then
         echo "no step named '$step' with a run block"
         return 0
     fi
@@ -91,7 +97,9 @@ run_step() {
 }
 
 output_of() { # output_of <repo dir> <key>
-    sed -n "s/^$2=//p" "$1/.out" 2>/dev/null | tail -1
+    local dir="$1" key="$2"
+    sed -n "s/^$key=//p" "$dir/.out" 2>/dev/null | tail -1
+    return
 }
 
 echo "tests.yml: steps against fixture repositories ($WORKFLOW)"
@@ -135,13 +143,13 @@ done
 run_step "Shell tests" "$repo" SHELL_GLOB="$(input_default shell_glob)" > "$WORK/shell.log"
 check "the shell leg runs root and skill-local tests" 3 "$(output_of "$repo" count)"
 for rel in tests/root.sh skills/a/scripts/tests/near.sh skills/a/scripts/tests/nested/deep.sh; do
-    check "ran $rel" yes "$([ -f "$repo/$rel.ran" ] && echo yes || echo no)"
+    check "ran $rel" yes "$([[ -f "$repo/$rel.ran" ]] && echo yes || echo no)"
 done
 
 run_step "Python tests" "$repo" PYTHON_GLOB="$(input_default python_glob)" > "$WORK/python.log"
 check "the python leg runs root and skill-local tests" 2 "$(output_of "$repo" count)"
 for rel in tests/root_test.py skills/a/scripts/tests/near_test.py; do
-    check "ran $rel" yes "$([ -f "$repo/$rel.ran" ] && echo yes || echo no)"
+    check "ran $rel" yes "$([[ -f "$repo/$rel.ran" ]] && echo yes || echo no)"
 done
 
 # --- 3. require_tests covers every place a skill repo ships scripts ---------
@@ -163,7 +171,7 @@ for layout in scripts skills/a/checker; do
 done
 
 echo
-if [ "$fail" -eq 0 ]; then
+if [[ "$fail" -eq 0 ]]; then
     echo "All tests.yml step tests passed"
 else
     echo "Some tests.yml step tests FAILED"
