@@ -129,39 +129,81 @@ except Exception:
 }
 SKILL_VERSION=$(skill_version_of "$(cd "$(dirname "$SKILL_FILE")" && pwd)")
 
-mkdir -p "$RESULTS_DIR"
-
-# Normalize: support both top-level array and {evals: [...]} wrapper
-EVAL_COUNT=$(python3 -c "
+# Every read of the eval set goes through this helper. The eval set may come
+# from another repository (the scheduled sweep clones catalog skills), so the
+# path, the index and the field name reach Python as arguments and never
+# become part of its source text.
+#   evals_query count | has-expectations
+#   evals_query name|expectation-count|expectations|assertions <index>
+#   evals_query field <index> <key>
+# Both a top-level array and an {"evals": [...]} wrapper are accepted.
+evals_query() {
+    python3 - "$EVALS_FILE" "$@" <<'PYEOF'
 import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(len(evals))
-")
+import sys
+
+path, op = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as f:
+    raw = json.load(f)
+evals = raw["evals"] if isinstance(raw, dict) and "evals" in raw else raw
+if op == "count":
+    print(len(evals))
+elif op == "has-expectations":
+    print("yes" if any(e.get("expectations") for e in evals) else "no")
+else:
+    i = int(sys.argv[3])
+    e = evals[i]
+    if op == "name":
+        # 'name', 'eval_name', or an 'id' fallback
+        print(e.get("name") or e.get("eval_name") or f"eval_{e.get('id', i)}")
+    elif op == "field":
+        print(e.get(sys.argv[4], ""))
+    elif op == "expectation-count":
+        print(len(e.get("expectations", [])))
+    elif op == "expectations":
+        for n, text in enumerate(e.get("expectations", []), 1):
+            print(f"{n}. {text}")
+    elif op == "assertions":
+        # One line per assertion: "<kind><TAB><pattern>"
+        for a in e.get("assertions", []):
+            if isinstance(a, dict):
+                pattern = a.get("value") or a.get("pattern") or ""
+                kind = "must_not" if "must_not" in str(a.get("type") or "") else "positive"
+            else:
+                pattern, kind = str(a), "positive"
+            print(kind + "\t" + pattern)
+    else:
+        sys.exit(f"evals_query: unknown operation {op}")
+PYEOF
+}
+
+get_eval_name() { evals_query name "$1"; }
+get_eval_field() { evals_query field "$1" "$2"; }
+
+EVAL_COUNT=$(evals_query count)
 echo "Found $EVAL_COUNT evals, concurrency=$CONCURRENCY"
 echo "Evals: $EVALS_FILE"
 echo "Skill: $SKILL_FILE"
 
-# Helper: get eval name (supports 'name', 'eval_name', or 'id' fallback)
-get_eval_name() {
-    python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-e = evals[$1]
-print(e.get('name') or e.get('eval_name') or f\"eval_{e.get('id', $1)}\")
-"
-}
+# Refuse an eval set the run cannot handle safely, before the first model call.
+# The name becomes a file name under $RESULTS_DIR, so it must be a plain file
+# name. The prompt is the last argument of the claude call, so a leading dash
+# would be parsed as an option.
+EVAL_NAME_PATTERN='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+for ((i = 0; i < EVAL_COUNT; i++)); do
+    name=$(get_eval_name "$i")
+    if ! [[ "$name" =~ $EVAL_NAME_PATTERN ]]; then
+        echo "eval $i: name '$name' is not a plain file name (letters, digits, '.', '_', '-'; no leading '.' or '-')" >&2
+        exit 2
+    fi
+    prompt=$(get_eval_field "$i" "prompt")
+    if [[ "$prompt" == -* ]]; then
+        echo "eval $i ($name): the prompt starts with '-', which the claude CLI would read as an option" >&2
+        exit 2
+    fi
+done
 
-# Helper: get eval field
-get_eval_field() {
-    python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(evals[$1].get('$2', ''))
-"
-}
+mkdir -p "$RESULTS_DIR"
 
 # Answer file for one sample. Sample 1 keeps the historical name so existing
 # tooling and eyeballs still find it; further samples get a suffix.
@@ -256,25 +298,14 @@ grade_expectations() {
     grader_file="$(grader_file_for "$name" "$mode" "$sample")"
 
     # Get expectations as numbered list
-    expectations_count=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(len(evals[$idx].get('expectations', [])))
-")
+    expectations_count=$(evals_query expectation-count "$idx")
 
     if [[ "$expectations_count" -eq 0 ]]; then
         return
     fi
 
     local expectations_list
-    expectations_list=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-for i, e in enumerate(evals[$idx].get('expectations', []), 1):
-    print(f'{i}. {e}')
-")
+    expectations_list=$(evals_query expectations "$idx")
 
     local response_content
     response_content=$(cat "$output_file" 2>/dev/null || echo "(empty response)")
@@ -327,7 +358,7 @@ majority_pass() { # majority_pass <kind> <pattern> <file...>
     local hits=0 total=0 hit file
     for file in "$@"; do
         total=$((total + 1))
-        if grep -qiE "$pattern" "$file" 2>/dev/null; then hit=1; else hit=0; fi
+        if grep -qiE -e "$pattern" -- "$file" 2>/dev/null; then hit=1; else hit=0; fi
         [[ "$kind" == "must_not" ]] && hit=$((1 - hit))
         hits=$((hits + hit))
     done
@@ -395,12 +426,7 @@ done
 # Run LLM grading for expectations (if not disabled)
 if [[ "$NO_LLM" == "false" ]]; then
     # Check which evals have expectations
-    HAS_ANY_EXPECTATIONS=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print('yes' if any(e.get('expectations') for e in evals) else 'no')
-")
+    HAS_ANY_EXPECTATIONS=$(evals_query has-expectations)
     if [[ "$HAS_ANY_EXPECTATIONS" == "yes" ]]; then
         echo ""
         echo "=== LLM Grading (expectations) ==="
@@ -409,12 +435,7 @@ print('yes' if any(e.get('expectations') for e in evals) else 'no')
             [[ $batch_end -ge $EVAL_COUNT ]] && batch_end=$((EVAL_COUNT - 1))
 
             for i in $(seq "$batch_start" "$batch_end"); do
-                exp_count=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(len(evals[$i].get('expectations', [])))
-")
+                exp_count=$(evals_query expectation-count "$i")
                 if [[ "$exp_count" -gt 0 ]]; then
                     for ((sample = 1; sample <= SAMPLES; sample++)); do
                         grade_expectations "$i" "without" "$sample" &
@@ -474,12 +495,9 @@ for i in $(seq 0 $((EVAL_COUNT - 1))); do
     fi
 
     # Check regex assertions
-    assertion_count=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(len(evals[$i].get('assertions', [])))
-")
+    assertion_lines=$(evals_query assertions "$i")
+    assertion_count=0
+    [[ -n "$assertion_lines" ]] && assertion_count=$(wc -l <<< "$assertion_lines")
     if [[ "$assertion_count" -gt 0 ]]; then
         pass_w=0; pass_s=0; total=0; disc=0
         # Each line is "<kind><TAB><pattern>", kind being must_not or positive.
@@ -501,18 +519,7 @@ print(len(evals[$i].get('assertions', [])))
             # passes it. An assertion both arms pass measures boilerplate, not
             # the skill.
             if [[ "$ok_w" -eq 0 && "$ok_s" -eq 1 ]]; then ((disc++)) || true; fi
-        done <<< "$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-for a in evals[$i].get('assertions', []):
-    if isinstance(a, dict):
-        pattern = a.get('value') or a.get('pattern') or ''
-        kind = 'must_not' if 'must_not' in str(a.get('type') or '') else 'positive'
-    else:
-        pattern, kind = str(a), 'positive'
-    print(kind + '\t' + pattern)
-")"
+        done <<< "$assertion_lines"
 
         delta=$((pass_s - pass_w))
         [[ $delta -gt 0 ]] && ds="+$delta" || ds="$delta"
@@ -530,12 +537,7 @@ for a in evals[$i].get('assertions', []):
     fi
 
     # Check LLM-graded expectations
-    exp_count=$(python3 -c "
-import json
-raw = json.load(open('$EVALS_FILE'))
-evals = raw['evals'] if isinstance(raw, dict) and 'evals' in raw else raw
-print(len(evals[$i].get('expectations', [])))
-")
+    exp_count=$(evals_query expectation-count "$i")
     if [[ "$exp_count" -gt 0 ]]; then
         if [[ "$NO_LLM" == "true" ]]; then
             echo "| $((i+1)) | $name | llm | skipped | skipped | -- |" >> "$SUMMARY_FILE"

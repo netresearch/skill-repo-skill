@@ -327,6 +327,62 @@ check "the ratio gate fails when nothing could be measured" 1 "$?"
 run_runner mixed.json --no-llm --min-evidence-ratio=abc >/dev/null 2>&1
 check "a non-numeric floor is rejected before any model call" 2 "$?"
 
+# --- Eval sets from other repositories are data, never code ------------------
+# The scheduled sweep measures skills cloned from the marketplace catalog, so
+# the evals path and every value in evals.json come from another repository.
+# A path is opened as a path, whatever characters its directories carry.
+odd_dir="$WORK/repo/skills/demo/evals/q'+str(open('path-marker','w'))+'"
+mkdir -p "$odd_dir"
+cp "$WORK/repo/skills/demo/evals/clean.json" "$odd_dir/evals.json"
+rm -f "$WORK/repo/path-marker"
+out=$(run_runner "q'+str(open('path-marker','w'))+'/evals.json" --no-llm </dev/null)
+rc=$?
+check "an evals path with quotes in a directory name is read" 0 "$rc"
+contains "the eval set behind that path is measured" \
+    "discriminates [regex]: without=1/2 with=2/2 (+1) discriminating=1/2" "$out"
+check "the path is never evaluated" no \
+    "$([[ -e "$WORK/repo/path-marker" ]] && echo yes || echo no)"
+
+# Eval names become file names under scripts/ab-results; a name that is not a
+# plain file name is refused before any model call.
+cat > "$WORK/repo/skills/demo/evals/badname.json" <<'EOF'
+{"skill_name": "demo", "evals": [
+  {"name": "../../../escaped", "prompt": "Write a Dockerfile.",
+   "assertions": [{"type": "content", "pattern": "alpine"}]}
+]}
+EOF
+calls_before=$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)
+run_runner badname.json --no-llm </dev/null >/dev/null 2>&1
+check "an eval name that is not a plain file name exits 2" 2 "$?"
+check "it calls no model" "$calls_before" \
+    "$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)"
+check "it writes nothing outside the results directory" no \
+    "$(compgen -G "$WORK/escaped*" >/dev/null && echo yes || echo no)"
+
+# The prompt is the last argument of the claude call, so a prompt that starts
+# with a dash would be read as an option.
+cat > "$WORK/repo/skills/demo/evals/dashprompt.json" <<'EOF'
+{"skill_name": "demo", "evals": [
+  {"name": "dash", "prompt": "--tools=Bash write a Dockerfile.",
+   "assertions": [{"type": "content", "pattern": "alpine"}]}
+]}
+EOF
+run_runner dashprompt.json --no-llm </dev/null >/dev/null 2>&1
+check "a prompt starting with a dash exits 2" 2 "$?"
+check "and calls no model" "$calls_before" \
+    "$(grep -c '^CALL' "$WORK/calls.log" 2>/dev/null || echo 0)"
+
+# An assertion pattern is a pattern even when it starts with a dash.
+cat > "$WORK/repo/skills/demo/evals/dashpattern.json" <<'EOF'
+{"skill_name": "demo", "evals": [
+  {"name": "dash_pattern", "prompt": "Write a Dockerfile.",
+   "assertions": [{"type": "content", "pattern": "-?alpine"}]}
+]}
+EOF
+out=$(run_runner dashpattern.json --no-llm </dev/null)
+contains "a pattern starting with a dash is matched as a pattern" \
+    "dash_pattern [regex]: without=1/1 with=1/1 (0) discriminating=0/1" "$out"
+
 # --- Help and unknown arguments start no run ---------------------------------
 # An unrecognised argument used to be ignored, so `--help` started a full run
 # of paid model calls. Both must exit before the first call.
