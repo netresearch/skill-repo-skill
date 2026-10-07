@@ -30,7 +30,7 @@ Description bytes are the always-on tax; body bytes are the on-demand tax. Refer
 
 Size rules bound how MUCH a skill costs; this rubric bounds WHAT KIND of content earns that cost. Every passage in a SKILL.md body or reference file must provide at least one of six value categories:
 
-1. **Org/project-specific knowledge** — Netresearch conventions, internal tooling, URLs, field IDs, policy decisions. (`jira` custom-field IDs; the split-licensing model.)
+1. **Org/project-specific knowledge** — Netresearch conventions, internal tooling, URLs, field IDs, policy decisions. (`jira` custom-field IDs; the split-licensing model.) Organization-wide only: one customer's sites, domains or excludes are not category 1 and belong in that project's `AGENTS.md` (see "Shared skills carry generic examples" below).
 2. **Version/ecosystem facts models get wrong** — post-training-cutoff changes, version-specific breaking changes, niche tool flags. (TYPO3 v14 `#108055` asset-concat removal; golangci-lint v2 config.)
 3. **Retro-born failure patterns** — symptom → cause → required behavior → verification, encoded from a real incident. (`github-project`: the auto-approve/Copilot race.)
 4. **Executable scripts/validators** — deterministic work shipped in `scripts/` or `checkpoints.yaml` instead of prose the model re-derives.
@@ -313,7 +313,7 @@ Files in `references/` with no path to discovery from SKILL.md (no direct cite, 
 
 ## Authoring checks before commit
 
-Four checks for any change to SKILL.md or a reference file. Each one targets a class of finding that reviewers otherwise catch one PR at a time.
+Six checks for any change to SKILL.md or a reference file. Each one targets a class of finding that reviewers otherwise catch one PR at a time.
 
 ### Spell in US English
 
@@ -322,6 +322,14 @@ Skill prose uses US spelling: `-ize`/`-ization`, `behavior`, `color`, `authoriza
 ### Examples obey the rules of their own document
 
 When a document states a rule in prose and also shows code, every example must follow that rule. An example that contradicts its own page teaches the wrong rule, and the reader copies the example, not the sentence. Typical shapes: a page that says "never use strippable `assert()` for security checks" and then uses `assert()` in its PHP and Python samples; a helper defined as `Assertf` and called as `assertf`. Before committing, extract the rules from the prose as a checklist and read each example against it line by line. If a rule cannot be shown without breaking it, split the example or restate the rule.
+
+### Run every executable example once before the PR
+
+A reader copies an example as written, so it has to run as written. Run each executable example (a config, a setup file, a script, a test) once in a throwaway directory before opening the PR, against the tool versions the page names. When the example is itself a test, a check or a property, also run a counter-probe that must fail: the property against an identity function, the check against the unfixed code. A green run alone does not show that the example tests anything. Real case: [netresearch/typo3-testing-skill#210](https://github.com/netresearch/typo3-testing-skill/pull/210) added a Vitest config whose `root: '..'` resolved against the working directory and found no tests, a setup file that used `vi` and `afterEach` without `globals: true`, and a Playwright `locator.or()` combining a page locator with a frame locator, which Playwright rejects. A review round found each of them; one run would have.
+
+### Shared skills carry generic examples; customer specifics go to that project's AGENTS.md
+
+Examples and defaults in a shared skill are generic. Site names, domains, a customer's plugin names and one customer's exclude lists do not belong there: an agent in every other project reads them as the standard. Put them in that project's own `AGENTS.md`, and only where an agent working in that project needs them. Real case: an internal frontend skill carried one customer's three site URLs, consent-manager block list and plugin excludes as the general standard.
 
 ### A cross-reference is a claim
 
