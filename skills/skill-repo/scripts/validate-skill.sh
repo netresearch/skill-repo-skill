@@ -151,7 +151,7 @@ validate_skill_md() {
                 }
             ' | sed -e 's/^-$//' -e '/^$/d')
             if [[ -n "$at_tokens" ]] && echo "$at_tokens" \
-                | grep -qE '^(Bash$|Bash\(([^)]*[[:space:],])?(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+                | grep -qE '^(Bash$|Bash\(([^)]*[^.[:alnum:]_])?(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi

@@ -286,6 +286,10 @@ at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/context7.sh:*) Read'  y
 # shellcheck disable=SC2016
 at_case 'allowed-tools: Bash(bash ${CLAUDE_SKILL_DIR}/scripts/context7.sh:*) Read' yes quiet 'bash plus script name ending in .sh'
 at_case 'allowed-tools: Bash(git:*, bash:*) Read'                             yes warn  'interpreter after comma and space'
+at_case 'allowed-tools: Bash(/bin/bash:*) Read'                                  yes warn  'interpreter named by path'
+at_case 'allowed-tools: Bash(/usr/bin/python3:*) Read'                           yes warn  'python3 named by path'
+# shellcheck disable=SC2016
+at_case 'allowed-tools: Bash(${CLAUDE_SKILL_DIR}/bin/sh:*) Read'                 yes warn  'sh named by a path under the skill'
 
 echo "----------------------------------------"
 echo "README install-instruction checks"
