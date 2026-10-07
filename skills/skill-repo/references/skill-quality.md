@@ -15,7 +15,7 @@
 - Auditing
 - Sources
 
-Detailed guidance backing the summary in [`SKILL.md`](../SKILL.md) (§ SKILL.md Quality Rules).
+Detailed guidance backing the summary in [`SKILL.md`](../SKILL.md) (§ SKILL.md Frontmatter: the Budgets and Flat discovery paragraphs).
 
 ## Why these rules exist
 
