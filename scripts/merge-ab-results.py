@@ -119,7 +119,7 @@ def main() -> int:
     if args.evals_path:
         entry["evals_path"] = args.evals_path
 
-    data["generated"] = datetime.datetime.now(datetime.timezone.utc).strftime(
+    data["generated"] = datetime.datetime.now(datetime.UTC).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
 
