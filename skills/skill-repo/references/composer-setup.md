@@ -132,13 +132,13 @@ Check the result where Composer looks, not on the package page: `https://repo.pa
 
 ### Renaming the package
 
-Changing `name` in `composer.json` does not rename anything on Packagist. Packagist keeps the package under the name it was submitted with and publishes every later tag there, so the new name answers 404 and `composer require <new name>` fails with "Could not find a matching version of package". Every Netresearch skill repo was in that state until 2026-10-18, after the `agent-*` names were changed to `<repo>`.
+Changing `name` in `composer.json` does not rename anything on Packagist. Packagist keeps the package under the name it was submitted with and publishes every later tag there, so the new name answers 404 and `composer require <new name>` fails with "Could not find a matching version of package". Until 2026-10-18 none of the 39 Netresearch skill repos was installable under its `composer.json` name: 16 were on Packagist only under an older name (`agent-*`, `agents-skill`), and 23 had never been submitted.
 
 A rename therefore takes three steps:
 
 1. Keep `"replace": {"<old name>": "self.version"}` in `composer.json`. When a project requires the new name and something in its tree still requires the old one, the new package satisfies both and is installed once, instead of two copies of the same skill. `self.version` makes the old name available only at the new package's own version, so this works while the old constraint (for example `^2.20`) accepts that version; a constraint the new versions do not meet has to be updated. A project that requires only the old name keeps installing the old package.
 2. Submit the repository again, through the form or `create-package` above. Packagist reads the new name from `composer.json` and creates a second package for the same repository.
-3. Mark the old package abandoned with the new name as its replacement (package page → Abandon, field "Replacement package"). Composer then prints the replacement to anyone who still installs the old name.
+3. Mark the old package abandoned with the new name as its replacement (`https://packagist.org/packages/<old name>/abandon`, replacement field `package[replacement]`). Composer then prints the replacement to anyone who still installs the old name.
 
 ## Skill repos that ship their own PHP code
 
