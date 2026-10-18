@@ -318,3 +318,20 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # A renamed composer.json name is not registered on Packagist by itself:
+      # the old package keeps receiving every release, and the name the README
+      # documents answers 404 (typo3-docs-skill#168). The release is already
+      # public at this point; the red job is the signal to register the name.
+      - name: Check the Composer package is registered on Packagist
+        run: |
+          set -euo pipefail
+          [ -f composer.json ] || { echo "No composer.json, nothing to check."; exit 0; }
+          NAME=$(python3 -c "import json; print(json.load(open('composer.json'))['name'])")
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' "https://repo.packagist.org/p2/${NAME}.json")
+          if [ "$CODE" = "404" ]; then
+            echo "::error::Composer package ${NAME} is not registered on Packagist; 'composer require ${NAME}' fails. Submit https://github.com/${GITHUB_REPOSITORY} on packagist.org."
+            exit 1
+          elif [ "$CODE" != "200" ]; then
+            echo "::warning::Packagist answered HTTP ${CODE} for ${NAME}; registration not verified."
+          fi
