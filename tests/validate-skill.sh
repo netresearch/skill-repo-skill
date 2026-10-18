@@ -453,6 +453,39 @@ script_test_case root root expect-absent \
 script_test_case none none expect-present \
     "no test references these script(s): x.sh" "a script no test names still warns"
 
+echo "== Organisation reusables are called at @main =="
+# reusable_case <name> <want> <workflow line> <label>
+# Case one is the line that slipped into netresearch-branding-skill, copied.
+reusable_case() {
+    local name="$1" want="$2" line="$3" label="$4" dir out
+    dir="$(fixture "reusable_$name" "${hdr}description: Use when doing X\n---\n# T\n")"
+    mkdir -p "$dir/.github/workflows"
+    printf 'jobs:\n  j:\n%s\n' "$line" > "$dir/.github/workflows/ci.yml"
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    local got=accept
+    if grep -qF "reusable workflow pinned to a commit hash: .github/workflows/ci.yml:3" <<<"$out"; then
+        got=reject
+    fi
+    if [[ "$got" == "$want" ]]; then ((PASS++)); else
+        echo "  FAIL $label: expected $want, got $got"; ((FAIL++)); fi
+    return 0
+}
+reusable_case real reject \
+    '    uses: netresearch/.github/.github/workflows/script-check.yml@d9e0aa0325124dbee7a2ad206f76dcf37347d0ba # main' \
+    "the hash pin found in netresearch-branding-skill is rejected"
+reusable_case quoted reject \
+    "    uses: 'netresearch/skill-repo-skill/.github/workflows/validate.yml@0123456789abcdef0123456789abcdef01234567'" \
+    "a quoted hash pin is rejected"
+reusable_case spaced reject \
+    '    uses : netresearch/.github/.github/workflows/script-check.yml@0123456789abcdef0123456789abcdef01234567' \
+    "a hash pin written with a space before the colon is rejected"
+reusable_case main accept \
+    '    uses: netresearch/.github/.github/workflows/script-check.yml@main' \
+    "@main is accepted"
+reusable_case thirdparty accept \
+    '    uses: actions/checkout/.github/workflows/x.yml@0123456789abcdef0123456789abcdef01234567' \
+    "a third-party SHA pin is not this check's business"
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
