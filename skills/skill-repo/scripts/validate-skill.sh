@@ -587,7 +587,7 @@ fi
 # Renovate PR exposed it (netresearch/netresearch-branding-skill#115). Third-party
 # actions stay SHA-pinned; this check reads netresearch/* reusables only.
 if [[ -d "$REPO_DIR/.github/workflows" ]]; then
-    PINNED_INTERNAL="$(grep -n -H -E '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]*["'\'']?netresearch/[^/@[:space:]]+/\.github/workflows/[^@[:space:]]+@[0-9a-f]{40}' \
+    PINNED_INTERNAL="$(grep -n -H -E '^[[:space:]]*(-[[:space:]]+)?uses[[:space:]]*:[[:space:]]*["'\'']?netresearch/[^/@[:space:]]+/\.github/workflows/[^@[:space:]]+@[0-9a-f]{40}' \
         "$REPO_DIR"/.github/workflows/*.yml "$REPO_DIR"/.github/workflows/*.yaml 2>/dev/null \
         | sed "s|^$REPO_DIR/||" || true)"
     if [[ -n "$PINNED_INTERNAL" ]]; then

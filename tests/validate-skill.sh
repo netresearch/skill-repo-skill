@@ -476,6 +476,9 @@ reusable_case real reject \
 reusable_case quoted reject \
     "    uses: 'netresearch/skill-repo-skill/.github/workflows/validate.yml@0123456789abcdef0123456789abcdef01234567'" \
     "a quoted hash pin is rejected"
+reusable_case spaced reject \
+    '    uses : netresearch/.github/.github/workflows/script-check.yml@0123456789abcdef0123456789abcdef01234567' \
+    "a hash pin written with a space before the colon is rejected"
 reusable_case main accept \
     '    uses: netresearch/.github/.github/workflows/script-check.yml@main' \
     "@main is accepted"
