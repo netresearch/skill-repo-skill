@@ -124,7 +124,7 @@ For packages containing multiple skills:
    - Enter repository URL
    - Submit
 
-3. Enable auto-update with a repository webhook: payload URL `https://packagist.org/api/github`, content type `json`, the push event only, and the Packagist account's main API token as the secret. Without it Packagist keeps the state of its first crawl, and no later tag reaches `composer require`.
+3. Check the auto-update webhook. When the Packagist account is linked to GitHub, submitting the package makes Packagist create a repository webhook to `https://packagist.org/api/github` itself; its latest delivery in the repository's webhook settings answers 202. Only when no such hook exists, add one by hand with the values from <https://packagist.org/about#how-to-update-packages>: payload URL `https://packagist.org/api/github?username=<Packagist username>`, content type `json`, the push event only, the account's API token as the secret. Without `?username=` the hook answers 403 on every push, and Packagist keeps the state of its last crawl, so no later tag reaches `composer require`. Do not add a second hook next to a working one.
 
 The API alternative to the submit form is `POST https://packagist.org/api/create-package` with the body `{"repository": "https://github.com/<org>/<repo>"}`, `Content-Type: application/json` and `Authorization: Bearer <username>:<main API token>`. It answers 202, and the first crawl followed within a minute when this was done for the skill repos. The Packagist API documentation marks the endpoint as requiring the main token; the safe token is not enough.
 
