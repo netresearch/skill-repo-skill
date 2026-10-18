@@ -124,9 +124,21 @@ For packages containing multiple skills:
    - Enter repository URL
    - Submit
 
-3. Enable auto-update:
-   - Configure GitHub webhook for Packagist
-   - Or use GitHub Actions integration
+3. Check the auto-update webhook. When the Packagist account is linked to GitHub and the Packagist GitHub application has access to the organization, submitting the package makes Packagist create a repository webhook to `https://packagist.org/api/github` itself; its latest delivery in the repository's webhook settings answers 202. Only when no such hook exists, add one by hand with the values from <https://packagist.org/about#how-to-update-packages>: payload URL `https://packagist.org/api/github?username=<Packagist username>`, content type `json`, the push event only, the account's API token as the secret. Without `?username=` the hook answers 403 on every push, and Packagist keeps the state of its last crawl, so no later tag reaches `composer require`. Do not add a second hook next to a working one.
+
+The API alternative to the submit form is `POST https://packagist.org/api/create-package` with the body `{"repository": "https://github.com/<org>/<repo>"}`, `Content-Type: application/json` and `Authorization: Bearer <username>:<main API token>`. It answers 202, and the first crawl followed within a minute when this was done for the skill repos. The Packagist API documentation marks the endpoint as requiring the main token; the safe token is not enough.
+
+Check the result where Composer looks, not on the package page: `https://repo.packagist.org/p2/<vendor>/<name>.json` answers 404 for a name Composer cannot install. The reusable `release.yml` runs that check after every release and fails on 404.
+
+### Renaming the package
+
+Changing `name` in `composer.json` does not rename anything on Packagist. Packagist keeps the package under the name it was submitted with and publishes every later tag there, so the new name answers 404 and `composer require <new name>` fails with "Could not find a matching version of package". Until 2026-10-18 none of the 39 Netresearch skill repos was installable under its `composer.json` name: 16 were on Packagist only under an older name (`agent-*`, `agents-skill`), and 23 had never been submitted.
+
+A rename therefore takes three steps:
+
+1. Keep `"replace": {"<old name>": "self.version"}` in `composer.json`. When a project requires the new name and something in its tree still requires the old one, the new package satisfies both and is installed once, instead of two copies of the same skill. `self.version` makes the old name available only at the new package's own version, so this works while the old constraint (for example `^2.20`) accepts that version; a constraint the new versions do not meet has to be updated. A project that requires only the old name keeps installing the old package.
+2. Submit the repository again, through the form or `create-package` above. Packagist reads the new name from `composer.json` and creates a second package for the same repository.
+3. Mark the old package abandoned with the new name as its replacement (`https://packagist.org/packages/<old name>/abandon`, replacement field `package[replacement]`). Composer then prints the replacement to anyone who still installs the old name.
 
 ## Skill repos that ship their own PHP code
 
