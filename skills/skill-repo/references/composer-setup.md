@@ -124,9 +124,21 @@ For packages containing multiple skills:
    - Enter repository URL
    - Submit
 
-3. Enable auto-update:
-   - Configure GitHub webhook for Packagist
-   - Or use GitHub Actions integration
+3. Enable auto-update with a repository webhook: payload URL `https://packagist.org/api/github`, content type `json`, the push event only, and the Packagist account's main API token as the secret. Without it Packagist keeps the state of its first crawl, and no later tag reaches `composer require`.
+
+The API alternative to the submit form is `POST https://packagist.org/api/create-package` with the body `{"repository": "https://github.com/<org>/<repo>"}`, `Content-Type: application/json` and `Authorization: Bearer <username>:<main API token>`. It answers 202, and the first crawl followed within a minute when this was done for the skill repos. The Packagist API documentation marks the endpoint as requiring the main token; the safe token is not enough.
+
+Check the result where Composer looks, not on the package page: `https://repo.packagist.org/p2/<vendor>/<name>.json` answers 404 for a name Composer cannot install. The reusable `release.yml` runs that check after every release and fails on 404.
+
+### Renaming the package
+
+Changing `name` in `composer.json` does not rename anything on Packagist. Packagist keeps the package under the name it was submitted with and publishes every later tag there, so the new name answers 404 and `composer require <new name>` fails with "Could not find a matching version of package". Every Netresearch skill repo was in that state until 2026-10-18, after the `agent-*` names were changed to `<repo>`.
+
+A rename therefore takes three steps:
+
+1. Keep `"replace": {"<old name>": "self.version"}` in `composer.json`, so a project that still requires the old name resolves to the new package.
+2. Submit the repository again, through the form or `create-package` above. Packagist reads the new name from `composer.json` and creates a second package for the same repository.
+3. Mark the old package abandoned with the new name as its replacement (package page → Abandon, field "Replacement package"). Composer then prints the replacement to anyone who still installs the old name.
 
 ## Skill repos that ship their own PHP code
 

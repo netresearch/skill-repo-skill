@@ -158,6 +158,39 @@
     }
   },
   {
+    "name": "composer_renamed_package_not_on_packagist",
+    "prompt": "I changed the name in composer.json of a skill repo to match the repository name. Releases still run, but `composer require netresearch/<repo>` now fails with \"Could not find a matching version of package\". What is wrong and how do I fix it?",
+    "assertions": [
+      {
+        "type": "content_regex",
+        "value": "(?i)(not (renamed|registered)|old name|still (published|listed)|keeps)",
+        "description": "Names the cause: Packagist still holds the package under the old name"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)(submit|create-package|register)",
+        "description": "Registers the new name as a package"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)abandon",
+        "description": "Marks the old package abandoned"
+      },
+      {
+        "type": "content_regex",
+        "value": "(?i)replace",
+        "description": "Keeps the replace entry or names the replacement package"
+      }
+    ],
+    "samples": {
+      "passing": "Packagist did not rename the package: it still holds it under the old name and publishes every tag there, so the new name is not registered. Submit the repository again (form or create-package API), keep the replace entry for the old name in composer.json, and mark the old package abandoned with the new name as its replacement.",
+      "failing": [
+        "Run `composer clear-cache` and try again; Packagist needs a moment after a release.",
+        "Add a version field to composer.json so Packagist can find the release."
+      ]
+    }
+  },
+  {
     "name": "composer_no_lock_file",
     "prompt": "Should a Netresearch skill repo commit composer.lock?",
     "assertions": [
