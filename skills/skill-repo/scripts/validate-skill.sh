@@ -578,6 +578,27 @@ if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
+# --- Organisation reusable workflows are called at @main ---
+# Netresearch reusables (netresearch/<repo>/.github/workflows/<name>.yml) are
+# referenced at @main, never at a commit hash: they are maintained together with
+# their callers, and a hash freezes a caller on an old copy while Renovate opens
+# digest PRs for it. A hash pin of netresearch/.github's script-check.yml slipped
+# into netresearch-branding-skill next to eighteen @main callers, and only a
+# Renovate PR exposed it (netresearch/netresearch-branding-skill#115). Third-party
+# actions stay SHA-pinned; this check reads netresearch/* reusables only.
+if [[ -d "$REPO_DIR/.github/workflows" ]]; then
+    PINNED_INTERNAL="$(grep -n -H -E '^[[:space:]]*(-[[:space:]]+)?uses:[[:space:]]*["'\'']?netresearch/[^/@[:space:]]+/\.github/workflows/[^@[:space:]]+@[0-9a-f]{40}' \
+        "$REPO_DIR"/.github/workflows/*.yml "$REPO_DIR"/.github/workflows/*.yaml 2>/dev/null \
+        | sed "s|^$REPO_DIR/||" || true)"
+    if [[ -n "$PINNED_INTERNAL" ]]; then
+        while IFS= read -r hit; do
+            error "organisation reusable workflow pinned to a commit hash: ${hit%%:*}:$(cut -d: -f2 <<<"$hit") — call netresearch/* reusables at @main"
+        done <<<"$PINNED_INTERNAL"
+    else
+        success "netresearch reusable workflows are called at @main"
+    fi
+fi
+
 # --- Required files ---
 for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
     if [[ -f "$REPO_DIR/$file" ]]; then
