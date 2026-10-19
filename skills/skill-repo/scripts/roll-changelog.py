@@ -118,10 +118,7 @@ def parse_args():
     )
     parser.add_argument(
         "--date",
-        default=datetime.datetime.now(datetime.timezone.utc)
-        .astimezone()
-        .date()
-        .isoformat(),
+        default=datetime.datetime.now(datetime.UTC).astimezone().date().isoformat(),
         help="release date (default: today, ISO 8601)",
     )
     parser.add_argument(
