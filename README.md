@@ -47,7 +47,7 @@ This is an **Agent Skill** following the [open standard](https://agentskills.io)
 
 ## Context requirements
 
-- **Validation script**: `bash` 4.3+ and `python3` on PATH when running `validate-skill.sh` (JSON checks use Python, not `jq`)
+- **Validation script**: `bash` 4.3+ and `python3` (3.11+) on PATH when running `validate-skill.sh` (JSON checks use Python, not `jq`)
 - **Target repos**: GitHub-hosted Netresearch skill repos using split licensing and Composer type `ai-agent-skill`
 - **CI**: consuming repos call reusable workflows from this repository (`validate.yml`, `release.yml`, …)
 
@@ -237,7 +237,7 @@ Contributions welcome. Please open PRs for:
 
 ### Tests
 
-The suite lives in `tests/`: one Bash script per area plus `tests/renovate-custom-manager.py`. It needs Bash 4.3+, Python 3 (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
+The suite lives in `tests/`: one Bash script per area plus `tests/renovate-custom-manager.py`. It needs Bash 4.3+, Python 3.11+ (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
 
 ```bash
 rc=0
@@ -260,7 +260,7 @@ In CI, every push to `main` and every pull request runs Skill Tests (`tests-call
 ### Dependencies
 
 - **Shipped package:** `composer.json` requires `netresearch/composer-agent-skill-plugin`, which registers the skill in a PHP project; `package.json` declares `@netresearch/agent-skill-coordinator` as a peer dependency for the same job in Node projects. Neither has a lock file: a skill package pins nothing for its consumers (see [AGENTS.md](AGENTS.md)).
-- **Scripts:** Bash, Python 3 standard library, Git and `jq`; PyYAML is optional for `validate-skill.sh`; the fleet driver needs `gh`; `scripts/run-ab-evals.sh` needs the `claude` CLI. None is installed by this repository.
+- **Scripts:** Bash, Python 3.11+ standard library, Git and `jq`; PyYAML is optional for `validate-skill.sh`; the fleet driver needs `gh`; `scripts/run-ab-evals.sh` needs the `claude` CLI. None is installed by this repository.
 - **CI tools:** third-party GitHub Actions are pinned to commit SHAs. `validate.yml` downloads ShellCheck 0.11.0 and checks its SHA-256, and runs `ruff` 0.16.9 and `pyyaml` 6.0.3 through `uv`. bandit and pip-audit are installed with `--require-hashes` from `.github/requirements/*.txt`, generated with `uv pip compile --generate-hashes`. Pre-commit hooks are pinned by `rev:` in `.pre-commit-config.yaml`. `ab-evals-schedule.yml` installs `@anthropic-ai/claude-code` at a fixed version.
 - **Tracking and updates:** Renovate (`renovate.json`: `config:recommended`, pre-commit hooks enabled, and a regex manager for the `uvx …@version` and `uv run --with …==version` pins in workflows, tested by `tests/renovate-custom-manager.py`) opens update pull requests; `auto-merge-deps-caller.yml` hands them to the organisation's auto-merge workflow, which merges them after their checks pass. The ShellCheck version and checksum, the `pyyaml` and `claude-code` pins and the files in `.github/requirements/` have no Renovate rule and are updated by hand.
 - **Selection:** a new dependency is added in a pull request that changes the manifest or workflow that uses it, and is reviewed there, including its licence against the organisation policy below. Dependency review and Composer Audit run on that pull request (see below).

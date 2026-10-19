@@ -4,7 +4,7 @@
 name: skill-repo
 description: "Use when creating skill repositories, standardizing or validating skill repo structure, setting up composer/release workflows, configuring split licensing (MIT + CC-BY-SA-4.0), fixing plugin.json / SKILL.md validation or version-parity errors, writing, changing or validating evals/evals.json assertions and samples (graded as POSIX ERE by grep -qiE), or releasing a skill version (version bump, tagging)."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires bash 4.3+, python3."
+compatibility: "Requires bash 4.3+, python3 3.11+."
 metadata:
   author: Netresearch DTT GmbH
   version: "2.4.0"
