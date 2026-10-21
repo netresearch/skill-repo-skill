@@ -5,6 +5,7 @@ name: Harness Verification
 
 on:
   workflow_call:
+  merge_group:
 
 permissions:
   contents: read
