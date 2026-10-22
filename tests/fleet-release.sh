@@ -659,7 +659,10 @@ check "no bare \$(gh api ...) capture outside gh_json" "" "$stray_api"
 # --- merge gate: what ends the wait, and what does not (#393) ----------------
 # host_merge_gate runs against a stub `gh` on PATH that serves one fixture per
 # GraphQL poll (the last fixture repeats) and prints an error body to STDOUT
-# with exit 1 for a FAIL fixture — what real gh does on a rate limit. The
+# with exit 1 for a FAIL fixture — what real gh does on a rate limit. The gate
+# reads with --paginate --slurp, so a poll's output is an array of pages: a
+# fixture that is already an array is served as the pages, any other one as a
+# single page. The
 # 2026-10-21 sweep failed every repo on one unreadable poll and on red checks
 # no branch rule required, including a PR that had already merged.
 echo
@@ -679,7 +682,10 @@ case "$1 $2" in
             echo '{"message":"API rate limit exceeded","documentation_url":"https://docs.github.com/rest"}'
             exit 1
         fi
-        cat "$f"
+        case "$(head -c1 "$f")" in
+            "[") cat "$f" ;;
+            *) printf '[%s]\n' "$(cat "$f")" ;;
+        esac
         ;;
     "pr merge") echo "merge $*" >> "$d/merges" ;;
     *) echo "stub gh: unexpected $*" >&2; exit 2 ;;
@@ -692,7 +698,7 @@ gate_pr() { # STATE MERGESTATE MERGEABLE AUTOMERGE(true|false) CONTEXTS-JSON
         '{data: {repository: {pullRequest: {state: $s, mergeStateStatus: $m, mergeable: $g,
           autoMergeRequest: (if $a then {enabledAt: "2026-10-21T00:00:00Z"} else null end),
           commits: {nodes: [{commit: {statusCheckRollup: {contexts:
-            {totalCount: ($c | length), nodes: $c}}}}]}}}}}'
+            {pageInfo: {hasNextPage: false, endCursor: null}, nodes: $c}}}}]}}}}}'
 }
 gate_check() { # NAME REQUIRED(true|false) CONCLUSION
     jq -nc --arg n "$1" --argjson r "$2" --arg c "$3" \
@@ -710,11 +716,16 @@ run_gate() { # CASE TIMEOUT FIXTURE... — sets gate_out, gate_rc, gate_polls
         i=$((i + 1))
         printf '%s\n' "$fx" > "$dir/r$i.json"
     done
+    # Output goes to a file, not through $( ): a killed gate must end the case
+    # even if a grandchild still holds a pipe open, and -k SIGKILLs a gate
+    # that outlives its TERM. A regression that loops shows as rc 124.
     # shellcheck disable=SC2016  # $1 expands in the child bash, not here
-    gate_out=$(PATH="$GATE_BIN:$PATH" GH_STUB_DIR="$dir" FR_POLL_SECONDS=0 \
-        FR_MERGE_TIMEOUT="$timeout_s" timeout 20 bash -c \
-        'source "$1" && host_merge_gate some-skill 245' _ "$SCRIPTS/fleet-release-github.sh" 2>&1)
+    PATH="$GATE_BIN:$PATH" GH_STUB_DIR="$dir" FR_POLL_SECONDS=0 \
+        FR_MERGE_TIMEOUT="$timeout_s" timeout -k 5 20 bash -c \
+        'source "$1" && host_merge_gate some-skill 245' _ "$SCRIPTS/fleet-release-github.sh" \
+        > "$dir/out" 2>&1 < /dev/null
     gate_rc=$?
+    gate_out=$(< "$dir/out")
     gate_polls=$(cat "$dir/count" 2> /dev/null || echo 0)
 }
 
@@ -733,6 +744,8 @@ run_gate red-optional 60 \
     "$(gate_pr OPEN UNSTABLE MERGEABLE true "[$RED_OPT, $GREEN_REQ]")" \
     "$(gate_pr MERGED UNKNOWN UNKNOWN true "[$RED_OPT, $GREEN_REQ]")"
 check "merge gate: red non-required check, otherwise mergeable -> merged (rc 0)" 0 "$gate_rc"
+check "merge gate: poll line says armed, not the auto-merge object" yes \
+    "$(grep -q 'automerge=armed$' <<< "$gate_out" && echo yes || echo no)"
 check "merge gate: red non-required check is reported as a note" yes \
     "$(grep -q 'note: red checks on PR #245 that the branch rules do not require: \["drift / Template drift"\]' <<< "$gate_out" && echo yes || echo no)"
 
@@ -749,6 +762,13 @@ run_gate red-required 60 "$(gate_pr OPEN BLOCKED MERGEABLE true "[$RED_OPT, $RED
 check "merge gate: red REQUIRED check -> rc 1" 1 "$gate_rc"
 check "merge gate: red REQUIRED check fails on the first poll, naming the check" "1 yes" \
     "$gate_polls $(grep -q 'red required checks on PR #245: \["tests / Skill Tests"\]' <<< "$gate_out" && echo yes || echo no)"
+
+# The contexts connection is paginated: a red required check on page two is
+# as fatal as one on page one, never a BLOCKED wait until the timeout.
+run_gate required-page-two 60 \
+    "[$(gate_pr OPEN BLOCKED MERGEABLE true "[$GREEN_REQ]"), $(gate_pr OPEN BLOCKED MERGEABLE true "[$RED_REQ]")]"
+check "merge gate: red REQUIRED check on the second page of contexts -> rc 1 on the first poll" "1 1" \
+    "$gate_rc $gate_polls"
 
 run_gate merged-first 60 "$(gate_pr MERGED DIRTY CONFLICTING false "[$RED_REQ]")"
 check "merge gate: MERGED on the first read wins over red checks and conflicts" "0 1" \

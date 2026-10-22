@@ -112,8 +112,8 @@ only when the PR can no longer merge as it stands.** Each poll is one GraphQL
 read of the PR's state, `mergeStateStatus`, `mergeable` and its checks with
 `isRequired`. A merged PR counts as merged whatever its checks say. The gate
 fails the repo when the PR is closed, when it conflicts, or when a check the
-branch rules *require* is red. A poll that cannot be read (REST quota at 0, a
-GraphQL secondary rate limit, a 5xx) is not a state: the gate keeps waiting,
+branch rules *require* is red. A poll that cannot be read (the GraphQL quota
+at 0, a GraphQL secondary rate limit, a 5xx) is not a state: the gate keeps waiting,
 backs off up to four poll intervals, and only `FR_MERGE_TIMEOUT` ends that
 wait — the `TIMEOUT` line then says how many reads in a row failed, which
 separates a rate limit from slow CI. A red check that is not required

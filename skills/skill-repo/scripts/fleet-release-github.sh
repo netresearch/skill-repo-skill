@@ -252,16 +252,18 @@ host_arm_automerge() { # REPO NUMBER
 
 # One GraphQL read per merge-gate poll. `gh pr view --json statusCheckRollup`
 # does not expose whether a check is required; `isRequired` does, and it needs
-# the PR number as an argument. The first 100 contexts are read; totalCount
-# says when there are more (see host_merge_gate).
-# shellcheck disable=SC2016  # $owner/$repo/$number are GraphQL variables
-FR_GH_MERGE_GATE_QUERY='query($owner: String!, $repo: String!, $number: Int!) {
+# the PR number as an argument. Every page of check contexts is read (gh
+# --paginate follows the contexts' pageInfo, --slurp returns the pages as one
+# array): a red required check on page two must fail the gate, not leave it
+# waiting on BLOCKED until the timeout.
+# shellcheck disable=SC2016  # $owner/$repo/$number/$endCursor are GraphQL variables
+FR_GH_MERGE_GATE_QUERY='query($owner: String!, $repo: String!, $number: Int!, $endCursor: String) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $number) {
       state mergeStateStatus mergeable
       autoMergeRequest { enabledAt }
-      commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) {
-        totalCount
+      commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100, after: $endCursor) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           __typename
           ... on CheckRun { name status conclusion isRequired(pullRequestNumber: $number) }
@@ -284,15 +286,20 @@ host_merge_gate() { # REPO NUMBER — wait until the PR is merged.
     #   - BLOCKED without a red required check (review thread, pending checks).
     # Completion-first: a QUEUED check reports conclusion "" (not null) and
     # must read as pending, never as failure.
-    local r="$1" num="$2" deadline now j state mss mergeable total failed_req \
+    local r="$1" num="$2" deadline now j state mss mergeable failed_req \
         failed_opt last_opt="[]" pending automerge merr unread=0 nap last="no read yet"
     deadline=$(($(date +%s) + FR_MERGE_TIMEOUT))
     while true; do
         j=""
-        if j=$(gh_json graphql -f owner="$FR_ORG" -f repo="$r" -F number="$num" \
-            -f query="$FR_GH_MERGE_GATE_QUERY"); then
-            j=$(jq -c '.data.repository.pullRequest // empty
-                | select(.state | IN("OPEN","MERGED","CLOSED"))' <<< "$j" 2> /dev/null) || j=""
+        if j=$(gh_json graphql --paginate --slurp -f owner="$FR_ORG" -f repo="$r" \
+            -F number="$num" -f query="$FR_GH_MERGE_GATE_QUERY"); then
+            # The PR fields from page one, the contexts of every page.
+            j=$(jq -c '. as $pages
+                | ($pages[0].data.repository.pullRequest // empty) as $pr
+                | select($pr.state | IN("OPEN","MERGED","CLOSED"))
+                | $pr + {contexts: [$pages[]
+                    | (.data.repository.pullRequest.commits.nodes[0].commit.statusCheckRollup.contexts.nodes // [])[]
+                    | select(. != null)]}' <<< "$j" 2> /dev/null) || j=""
         fi
         if [[ -z "$j" ]]; then
             unread=$((unread + 1))
@@ -318,7 +325,7 @@ host_merge_gate() { # REPO NUMBER — wait until the PR is merged.
                     and (.conclusion | IN("SUCCESS","SKIPPED","NEUTRAL") | not))
                 or (.__typename == "StatusContext"
                     and (.state | IN("SUCCESS","PENDING","EXPECTED") | not))'
-            local ctx='[.commits.nodes[0].commit.statusCheckRollup.contexts.nodes // [] | .[] | select(. != null)]'
+            local ctx='.contexts'
             failed_req=$(jq -c "$ctx | map(select(($red_sel) and .isRequired == true) | (.name // .context))" <<< "$j")
             failed_opt=$(jq -c "$ctx | map(select(($red_sel) and .isRequired != true) | (.name // .context))" <<< "$j")
             if [[ "$failed_req" != "[]" ]]; then
@@ -329,22 +336,19 @@ host_merge_gate() { # REPO NUMBER — wait until the PR is merged.
                 echo "note: red checks on PR #$num that the branch rules do not require: $failed_opt — not a merge blocker"
             fi
             last_opt="$failed_opt"
-            total=$(jq -r '.commits.nodes[0].commit.statusCheckRollup.contexts.totalCount // 0' <<< "$j")
-            if [[ "$total" -gt 100 ]]; then
-                echo "note: PR #$num reports $total check contexts; only the first 100 were classified — mergeStateStatus decides the rest"
-            fi
             pending=$(jq "$ctx"' | map(select((.__typename == "CheckRun" and .status != "COMPLETED")
                     or (.__typename == "StatusContext" and (.state | IN("PENDING","EXPECTED"))))) | length' <<< "$j")
-            automerge=$(jq -r '.autoMergeRequest // empty | tostring' <<< "$j")
+            automerge=no
+            [[ "$(jq -r '.autoMergeRequest != null' <<< "$j")" == true ]] && automerge=armed
             last="state=$state mergeState=$mss pending=$pending"
-            echo "poll: $last automerge=${automerge:+armed}${automerge:-no}"
+            echo "poll: $last automerge=$automerge"
             # Merge plainly only on GitHub's own verdict that the PR may merge:
             # CLEAN, or UNSTABLE (mergeable, but a check that is not required
             # is red or pending) once nothing reported is still running — an
             # empty or not-yet-reported rollup is NOT green (queued workflows
             # are invisible to the rollup; a missing REQUIRED check shows as
             # BLOCKED, never as CLEAN or UNSTABLE).
-            if [[ -z "$automerge" ]] \
+            if [[ "$automerge" == no ]] \
                 && { [[ "$mss" == "CLEAN" ]] || [[ "$mss" == "UNSTABLE" && "$pending" -eq 0 ]]; } \
                 && ! merr=$(gh pr merge --merge "$num" --repo "$FR_ORG/$r" 2>&1); then
                 echo "$merr"
