@@ -225,8 +225,11 @@ jobs:
         # template substitution into this script. `eval` keeps the semantics of
         # the former `run: ${{ inputs.test-command }}`: multi-line commands,
         # `a && b`, quotes, braces and heredocs are parsed by bash as before, and
-        # the step's `-eo pipefail` still applies. A bare `run: $TEST_COMMAND`
-        # would word-split instead of parsing, and `bash -c` would drop -e.
+        # the step's `-e` still applies. The step keeps GitHub's default shell
+        # (`bash -e {0}`, no pipefail) on purpose: `shell: bash` would add
+        # pipefail and could fail a caller's `cmd | head` that passes today.
+        # A bare `run: $TEST_COMMAND` would word-split instead of parsing, and
+        # `bash -c` would drop -e.
         run: eval "$TEST_COMMAND"
 
       - name: Upload coverage
