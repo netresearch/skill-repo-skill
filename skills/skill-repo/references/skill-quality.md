@@ -176,6 +176,29 @@ that looked plausible in aggregate. When a delta is negative, or an eval reports
 zero discriminating checks, read the two files before concluding anything about
 the skill — the instrument is the more likely defect.
 
+### Build the prompt so it measures the skill
+
+Two ways an eval prompt measures something other than the skill:
+
+- **The prompt carries the answer.** When a prompt embeds the output of a
+  tool or script, for example a report the skill's script prints, build the
+  prompts with a generator script. Strip every line that holds the answer: a
+  triage decision, a list of existing pull requests, a flag that states the
+  result. Make the generator fail when a known answer token is still in a
+  prompt. Strip regexes break silently: on 2026-10-21 the embedded script's
+  output format changed twice during review, the regexes stopped matching
+  both times, and the answer leaked into the prompts until a later grep found
+  it.
+- **The skill points at a page the arm cannot open.** When a skill delegates
+  rules to a document it tells the agent to read, such as a guide page, give
+  both arms the text of that document in the prompt. `run-ab-evals.sh` runs
+  with no tools, so the with-skill arm cannot read the page. Measured on
+  2026-10-21 (`typo3-docs-changelog`): moving the triage rules from
+  `SKILL.md` to the guide dropped the with-skill arm from 14/15 to 12/15.
+  With the guide text in both arms the result was 10/15 without and 14/15
+  with the skill. The drop to 12/15 had measured the missing page, not the
+  skill.
+
 ### Fact and trigger ownership
 
 Each fact and each trigger phrase has ONE canonical owning skill in the catalog; every other skill cross-references instead of restating. Duplicated facts drift apart at the next release, and duplicated trigger phrases compete for the model's skill selection. (Example: TYPO3 v14 breaking-change facts are owned by `typo3-conformance`; upgrade-execution phrasing by `typo3-extension-upgrade`; siblings link, they do not repeat.) This is the content-level twin of the discovery-level Mirroring rule in [`repository-quality-rules.md`](repository-quality-rules.md) — one canonical surface per fact, links from everywhere else.
