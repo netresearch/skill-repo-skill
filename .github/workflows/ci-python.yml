@@ -220,12 +220,14 @@ jobs:
       - name: Run tests
         env:
           PYTHON_VERSION: ${{ matrix.python }}
-        # zizmor: ignore[template-injection] -- caller-supplied test command; this reusable
-        # workflow runs it verbatim by design. Input comes from the trusted calling repo, not
-        # external/untrusted context, and may be a compound command (a && b) so env indirection
-        # would change behaviour. Same reason for Opengrep:
-        # nosemgrep: yaml.github-actions.security.run-shell-injection.run-shell-injection
-        run: ${{ inputs.test-command }}
+          TEST_COMMAND: ${{ inputs.test-command }}
+        # The caller's test command reaches the shell through env, not through
+        # template substitution into this script. `eval` keeps the semantics of
+        # the former `run: ${{ inputs.test-command }}`: multi-line commands,
+        # `a && b`, quotes, braces and heredocs are parsed by bash as before, and
+        # the step's `-eo pipefail` still applies. A bare `run: $TEST_COMMAND`
+        # would word-split instead of parsing, and `bash -c` would drop -e.
+        run: eval "$TEST_COMMAND"
 
       - name: Upload coverage
         if: ${{ inputs.upload-coverage && matrix.python == fromJSON(inputs.python-versions)[0] }}
