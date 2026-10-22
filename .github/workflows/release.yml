@@ -85,8 +85,7 @@ on:
         required: false
         default: true
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
   release:
