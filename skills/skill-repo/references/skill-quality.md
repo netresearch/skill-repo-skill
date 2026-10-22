@@ -196,7 +196,7 @@ Two ways an eval prompt measures something other than the skill:
   2026-10-21 (`typo3-docs-changelog`): moving the triage rules from
   `SKILL.md` to the guide dropped the with-skill arm from 14/15 to 12/15.
   With the guide text in both arms the result was 10/15 without and 14/15
-  with the skill — the first number had measured the missing page, not the
+  with the skill. The drop to 12/15 had measured the missing page, not the
   skill.
 
 ### Fact and trigger ownership
