@@ -107,7 +107,7 @@ The `release.yml` workflow triggers on `v*` tags, validates that the tag matches
 ### This Repo's Own CI
 
 - `lint.yml` runs markdown lint, ShellCheck, and skill validation on push to main and PRs
-- `auto-merge-deps-caller.yml` is this repo's own caller for the org-level auto-merge workflow
+- `auto-merge-deps.yml` is this repo's own caller for the org-level auto-merge workflow (managed by the template sync; one caller only, a second one runs every pull request twice)
 
 ### Caller Workflow Pattern
 
