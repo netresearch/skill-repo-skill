@@ -107,6 +107,24 @@ takes an `sha` pin (`gh api -X PUT .../pulls/N/merge -f merge_method=merge
 `--watch` over repeated status reads, and stop any watcher whose answer is
 already known.
 
+**The `finish` merge gate waits through an exhausted quota; it fails a repo
+only when the PR can no longer merge as it stands.** Each poll is one GraphQL
+read of the PR's state, `mergeStateStatus`, `mergeable` and its checks with
+`isRequired`. A merged PR counts as merged whatever its checks say. The gate
+fails the repo when the PR is closed, when it conflicts, or when a check the
+branch rules *require* is red. A poll that cannot be read (the GraphQL quota
+at 0, a GraphQL secondary rate limit, a 5xx) is not a state: the gate keeps waiting,
+backs off up to four poll intervals, and only `FR_MERGE_TIMEOUT` ends that
+wait — the `TIMEOUT` line then says how many reads in a row failed, which
+separates a rate limit from slow CI. A red check that is not required
+(`drift / Template drift`, a reviewer bot out of quota) is printed as a
+`note:` and does not block, because GitHub merges over it: with auto-merge
+armed the gate waits for that merge, without it the gate merges plainly on
+`CLEAN`, or on `UNSTABLE` once no reported check is still running. (2026-10-21:
+before this, two consecutive `finish` runs reported all six repos as
+`FAIL … merge gate` during a rate limit caused by other sessions on the same
+account, one of them for a bump PR that had already merged; #393.)
+
 **A batch that waits on a prerequisite PR runs in its own `--workdir`.** The
 lock is per workdir and covers every phase, and a `finish` run holds it until
 each of its merge gates closes — up to `FR_MERGE_TIMEOUT` per repo. Repos held
@@ -399,7 +417,7 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
   variable and the `pageInfo` block above, and `jq -s` to slurp the pages it emits.
 
   In the 2026-09-03 sweep this hit 3 of 4 PRs in one batch — all three findings were real defects in the *generated* changelog, which is exactly the text nobody proofreads. Budget a review round for the roll's output rather than treating a bump PR as mechanical.
-- **A `FAIL <repo>: merge gate` with a CONFLICTING bump PR is usually a parallel release, not a conflict to resolve.** A sweep surveys once and acts minutes later, and another session on the same account can release one of the surveyed repos inside that window. The sweep's own bump PR then sits on a moved `main` with a conflict in `plugin.json`, every check green, `mergeable=CONFLICTING mergeState=DIRTY` — which reads as "rebase it". Rebasing is wrong whenever the parallel release is *higher*: read `origin/main`'s `plugin.json` version and the latest release first, and check whether that release's compare range already covers the commits the sweep's version targeted. When it does, the sweep's PR is redundant and a rebase would move the version backwards; close it, naming the superseding release and PR, and delete the branch. (2026-09-20: `skill-repo-skill` was released as v2.2.0 from #335 at 10:49 while a sweep held a v2.1.6 bump PR (#336) open; v2.2.0 covered both commits v2.1.6 existed for.) The engine cannot distinguish this from a real conflict today — it reports the generic merge-gate failure — so the operator makes the call.
+- **A `FAIL <repo>: merge gate` with a CONFLICTING bump PR is usually a parallel release, not a conflict to resolve.** A sweep surveys once and acts minutes later, and another session on the same account can release one of the surveyed repos inside that window. The sweep's own bump PR then sits on a moved `main` with a conflict in `plugin.json`, every check green, `mergeable=CONFLICTING mergeState=DIRTY` — which reads as "rebase it". Rebasing is wrong whenever the parallel release is *higher*: read `origin/main`'s `plugin.json` version and the latest release first, and check whether that release's compare range already covers the commits the sweep's version targeted. When it does, the sweep's PR is redundant and a rebase would move the version backwards; close it, naming the superseding release and PR, and delete the branch. (2026-09-20: `skill-repo-skill` was released as v2.2.0 from #335 at 10:49 while a sweep held a v2.1.6 bump PR (#336) open; v2.2.0 covered both commits v2.1.6 existed for.) The merge gate names the conflict (`PR #N has a merge conflict (mergeable=CONFLICTING mergeState=DIRTY) — PR left open`) but cannot tell a parallel release from a real conflict, so the operator makes the call.
 - **Dependency commits landing after a tag are not a second release; commits under `skills/**` are.** The same window produces both. A post-tag delta touching only `.pre-commit-config.yaml` or `renovate.json` ships nothing, because the release archive's allow-list does not carry those files. One that touches a skill's `SKILL.md`, `references/` or `scripts/` does, and a sweep that measured once will not see it: re-check the repos it released before reporting the fleet clean. (2026-09-20: of six GitHub repos with commits after their new tag, five were pre-commit bumps and one — `git-workflow-skill` — had two `references/advanced-git.md` commits, released as v1.34.1.)
 - **Archived repos are release-infeasible** (pushes rejected). A deprecated repo whose deprecation-banner commit landed *after* the last tag has never shipped its own deprecation notice — flag it for an unarchive decision instead of silently skipping.
 - **The unarchive → final release → re-archive path** (walked 2026-08-13 for claude-coach-plugin v2.6.0 and typo3-frontend-patterns-skill v1.2.1) has its own traps. A sweep that was blocked by the archive may have left a prepared, signed local bump branch — verify its signature and content, then push and reuse it rather than recreating. Expect the frozen repo to fail reusables that evolved while it slept, and fix proportionately: measure ruff with the fleet config (`select = ["E","F","W"]`, `line-length = 120`) before concluding code work exists — 439 default-rule findings were **zero** under it, so the fix was one `ruff.toml`, not a rewrite. `ruff format` also rewrites ` ```python ` blocks inside `.md` files, and a config change invalidates every earlier `--check` measurement — re-measure after the config lands, and AST-verify the formatted files before claiming the change is behavior-free. A red Template Drift paired with a Security `startup_failure` usually shares one cause: the frozen `security.yml` still passes the org-removed `GITLEAKS_LICENSE` secret — syncing `templates/skill/.github/workflows/security.yml` from `netresearch/.github` fixes both at once. Re-archive only after the Release object and its assets are verified.

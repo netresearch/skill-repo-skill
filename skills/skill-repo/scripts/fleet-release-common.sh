@@ -18,7 +18,14 @@
 #                                  print '<id> <url> <state> <author>' of the
 #                                  newest PR/MR for BRANCH, or nothing
 #   host_arm_automerge REPO ID     arm auto-merge (or no-op); never fails the repo
-#   host_merge_gate REPO ID        wait until merged; 0 merged, 1 failed/timeout
+#   host_merge_gate REPO ID        wait until merged; 0 merged, 1 failed/timeout.
+#                                  "Failed" means the PR/MR can no longer merge
+#                                  as it stands: closed, conflicting, or a red
+#                                  check the host REQUIRES. An unreadable poll
+#                                  is not a state and a red optional check is
+#                                  not a blocker: both keep the gate waiting,
+#                                  and only the timeout ends that wait. A
+#                                  merged PR/MR returns 0 whatever its checks.
 #   host_merge_commit REPO ID      print the SHA the merged PR/MR produced
 #   host_release_verify REPO TAG   wait for the Release object; 0 ok, 1 missing
 #   host_origin_suffix REPO        expected origin URL suffix, e.g. 'org/repo'
