@@ -61,7 +61,8 @@
 #   opened.jsonl   the PRs/MRs THIS sweep opened — the only ones finish may
 #                  ever wait on or merge (a colleague's bump PR is never
 #                  covered by sweep approval; release-discipline.md)
-#   logs/<phase>/<repo>.log
+#   logs/<phase>/<repo>.log      this run's logs only
+#   logs/<phase>.<UTC stamp>/    an earlier run's logs, moved aside at start
 
 # ---------------------------------------------------------------------------
 # Globals (drivers may override before sourcing or via flags)
@@ -384,6 +385,23 @@ fr_tag_on_tip() { # GITDIR TAG TIP — signed tag on the verified remote tip; no
     local ec=$?
     fr_note "TAG PUSH EXIT: $ec"
     return "$ec"
+}
+
+fr_rotate_logs() { # LOGDIR — move an earlier run's logs into a sibling
+    # LOGDIR.<UTC stamp>/ before this run writes its own. Deleting them lost
+    # the evidence of why the earlier run failed, which is exactly what the
+    # re-run is for; leaving them in place would fail the count invariant and
+    # resurrect their FAIL lines in this run's summary. A second run in the
+    # same second gets a mktemp suffix instead of merging into the first.
+    local logdir="$1" stamp dest
+    compgen -G "$logdir/*.log" > /dev/null || return 0
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    dest="$logdir.$stamp"
+    if ! mkdir "$dest" 2> /dev/null; then
+        dest=$(mktemp -d "$logdir.$stamp.XXXX") || { fr_err "cannot create a directory for the previous logs next to $logdir"; return 1; }
+    fi
+    mv "$logdir"/*.log "$dest"/ || { fr_err "cannot move the previous logs out of $logdir"; return 1; }
+    fr_note "previous run's logs moved to $dest"
 }
 
 fr_check_log_invariant() { # LOGDIR EXPECTED — a killed batch 'completes' with
@@ -1043,8 +1061,9 @@ fr_bump() { # PLAN
     local plan="$1" logdir="$FR_WORKDIR/logs/bump" row repo n=0 rc=0
     fr_plan_validate "$plan"
     # Logs are per-RUN evidence: stale ones from a previous run would fail the
-    # count invariant and resurrect old FAIL lines into this run's summary.
-    find "$logdir" -maxdepth 1 -name '*.log' -delete 2> /dev/null || true
+    # count invariant and resurrect old FAIL lines into this run's summary, so
+    # they move aside (kept, not deleted — they say why that run failed).
+    fr_rotate_logs "$logdir" || fr_die "previous bump logs could not be moved aside — refusing to mix them into this run"
     while IFS= read -u 3 -r row || [[ -n "$row" ]]; do
         [[ -n "$row" ]] || continue
         repo=$(jq -r '.repo' <<< "$row")
@@ -1237,7 +1256,7 @@ fr_cleanup_release_branch() { # DIR GITDIR BRANCH VERSION PRID — tolerant;
 fr_finish() { # PLAN [--continue]
     local plan="$1" cont="${2:-}" logdir="$FR_WORKDIR/logs/finish" row repo n=0 rc=0 ec
     fr_plan_validate "$plan"
-    find "$logdir" -maxdepth 1 -name '*.log' -delete 2> /dev/null || true
+    fr_rotate_logs "$logdir" || fr_die "previous finish logs could not be moved aside — refusing to mix them into this run"
     while IFS= read -u 3 -r row || [[ -n "$row" ]]; do
         [[ -n "$row" ]] || continue
         repo=$(jq -r '.repo' <<< "$row")

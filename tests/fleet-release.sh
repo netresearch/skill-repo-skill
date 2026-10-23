@@ -199,6 +199,58 @@ check "summary counts ok/fail/indeterminate" yes \
 check "summary is nonzero when anything is not OK" yes \
     "$(grep -q 'rc=1' <<< "$summary" && echo yes || echo no)"
 
+# --- a re-run keeps the previous run's logs ---------------------------------
+# bump and finish used to delete logs/<phase>/*.log at start, so the re-run
+# that follows a failure destroyed the only record of why it failed. They now
+# move into logs/<phase>.<UTC stamp>/, and the count invariant still sees
+# only the current run. The phases run here with their per-repo step stubbed.
+# shellcheck disable=SC2034  # read by fr_bump's epilogue
+FR_DRIVER="test-driver"
+rot_run() { # WORKDIR PHASE LOG-TEXT REPO... — one phase run over a plan of REPOs
+    # FR_WORKDIR keeps the engine's name on purpose: a dynamically scoped
+    # local is how the sourced fr_bump/fr_finish see this run's workdir.
+    local FR_WORKDIR="$1" phase="$2" text="$3" r rc=0
+    shift 3
+    mkdir -p "$FR_WORKDIR"
+    : > "$FR_WORKDIR/plan.jsonl"
+    for r in "$@"; do
+        jq -nc --arg r "$r" '{repo: $r, classification: "BUMP", version: "1.1.0", default: "main", last: "1.0.0"}' \
+            >> "$FR_WORKDIR/plan.jsonl"
+    done
+    mkdir -p "$FR_WORKDIR/logs/$phase"
+    # shellcheck disable=SC2329  # invoked indirectly by fr_bump / fr_finish
+    fr_bump_one() { local plan_row="$1"; echo "$ROT_TEXT"; echo "OK $(jq -r .repo <<< "$plan_row")"; return 0; }
+    # shellcheck disable=SC2329  # invoked indirectly by fr_finish
+    fr_finish_one() { local plan_row="$1"; echo "$ROT_TEXT"; echo "OK $(jq -r .repo <<< "$plan_row")"; return 0; }
+    ROT_TEXT="$text"
+    if [[ "$phase" == bump ]]; then
+        fr_bump "$FR_WORKDIR/plan.jsonl" || rc=$?
+    else
+        fr_finish "$FR_WORKDIR/plan.jsonl" || rc=$?
+    fi
+    return "$rc"
+}
+for phase in bump finish; do
+    out=$( rot_run "$WORK/rot-$phase" "$phase" "first run" a b c > /dev/null 2>&1
+           rot_run "$WORK/rot-$phase" "$phase" "second run" a b 2>&1
+           rot_run "$WORK/rot-$phase" "$phase" "third run" a 2>&1 )
+    RD="$WORK/rot-$phase/logs"
+    check "$phase: the current log directory holds only this run's logs" "a.log" \
+        "$(find "$RD/$phase" -mindepth 1 -printf '%f ' | sed 's/ $//')"
+    check "$phase: the current logs are this run's" "third run" "$(head -1 "$RD/$phase/a.log")"
+    check "$phase: both earlier runs were kept, not deleted" 2 \
+        "$(find "$RD" -mindepth 1 -maxdepth 1 -type d -name "$phase.*" | wc -l | tr -d ' ')"
+    check "$phase: the first run's three logs survive with their content" "3 first run" \
+        "$(grep -l 'first run' "$RD/$phase".*/*.log | wc -l | tr -d ' ') $(grep -h 'first run' "$RD/$phase".*/c.log)"
+    check "$phase: a rotated directory is named <phase>.<UTC stamp>" yes \
+        "$(find "$RD" -maxdepth 1 -type d -name "$phase.*" | grep -qE "/$phase\.[0-9]{8}T[0-9]{6}Z(\.[A-Za-z0-9]{4})?$" && echo yes || echo no)"
+    check "$phase: the re-run says where the old logs went" yes \
+        "$(grep -q "previous run's logs moved to $RD/$phase\." <<< "$out" && echo yes || echo no)"
+done
+out=$( rot_run "$WORK/rot-bump" bump "fourth run" a 2>&1; echo "rc=$?" )
+check "bump: after rotation the log invariant counts only the current run" yes \
+    "$(grep -q 'log invariant holds: 1/1' <<< "$out" && grep -q 'rc=0' <<< "$out" && echo yes || echo no)"
+
 # --- classification: one shared implementation, every class ------------------
 row() { # KEY=VALUE... — build a survey row over sane defaults
     local json='{"host":"test","repo":"r","resolved":"o/r","default":"main",
