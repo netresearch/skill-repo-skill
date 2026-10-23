@@ -277,7 +277,7 @@ This repository follows the Netresearch organisation policies:
 
 The security assurance case for this repository (threat model, trust boundaries, countermeasures and limits) is in [docs/SECURITY-ASSURANCE.md](docs/SECURITY-ASSURANCE.md).
 
-Checks that run on every pull request in this repository: Skill Validation (`lint.yml`, the reusable `validate.yml` from `main`: skill structure, plugin manifest sync, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff, checkpoint schemas), Self-test, Skill Tests, Eval Validation, npm Pack Smoke, the template drift check, and Security (`security.yml`, for pull requests against `main`): Betterleaks secret scanning, zizmor on the workflows, dependency review, and Composer Audit with an Opengrep SAST scan. CodeQL default setup, SonarCloud and the DCO check also report on pull requests; they are configured in the repository settings, not in this repository.
+Checks that run on every pull request in this repository: Skill Validation (`lint.yml`, the reusable `validate.yml` from `main`: skill structure, plugin manifest sync, markdownlint, yamllint, actionlint, JSON syntax, ShellCheck, ruff, checkpoint schemas), Self-test, Skill Tests, Eval Validation, npm Pack Smoke, the template drift check, and Security (`security.yml`, for pull requests against `main` or `master`): Betterleaks secret scanning, zizmor on the workflows, dependency review, Composer Audit with an Opengrep SAST scan, and CodeQL. SonarCloud and the DCO check also report on pull requests; they are configured in the repository settings, not in this repository.
 
 ## License
 
