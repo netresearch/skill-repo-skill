@@ -125,6 +125,21 @@ before this, two consecutive `finish` runs reported all six repos as
 `FAIL … merge gate` during a rate limit caused by other sessions on the same
 account, one of them for a bump PR that had already merged; #393.)
 
+**The Release check after the tag tells an unreadable read from a missing
+Release, but it does not wait out the quota.** A 404 is a read that answered
+("not published yet"); a 403 or 5xx is not a state. Unreadable polls back off
+on the merge gate's schedule. If the last read before `FR_RELEASE_TIMEOUT` is
+unreadable, the repo fails with `Release for vX.Y.Z UNVERIFIED` instead of
+`no verified Release`, even when earlier reads answered 404: those only say
+the Release was not published yet, and a quota usually drains partway through
+the window. The log then names the unreadable and the 404 counts, the REST
+core quota with its reset time, and the last workflow runs; each failed read
+also logs its cause (`gh api failed: …`). Both outcomes still halt the sweep, since the next repo
+meets the same exhausted quota. Re-run `finish` after the reset: with the tag
+on the remote it only verifies. (2026-10-23: agent-rules-skill v3.16.5 was
+complete with 6 assets while the quota stayed at 0, and the sweep halted on
+"no verified Release".)
+
 **A batch that waits on a prerequisite PR runs in its own `--workdir`.** The
 lock is per workdir and covers every phase, and a `finish` run holds it until
 each of its merge gates closes — up to `FR_MERGE_TIMEOUT` per repo. Repos held
@@ -381,6 +396,34 @@ A zero means the release archive would be byte-identical to the last tag — ski
 the repo and say so in the manifest. In the 2026-08-06 sweep this filter alone
 removed 13 of 32 repos that had commits since their tag.
 
+**A delta that ships nothing is not a release either: `SKIP-NOT-SHIPPED`.**
+Commits that touch only inert files change nothing a consumer installs. The
+inert list is `FR_NOT_SHIPPED_RE` in `fleet-release-common.sh`: `README.md`,
+`AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
+`CODE_OF_CONDUCT.md`, `SECURITY*.md`, root `docs/`, `tests/` and `evals/`, and
+a skill's `evals/`, `tests/` and `README.md`. The code comment gives the reason
+for each entry. **Every other path counts as shipped**, so a path nobody listed
+releases instead of being skipped. An allow-list of shipped paths failed that
+way: `styles/` and `config/` read via `SKILL.md`, `workflows/`, and a root
+`package.json` (npm `files`, `aiAgentSkill`) all reach consumers and none of
+them was on it. The survey counts, from the same non-CI file list, the files
+that are not inert. A row with commits, a non-zero non-CI count and zero
+shipped files classifies as `SKIP-NOT-SHIPPED`, and the manifest names up to
+five of its files. The class needs a complete measurement. These rows stay
+`BUMP`, because a wrong skip leaves a change unreleased while a wrong bump
+only costs a release:
+
+- a truncated compare file list;
+- a missing or failed count;
+- a file list that does not reconcile with the non-CI count;
+- a row without `renames_counted: true`.
+
+That last key means the driver lists a renamed file under its old *and* its
+new path, so moving `skills/x/references/a.md` to `docs/a.md` counts as a
+shipped change. The GitHub driver sets it. A driver that reads only the new
+path (GitLab's `.diffs[].new_path`) never produces the class. Like
+`SKIP-CI-ONLY`, a 0.x row is still offered as a `STABILIZE` candidate.
+
 Surveying dozens of local skill-repo checkouts for "commits since last tag" hits these, verified in the 2026-07-16 sweep (16 releases):
 
 - **Three checkout layouts coexist** under the projects dir: bare + worktrees (`repo/.bare`), a plain repo at the top level (`repo/.git`, which is a pointer *file* when the top level is itself a worktree), and a plain clone one level down (`repo/main/.git`). Resolve the git dir per repo instead of assuming one shape:
@@ -501,14 +544,15 @@ Surveying dozens of local skill-repo checkouts for "commits since last tag" hits
 
 A "bring everything to at least 1.0" sweep needs releases that have no new
 content of their own. The classification cannot produce them — a quiet 0.x repo
-is `UP-TO-DATE` or `SKIP-CI-ONLY` and gets no plan row — and the rollover refuses
-an empty `[Unreleased]`. The 2026-09-23 sweep lifted 20 repos to 1.0.0 by
+is `UP-TO-DATE`, `SKIP-CI-ONLY` or `SKIP-NOT-SHIPPED` and gets no plan row — and
+the rollover refuses an empty `[Unreleased]`. The 2026-09-23 sweep lifted 20
+repos to 1.0.0 by
 retyping plan rows in a session-local script and by opening a CHANGELOG PR per
 repo first, which is the hand-written driver this page warns against. The class
 now does it:
 
 - **manifest** notes `0.x: stabilization candidate` on every 0.x row that is
-  `BUMP`, `UP-TO-DATE` or `SKIP-CI-ONLY`, and writes a ready row
+  `BUMP`, `UP-TO-DATE`, `SKIP-CI-ONLY` or `SKIP-NOT-SHIPPED`, and writes a ready row
   (`classification: STABILIZE`, `version: 1.0.0`) to `plan.stabilize.jsonl`.
   Stabilizing is opt-in: the rows are not in the skeleton. Copy the ones you
   want into `plan.jsonl`, replacing the repo's skeleton row if it has one — the

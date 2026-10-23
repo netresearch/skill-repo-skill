@@ -28,6 +28,15 @@
 #                                  merged PR/MR returns 0 whatever its checks.
 #   host_merge_commit REPO ID      print the SHA the merged PR/MR produced
 #   host_release_verify REPO TAG   wait for the Release object; 0 ok, 1 missing
+#                                  (the last read before the deadline answered
+#                                  and showed no Release with assets), 3
+#                                  unverifiable (the last read before the
+#                                  deadline failed: quota, 5xx — the state
+#                                  at the deadline is unknown, even after
+#                                  earlier 404s; not evidence of a missing
+#                                  Release).
+#                                  A driver that only returns 0/1 still works;
+#                                  its 1 reads as "missing", as before.
 #   host_origin_suffix REPO        expected origin URL suffix, e.g. 'org/repo'
 #   host_display REPO              display identity, e.g. 'netresearch/repo'
 #
@@ -37,6 +46,13 @@
 #   release_gate ci_status ahead nonci changelog_unreleased files_truncated
 #   tags_failed subjects files
 #   open_release_prs [{id,url,author,branch,title}] ci_tag_rules notes
+# fr_survey adds one key to every row whose `files` is a list, so a driver
+# need not compute it: `shipped`, the count of those files that do NOT match
+# FR_NOT_SHIPPED_RE (-1 when the count itself failed).
+# Optional driver key: `renames_counted: true` when `files` and `nonci` list a
+# renamed file under its old AND its new path. Without it a move from
+# skills/x/references/a.md to docs/a.md looks docs-only, so SKIP-NOT-SHIPPED
+# is granted only to rows that carry it; every other row stays BUMP.
 #
 # Every phase writes into $FR_WORKDIR:
 #   survey.jsonl   one row per repo (jq -nc: ROW COUNTS MUST EQUAL LINE COUNTS)
@@ -45,7 +61,8 @@
 #   opened.jsonl   the PRs/MRs THIS sweep opened — the only ones finish may
 #                  ever wait on or merge (a colleague's bump PR is never
 #                  covered by sweep approval; release-discipline.md)
-#   logs/<phase>/<repo>.log
+#   logs/<phase>/<repo>.log      this run's logs only
+#   logs/<phase>.<UTC stamp>/    an earlier run's logs, moved aside at start
 
 # ---------------------------------------------------------------------------
 # Globals (drivers may override before sourcing or via flags)
@@ -67,6 +84,26 @@ FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
 # is deliberate.
 # shellcheck disable=SC2034  # consumed by the host drivers' survey callbacks
 FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-config\.yaml$|^\.markdownlint(-cli2)?\.jsonc$|^\.yamllint\.yml$|^\.editorconfig$'
+# Inert-path filter: files no consumer loads. A path counts as SHIPPED unless
+# it matches here, so a path nobody thought of releases (BUMP) instead of
+# skipping — an allow-list of shipped paths failed exactly that way: styles/,
+# workflows/, config/ and package.json all reach consumers and none was on it.
+# Each entry, and why no install reads it (2026-10-23, 39 GitHub repos):
+#   README.md AGENTS.md CLAUDE.md CHANGELOG.md CONTRIBUTING.md
+#   CODE_OF_CONDUCT.md SECURITY*.md  contributor and repo documentation; npm
+#            packs README.md and some repos' AGENTS.md, but an agent reads
+#            AGENTS.md/CLAUDE.md from the project it works in, never from an
+#            installed package, and no SKILL.md in the fleet links to any of
+#            them. GEMINI.md is NOT here: a Gemini extension loads it.
+#   docs/ tests/ evals/  repo documentation, test suites, eval suites; the
+#            release archive and every npm `files` list leave the root ones out.
+#   skills/<name>/evals/ skills/<name>/tests/ skills/<name>/README.md
+#            outside the archive's per-skill allow-list; npm packs them with
+#            the skill dir, but nothing loads them.
+# Everything else — .gitignore, Build/, package.json, styles/, config/ … —
+# counts as shipped: being wrong there costs one release, not a skipped one.
+# shellcheck disable=SC2034  # consumed by fr_add_shipped
+FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$'
 # STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
 # use it as the release body when the plan row leaves `body` empty: a first
 # stable release ships a promise, and the promise has to be written where a
@@ -350,6 +387,23 @@ fr_tag_on_tip() { # GITDIR TAG TIP — signed tag on the verified remote tip; no
     return "$ec"
 }
 
+fr_rotate_logs() { # LOGDIR — move an earlier run's logs into a sibling
+    # LOGDIR.<UTC stamp>/ before this run writes its own. Deleting them lost
+    # the evidence of why the earlier run failed, which is exactly what the
+    # re-run is for; leaving them in place would fail the count invariant and
+    # resurrect their FAIL lines in this run's summary. A second run in the
+    # same second gets a mktemp suffix instead of merging into the first.
+    local logdir="$1" stamp dest
+    compgen -G "$logdir/*.log" > /dev/null || return 0
+    stamp=$(date -u +%Y%m%dT%H%M%SZ)
+    dest="$logdir.$stamp"
+    if ! mkdir "$dest" 2> /dev/null; then
+        dest=$(mktemp -d "$logdir.$stamp.XXXX") || { fr_err "cannot create a directory for the previous logs next to $logdir"; return 1; }
+    fi
+    mv "$logdir"/*.log "$dest"/ || { fr_err "cannot move the previous logs out of $logdir"; return 1; }
+    fr_note "previous run's logs moved to $dest"
+}
+
 fr_check_log_invariant() { # LOGDIR EXPECTED — a killed batch 'completes' with
     # fewer logs than repos and nothing says so; count before trusting anything
     local logdir="$1" expected="$2" actual
@@ -383,6 +437,22 @@ fr_summarize_logs() { # LOGDIR — count explicit end-state markers; a truncated
 # ---------------------------------------------------------------------------
 # Survey
 # ---------------------------------------------------------------------------
+fr_add_shipped() { # ROW-JSON — the row plus `shipped`, computed here from its
+    # own `files` so every host gets it from the engine: the files that are
+    # NOT inert. A row without a file list (unreachable, duplicate) passes
+    # through unchanged, and a count that cannot be made is -1, never 0: 0 is
+    # what skips a release.
+    local row="$1" out
+    if out=$(jq -c --arg re "$FR_NOT_SHIPPED_RE" \
+        'if (.files | type) == "array"
+         then .shipped = ([.files[] | select(test($re) | not)] | length) else . end' <<< "$row" 2> /dev/null); then
+        printf '%s\n' "$out"
+    else
+        jq -c '.shipped = -1' <<< "$row" 2> /dev/null || printf '%s\n' "$row"
+    fi
+    return 0
+}
+
 fr_survey() { # REPO... — remote-first; per-repo failures become rows, not aborts.
     # A re-survey of a SUBSET (the manifest's own "re-run survey --repos X"
     # advice) replaces exactly those rows and keeps the rest — truncating the
@@ -403,6 +473,7 @@ fr_survey() { # REPO... — remote-first; per-repo failures become rows, not abo
         row=$(host_survey_repo "$repo" < /dev/null) \
             || row=$(jq -nc --arg r "$repo" --arg h "$FR_HOST" \
                 '{host:$h, repo:$r, unreachable:true}')
+        row=$(fr_add_shipped "$row")
         # A renamed repo answers on both names (API redirect) — the SECOND row
         # for one resolved identity must not become a second bump PR.
         resolved=$(jq -r '.resolved // empty' <<< "$row")
@@ -451,6 +522,16 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
               elif (.ahead // 0) < 0 or (.nonci // 0) < 0 then "SURVEY-INCOMPLETE"
               elif (.ahead // 0) == 0 then "UP-TO-DATE"
               elif (.nonci // 0) == 0 then "SKIP-CI-ONLY"
+              # Only on a complete, reconciled file list: a truncated list, a
+              # missing or failed count (`shipped` absent or -1), a list
+              # whose length disagrees with nonci, or a driver that does not
+              # count renames under both paths is "unknown", and unknown
+              # releases.
+              elif (.files_truncated // false) != true
+                   and (.renames_counted // false) == true
+                   and (.shipped // -1) == 0
+                   and ((.files // []) | length) == .nonci
+              then "SKIP-NOT-SHIPPED"
               else "BUMP"
               end
         end' <<< "$1"
@@ -492,7 +573,12 @@ fr_manifest() {
                  (if (.last_tag // "") != "" and ((.last_tag | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+")) | not)
                   then "nonstandard tag convention" else empty end),
                  (if .files_truncated == true then "compare file list truncated" else empty end),
-                 (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY"))
+                 (if $cls == "SKIP-NOT-SHIPPED"
+                  then "delta touches only files no release ships: "
+                       + ((.files // [])[:5] | join(", "))
+                       + (if ((.files // []) | length) > 5 then ", …" else "" end)
+                  else empty end),
+                 (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY", "SKIP-NOT-SHIPPED"))
                      and (.claude_plugin // "") != "" and ((.claude_plugin | vparse)[0] == 0)
                   then "0.x: stabilization candidate — STABILIZE row in plan.stabilize.jsonl"
                   else empty end),
@@ -548,7 +634,7 @@ fr_manifest() {
         # it into the plan is the operator's decision — replace the repo's
         # skeleton row if it has one, the duplicate-row guard refuses both.
         case "$cls" in
-            BUMP|UP-TO-DATE|SKIP-CI-ONLY)
+            BUMP|UP-TO-DATE|SKIP-CI-ONLY|SKIP-NOT-SHIPPED)
                 jq -c "$FR_JQ_VPARSE"'
                     select(((.claude_plugin // "") | vparse)[0] == 0 and (.claude_plugin // "") != "")
                     | {repo, classification: "STABILIZE", default: (.default // "main"),
@@ -975,8 +1061,9 @@ fr_bump() { # PLAN
     local plan="$1" logdir="$FR_WORKDIR/logs/bump" row repo n=0 rc=0
     fr_plan_validate "$plan"
     # Logs are per-RUN evidence: stale ones from a previous run would fail the
-    # count invariant and resurrect old FAIL lines into this run's summary.
-    find "$logdir" -maxdepth 1 -name '*.log' -delete 2> /dev/null || true
+    # count invariant and resurrect old FAIL lines into this run's summary, so
+    # they move aside (kept, not deleted — they say why that run failed).
+    fr_rotate_logs "$logdir" || fr_die "previous bump logs could not be moved aside — refusing to mix them into this run"
     while IFS= read -u 3 -r row || [[ -n "$row" ]]; do
         [[ -n "$row" ]] || continue
         repo=$(jq -r '.repo' <<< "$row")
@@ -1039,8 +1126,7 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
     fi
     if [[ -n "$pre_existing" ]]; then
         echo "tag $tag already on the remote at $pre_existing — verifying its Release"
-        host_release_verify "$repo" "$tag" < /dev/null \
-            || { echo "FAIL $repo: tag $tag exists but has no verified Release (post-tag — halting the sweep)"; return 2; }
+        fr_release_verified "$repo" "$tag" "tag $tag exists but has no verified Release" || return 2
         fr_cleanup_release_branch "$dir" "$gitdir" "$branch" "$version" "$(fr_opened_lookup "$repo")"
         echo "OK $repo $tag released (verified on re-run)"
         return 0
@@ -1130,11 +1216,26 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
     # Past this point a failure means the tag is on the remote but the release
     # machinery did not produce a verified Release object — that class is
     # contagious (a broken shared workflow breaks every following repo too).
-    host_release_verify "$repo" "$tag" < /dev/null \
-        || { echo "FAIL $repo: no verified Release for $tag (post-tag — halting the sweep)"; return 2; }
+    fr_release_verified "$repo" "$tag" "no verified Release for $tag" || return 2
 
     fr_cleanup_release_branch "$dir" "$gitdir" "$branch" "$version" "$prid"
     echo "OK $repo $tag released"
+}
+
+fr_release_verified() { # REPO TAG MISSING-TEXT — host_release_verify, with the
+    # outcome on the FAIL line: the summary and the per-repo `tail -1` show
+    # only that line, so "could not be read" has to be said there, not in the
+    # callback's own output further up the log. Both failures still halt: an
+    # unreadable API reaches the next repo too. The re-run is cheap — with the
+    # tag on the remote, finish only verifies.
+    local repo="$1" tag="$2" missing="$3" rc=0
+    host_release_verify "$repo" "$tag" < /dev/null || rc=$?
+    case "$rc" in
+        0) return 0 ;;
+        3) echo "FAIL $repo: Release for $tag UNVERIFIED — the last API read before the deadline failed (quota or outage, see above), so its state at the deadline is unknown, which is not a missing Release; re-run finish once the API answers (post-tag — halting the sweep)" ;;
+        *) echo "FAIL $repo: $missing (post-tag — halting the sweep)" ;;
+    esac
+    return 1
 }
 
 fr_cleanup_release_branch() { # DIR GITDIR BRANCH VERSION PRID — tolerant;
@@ -1155,7 +1256,7 @@ fr_cleanup_release_branch() { # DIR GITDIR BRANCH VERSION PRID — tolerant;
 fr_finish() { # PLAN [--continue]
     local plan="$1" cont="${2:-}" logdir="$FR_WORKDIR/logs/finish" row repo n=0 rc=0 ec
     fr_plan_validate "$plan"
-    find "$logdir" -maxdepth 1 -name '*.log' -delete 2> /dev/null || true
+    fr_rotate_logs "$logdir" || fr_die "previous finish logs could not be moved aside — refusing to mix them into this run"
     while IFS= read -u 3 -r row || [[ -n "$row" ]]; do
         [[ -n "$row" ]] || continue
         repo=$(jq -r '.repo' <<< "$row")

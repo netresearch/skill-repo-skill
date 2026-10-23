@@ -677,7 +677,7 @@
       }
     ],
     "samples": {
-      "passing": "Run survey and manifest as usual. For every 0.x repo that is BUMP, UP-TO-DATE or SKIP-CI-ONLY the manifest notes a stabilization candidate and writes a ready STABILIZE row (version 1.0.0) to plan.stabilize.jsonl. After approval, copy the rows you want into plan.jsonl, replacing that repo's skeleton row if it has one. bump then seeds the 1.0.0 promise (incompatible changes only in a new major) into [Unreleased] before the roll, even when there are no new commits, and uses it as the body when the row has none.",
+      "passing": "Run survey and manifest as usual. For every 0.x repo that is BUMP, UP-TO-DATE, SKIP-CI-ONLY or SKIP-NOT-SHIPPED the manifest notes a stabilization candidate and writes a ready STABILIZE row (version 1.0.0) to plan.stabilize.jsonl. After approval, copy the rows you want into plan.jsonl, replacing that repo's skeleton row if it has one. bump then seeds the 1.0.0 promise (incompatible changes only in a new major) into [Unreleased] before the roll, even when there are no new commits, and uses it as the body when the row has none.",
       "failing": [
         "The driver skips repos without new commits, so edit plan.skeleton.jsonl by hand, change their class to BUMP and write the CHANGELOG entries in separate PRs first.",
         "Write a small script that builds the plan from the survey and sets version 1.0.0 for every repo below 1.0."
