@@ -71,11 +71,31 @@ gh_json() { # ARGS... — gh api that NEVER leaks an HTTP error body as data:
     # on 403/404/5xx gh prints the JSON error to STDOUT (verified with gh
     # 2.97), so every `$(gh api ... || echo "")` capture is poisoned. Output
     # only reaches the caller when the call succeeded.
-    local out
-    if out=$(gh api "$@" 2> /dev/null); then
+    # Exit 4 when the server ANSWERED 404: that is a read with a result, "no
+    # such object". The error body gh prints to STDOUT says so (gh 2.102:
+    # {"message":"Not Found",…,"status":"404"}), so no temp file for stderr
+    # is needed. Exit 1 for every other failure — rate limit, 5xx, network —
+    # where nothing was read at all. Callers that only test for success see
+    # no difference; host_release_verify needs it to keep "not there yet"
+    # apart from "could not look".
+    local out rc=0
+    out=$(gh api "$@" 2> /dev/null) || rc=$?
+    if [[ "$rc" -eq 0 ]]; then
         printf '%s\n' "$out"
         return 0
     fi
+    if jq -e '(.status // "") == "404" or .message == "Not Found"' <<< "$out" > /dev/null 2>&1; then
+        return 4
+    fi
+    # Every other failure names its cause in the log: the 404 above is the
+    # expected answer while a Release is queued and stays quiet, but an auth
+    # failure, a 5xx or a rate limit must not vanish behind "cannot read".
+    # REST errors are {"message":…}; a GraphQL error is {"errors":[{"message":…}]},
+    # and --paginate --slurp wraps either in an array — the merge gate's
+    # rate limit (#393) arrives in exactly that shape.
+    printf 'gh api failed: %s\n' \
+        "$(jq -r '(if type == "array" then .[0] else . end) | .message // .errors[0].message // empty' \
+            <<< "$out" 2> /dev/null | grep . || echo 'no response body (network?)')" >&2
     return 1
 }
 
@@ -384,28 +404,70 @@ host_merge_commit() { # REPO NUMBER — the SHA the merged PR produced
 }
 
 host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
-    # Release object and its assets, then link it
-    local r="$1" tag="$2" deadline rel assets
+    # Release object and its assets, then link it. 0 verified; 1 the last
+    # read before the deadline answered and showed no Release with assets; 3
+    # the last read before the deadline could not be made, so the state AT the
+    # deadline is unknown — even when earlier reads answered 404. Those 404s
+    # only say the Release was not there yet; a quota usually drains partway
+    # through the window, and calling that "missing" is the false alarm below.
+    # A failed read is not a state (#393, the merge gate's rule): a 403 from an
+    # exhausted REST quota says nothing about the Release. Counting it as "not
+    # there yet" turned agent-rules-skill v3.16.5 — complete, 6 assets — into
+    # a post-tag failure that halted the 2026-10-23 sweep, because the quota
+    # stayed at 0 past FR_RELEASE_TIMEOUT. Unreadable polls back off like the
+    # merge gate's, and the deadline reports them as such.
+    local r="$1" tag="$2" deadline now rel assets rc nap \
+        unread=0 unread_total=0 polls=0 answered_404=0
     deadline=$(($(date +%s) + FR_RELEASE_TIMEOUT))
     while true; do
         # gh_json, not a bare capture: while the Release workflow is queued
         # this 404s, and gh prints the error body to STDOUT, so `|| echo ""`
         # leaves {"message":"Not Found"} in $rel — non-empty, and the jq below
         # then errors on every poll of every repo (19 batch logs, 2026-09-03).
-        rel=$(gh_json "repos/$FR_ORG/$r/releases/tags/$tag") || rel=""
-        if [[ -n "$rel" ]]; then
-            assets=$(jq '[.assets[].name] | length' <<< "$rel")
-            if [[ "$assets" -gt 0 ]]; then
-                echo "RELEASE: $(jq -r '.html_url' <<< "$rel") assets: $(jq -c '[.assets[].name]' <<< "$rel")"
-                return 0
+        polls=$((polls + 1))
+        rc=0
+        rel=$(gh_json "repos/$FR_ORG/$r/releases/tags/$tag") || rc=$?
+        if [[ "$rc" -eq 0 || "$rc" -eq 4 ]]; then
+            unread=0
+            [[ "$rc" -eq 4 ]] && answered_404=$((answered_404 + 1))
+            if [[ "$rc" -eq 0 ]]; then
+                assets=$(jq '[.assets[].name] | length' <<< "$rel")
+                if [[ "$assets" -gt 0 ]]; then
+                    echo "RELEASE: $(jq -r '.html_url' <<< "$rel") assets: $(jq -c '[.assets[].name]' <<< "$rel")"
+                    return 0
+                fi
             fi
+        else
+            unread=$((unread + 1))
+            unread_total=$((unread_total + 1))
+            echo "poll: cannot read the Release for $tag (unreadable for $unread consecutive poll(s)) — not a state, still waiting"
         fi
-        if [[ "$(date +%s)" -ge "$deadline" ]]; then
+        now=$(date +%s)
+        if [[ "$now" -ge "$deadline" ]]; then
+            if [[ "$unread" -gt 0 ]]; then
+                # rate_limit does not draw from the core quota, so it still
+                # answers when the quota is the cause — and says when to re-run.
+                echo "UNVERIFIED: the Release for $tag could not be read at the deadline — the last $unread poll(s) were unreadable ($unread_total of $polls in total; $answered_404 earlier poll(s) answered 404, i.e. not published then); its state at the deadline is unknown, which is not evidence the Release is missing"
+                echo "REST core quota: $(gh_json rate_limit \
+                    | jq -r '.resources.core | "remaining=\(.remaining) reset=\(.reset | todate)"' 2> /dev/null \
+                    || echo "unknown (rate_limit unreadable too)")"
+                echo "last workflow runs:"
+                gh run list --repo "$FR_ORG/$r" --limit 3 2>&1 || true
+                return 3
+            fi
             echo "no Release with assets for $tag — last workflow runs:"
             gh run list --repo "$FR_ORG/$r" --limit 3 2>&1 || true
             return 1
         fi
-        sleep "$FR_POLL_SECONDS"
+        # Back off while reads fail (a rate limit does not lift faster for
+        # being polled), capped at 4x the poll interval and never past the
+        # deadline — the same schedule as host_merge_gate.
+        nap="$FR_POLL_SECONDS"
+        if [[ "$unread" -gt 1 ]]; then
+            nap=$((FR_POLL_SECONDS * (unread > 3 ? 4 : unread)))
+        fi
+        [[ "$nap" -gt $((deadline - now)) ]] && nap=$((deadline - now))
+        sleep "$nap"
     done
 }
 

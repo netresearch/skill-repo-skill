@@ -11,9 +11,10 @@
 # invariant — the logic classes that historically broke in hand-written sweep
 # drivers. Each guard tested HERE is observed to fail on a violating fixture,
 # not just to pass on a clean one. Scope limit, stated plainly: the GitHub
-# merge gate runs here against a stub `gh` (what ends its wait and what does
-# not); the other network phases (survey/bump/finish API calls, Release
-# polling) have no offline test — they are exercised against live hosts before
+# merge gate, the Release verification and one survey row run here against a
+# stub `gh` (what ends their wait and what does not, and how a compare
+# response becomes a row); the other network phases (the rest of the survey,
+# bump/finish API calls) have no offline test — they are exercised against live hosts before
 # releases, and their guards (freshness gate, foreign-PR stop, merge-commit
 # anchoring) are enforced by code review plus the read-only live runs.
 
@@ -682,6 +683,11 @@ case "$1 $2" in
             echo '{"message":"API rate limit exceeded","documentation_url":"https://docs.github.com/rest"}'
             exit 1
         fi
+        # GraphQL's own error shape, wrapped by --paginate --slurp
+        if [ "$(cat "$f")" = GQLFAIL ]; then
+            echo '[{"errors":[{"type":"RATE_LIMITED","message":"API rate limit already exceeded for user ID 1."}]}]'
+            exit 1
+        fi
         case "$(head -c1 "$f")" in
             "[") cat "$f" ;;
             *) printf '[%s]\n' "$(cat "$f")" ;;
@@ -733,6 +739,10 @@ run_gate unread-then-merged 60 FAIL FAIL "$(gate_pr MERGED UNKNOWN UNKNOWN true 
 check "merge gate: unreadable polls, then MERGED -> merged (rc 0)" 0 "$gate_rc"
 check "merge gate: unreadable polls are retried, not fatal" 3 "$gate_polls"
 
+run_gate gql-unread-then-merged 60 GQLFAIL "$(gate_pr MERGED UNKNOWN UNKNOWN true "[$GREEN_REQ]")"
+check "merge gate: a GraphQL error array names its cause, not a network fault" yes \
+    "$(grep -q '^gh api failed: API rate limit already exceeded for user ID 1\.$' <<< "$gate_out" && echo yes || echo no)"
+
 run_gate unread-timeout 2 FAIL
 check "merge gate: unreadable until the deadline -> rc 1" 1 "$gate_rc"
 check "merge gate: unreadable until the deadline ends in TIMEOUT, naming the unread polls" yes \
@@ -777,6 +787,144 @@ check "merge gate: MERGED on the first read wins over red checks and conflicts" 
 run_gate conflict 60 "$(gate_pr OPEN DIRTY CONFLICTING true "[$GREEN_REQ]")"
 check "merge gate: a conflicting PR fails at once with its own message" "1 yes" \
     "$gate_rc $(grep -q 'has a merge conflict' <<< "$gate_out" && echo yes || echo no)"
+
+# --- release verify: an unreadable read is not a missing Release -------------
+# 2026-10-23: the REST quota stayed at 0 past FR_RELEASE_TIMEOUT while
+# agent-rules-skill v3.16.5 was complete with 6 assets, and finish halted the
+# sweep on "no verified Release". The stub serves one fixture per release
+# read: FAIL is a 403 rate limit (error body on STDOUT, exit 1, as real gh),
+# NOTFOUND is the 404 of a Release the workflow has not published yet (stderr
+# text measured with gh 2.102), anything else is the Release JSON.
+echo
+echo "fleet-release-github.sh (release verify, stub gh)"
+REL_BIN="$WORK/rel-bin"
+mkdir -p "$REL_BIN"
+cat > "$REL_BIN/gh" << 'STUB'
+#!/usr/bin/env bash
+d="$GH_STUB_DIR"
+case "$1 $2" in
+    "api repos/"*"/releases/tags/"*)
+        n=$(( $(cat "$d/count" 2> /dev/null || echo 0) + 1 ))
+        echo "$n" > "$d/count"
+        f="$d/r$n.json"
+        [ -f "$f" ] || f=$(ls "$d"/r*.json | sort -V | tail -1)
+        case "$(cat "$f")" in
+            FAIL)
+                echo '{"message":"API rate limit exceeded","documentation_url":"https://docs.github.com/rest"}'
+                echo 'gh: API rate limit exceeded (HTTP 403)' >&2
+                exit 1
+                ;;
+            NOTFOUND)
+                echo '{"message":"Not Found","status":"404"}'
+                echo 'gh: Not Found (HTTP 404)' >&2
+                exit 1
+                ;;
+            *) cat "$f" ;;
+        esac
+        ;;
+    "api rate_limit") echo '{"resources":{"core":{"remaining":0,"reset":1792000000}}}' ;;
+    "run list") echo "stub run list" ;;
+    *) echo "stub gh: unexpected $*" >&2; exit 2 ;;
+esac
+STUB
+chmod +x "$REL_BIN/gh"
+REL_OK='{"html_url":"https://example.invalid/releases/v3.16.5","assets":[{"name":"a.zip"},{"name":"SHA256SUMS.txt"}]}'
+
+run_verify() { # CASE TIMEOUT FIXTURE... — sets ver_out, ver_rc, ver_polls
+    local dir="$WORK/verify-$1" timeout_s="$2" i=0
+    shift 2
+    mkdir -p "$dir"
+    for fx in "$@"; do
+        i=$((i + 1))
+        printf '%s\n' "$fx" > "$dir/r$i.json"
+    done
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    PATH="$REL_BIN:$PATH" GH_STUB_DIR="$dir" FR_POLL_SECONDS=0 \
+        FR_RELEASE_TIMEOUT="$timeout_s" timeout -k 5 20 bash -c \
+        'source "$1" && host_release_verify some-skill v3.16.5' _ "$SCRIPTS/fleet-release-github.sh" \
+        > "$dir/out" 2>&1 < /dev/null
+    ver_rc=$?
+    ver_out=$(< "$dir/out")
+    ver_polls=$(cat "$dir/count" 2> /dev/null || echo 0)
+    return 0
+}
+
+run_verify unread-then-ok 60 FAIL FAIL "$REL_OK"
+check "release verify: unreadable reads, then the Release -> verified (rc 0)" 0 "$ver_rc"
+check "release verify: unreadable reads are retried, not fatal" 3 "$ver_polls"
+check "release verify: the verified Release is linked" yes \
+    "$(grep -q '^RELEASE: https://example.invalid/releases/v3.16.5' <<< "$ver_out" && echo yes || echo no)"
+
+run_verify unread-timeout 2 FAIL
+check "release verify: unreadable until the deadline -> rc 3, not rc 1" 3 "$ver_rc"
+check "release verify: the deadline message names the unreadable polls" yes \
+    "$(grep -q '^UNVERIFIED: the Release for v3.16.5 could not be read at the deadline — the last [0-9]* poll(s) were unreadable' <<< "$ver_out" && echo yes || echo no)"
+check "release verify: …and reports the quota from rate_limit" yes \
+    "$(grep -q '^REST core quota: remaining=0 reset=' <<< "$ver_out" && echo yes || echo no)"
+check "release verify: …and never claims the Release is missing" no \
+    "$(grep -q 'no Release with assets' <<< "$ver_out" && echo yes || echo no)"
+check "release verify: an unreadable read names its cause in the log" yes \
+    "$(grep -q '^gh api failed: API rate limit exceeded$' <<< "$ver_out" && echo yes || echo no)"
+
+# 404s and then the reads go dark: the 404s say "not published then", not
+# "missing at the deadline" — a quota draining mid-window is the usual case.
+run_verify notfound-then-unread 2 NOTFOUND NOTFOUND FAIL
+check "release verify: 404s, then unreadable at the deadline -> rc 3" 3 "$ver_rc"
+check "release verify: …names the earlier 404s in the UNVERIFIED line" yes \
+    "$(grep -q '^UNVERIFIED: .*; 2 earlier poll(s) answered 404' <<< "$ver_out" && echo yes || echo no)"
+check "release verify: …and still prints the workflow runs" yes \
+    "$(grep -q '^stub run list' <<< "$ver_out" && echo yes || echo no)"
+
+# The control: a 404 is a read that ANSWERED. An implementation that counts
+# every failed call as unreadable passes both cases above and fails this one.
+run_verify notfound-timeout 2 NOTFOUND
+check "release verify: 404 until the deadline -> rc 1 (missing)" 1 "$ver_rc"
+check "release verify: 404 until the deadline keeps the 'no Release with assets' message" yes \
+    "$(grep -q '^no Release with assets for v3.16.5' <<< "$ver_out" && ! grep -q 'UNVERIFIED' <<< "$ver_out" && echo yes || echo no)"
+check "release verify: an answered 404 stays quiet" no \
+    "$(grep -q 'gh api failed' <<< "$ver_out" && echo yes || echo no)"
+run_verify notfound-then-ok 60 NOTFOUND "$REL_OK"
+check "release verify: 404 while queued, then the Release -> verified" 0 "$ver_rc"
+
+# Back-off: with a fake clock and a sleep that records its argument, an
+# always-unreadable read must wait 1x, 2x, 3x, then 4x the interval, stay at
+# 4x, and never sleep past the deadline.
+backoff_naps() { # INTERVAL TIMEOUT — the sleeps of one always-unreadable verify
+    local interval="$1" limit="$2" dir="$WORK/verify-backoff-$1-$2"
+    mkdir -p "$dir"
+    printf 'FAIL\n' > "$dir/r1.json"
+    # shellcheck disable=SC2016  # expands in the child bash, not here
+    PATH="$REL_BIN:$PATH" GH_STUB_DIR="$dir" FR_POLL_SECONDS="$interval" \
+        FR_RELEASE_TIMEOUT="$limit" timeout -k 5 20 bash -c '
+            source "$1"
+            NAPS="$2/naps"
+            FAKE_NOW=1000
+            date() { echo "$FAKE_NOW"; }
+            sleep() { echo "$1" >> "$NAPS"; FAKE_NOW=$((FAKE_NOW + $1)); }
+            host_release_verify some-skill v3.16.5' _ "$SCRIPTS/fleet-release-github.sh" "$dir" \
+        > /dev/null 2>&1 < /dev/null
+    paste -sd ' ' "$dir/naps"
+    return 0
+}
+check "release verify: back-off grows 1x-4x, caps at 4x, and stops at the deadline" \
+    "10 20 30 40 40 40 20" "$(backoff_naps 10 200)"
+
+# The engine side: the outcome has to reach the FAIL line, because the summary
+# and the per-repo tail show nothing else.
+verify_line() { # RC — the FAIL line fr_release_verified prints for that outcome
+    # shellcheck disable=SC2329  # invoked indirectly by fr_release_verified
+    host_release_verify() { return "$VERIFY_RC"; }
+    VERIFY_RC="$1" fr_release_verified demo v1.0.0 "no verified Release for v1.0.0"
+    echo "rc=$?"
+}
+out=$(verify_line 3)
+check "finish: an unverifiable Release says UNVERIFIED on the FAIL line" yes \
+    "$(grep -q '^FAIL demo: Release for v1.0.0 UNVERIFIED — the last API read before the deadline failed' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+out=$(verify_line 1)
+check "finish: a missing Release keeps its own FAIL line" yes \
+    "$(grep -q '^FAIL demo: no verified Release for v1.0.0 (post-tag' <<< "$out" && echo yes || echo no)"
+out=$(verify_line 0)
+check "finish: a verified Release prints no FAIL line" "rc=0" "$out"
 
 echo
 if [ "$fail" -eq 0 ]; then

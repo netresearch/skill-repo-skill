@@ -125,6 +125,21 @@ before this, two consecutive `finish` runs reported all six repos as
 `FAIL … merge gate` during a rate limit caused by other sessions on the same
 account, one of them for a bump PR that had already merged; #393.)
 
+**The Release check after the tag tells an unreadable read from a missing
+Release, but it does not wait out the quota.** A 404 is a read that answered
+("not published yet"); a 403 or 5xx is not a state. Unreadable polls back off
+on the merge gate's schedule. If the last read before `FR_RELEASE_TIMEOUT` is
+unreadable, the repo fails with `Release for vX.Y.Z UNVERIFIED` instead of
+`no verified Release`, even when earlier reads answered 404: those only say
+the Release was not published yet, and a quota usually drains partway through
+the window. The log then names the unreadable and the 404 counts, the REST
+core quota with its reset time, and the last workflow runs; each failed read
+also logs its cause (`gh api failed: …`). Both outcomes still halt the sweep, since the next repo
+meets the same exhausted quota. Re-run `finish` after the reset: with the tag
+on the remote it only verifies. (2026-10-23: agent-rules-skill v3.16.5 was
+complete with 6 assets while the quota stayed at 0, and the sweep halted on
+"no verified Release".)
+
 **A batch that waits on a prerequisite PR runs in its own `--workdir`.** The
 lock is per workdir and covers every phase, and a `finish` run holds it until
 each of its merge gates closes — up to `FR_MERGE_TIMEOUT` per repo. Repos held

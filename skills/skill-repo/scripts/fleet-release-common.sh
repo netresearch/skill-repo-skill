@@ -28,6 +28,15 @@
 #                                  merged PR/MR returns 0 whatever its checks.
 #   host_merge_commit REPO ID      print the SHA the merged PR/MR produced
 #   host_release_verify REPO TAG   wait for the Release object; 0 ok, 1 missing
+#                                  (the last read before the deadline answered
+#                                  and showed no Release with assets), 3
+#                                  unverifiable (the last read before the
+#                                  deadline failed: quota, 5xx — the state
+#                                  at the deadline is unknown, even after
+#                                  earlier 404s; not evidence of a missing
+#                                  Release).
+#                                  A driver that only returns 0/1 still works;
+#                                  its 1 reads as "missing", as before.
 #   host_origin_suffix REPO        expected origin URL suffix, e.g. 'org/repo'
 #   host_display REPO              display identity, e.g. 'netresearch/repo'
 #
@@ -1039,8 +1048,7 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
     fi
     if [[ -n "$pre_existing" ]]; then
         echo "tag $tag already on the remote at $pre_existing — verifying its Release"
-        host_release_verify "$repo" "$tag" < /dev/null \
-            || { echo "FAIL $repo: tag $tag exists but has no verified Release (post-tag — halting the sweep)"; return 2; }
+        fr_release_verified "$repo" "$tag" "tag $tag exists but has no verified Release" || return 2
         fr_cleanup_release_branch "$dir" "$gitdir" "$branch" "$version" "$(fr_opened_lookup "$repo")"
         echo "OK $repo $tag released (verified on re-run)"
         return 0
@@ -1130,11 +1138,26 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
     # Past this point a failure means the tag is on the remote but the release
     # machinery did not produce a verified Release object — that class is
     # contagious (a broken shared workflow breaks every following repo too).
-    host_release_verify "$repo" "$tag" < /dev/null \
-        || { echo "FAIL $repo: no verified Release for $tag (post-tag — halting the sweep)"; return 2; }
+    fr_release_verified "$repo" "$tag" "no verified Release for $tag" || return 2
 
     fr_cleanup_release_branch "$dir" "$gitdir" "$branch" "$version" "$prid"
     echo "OK $repo $tag released"
+}
+
+fr_release_verified() { # REPO TAG MISSING-TEXT — host_release_verify, with the
+    # outcome on the FAIL line: the summary and the per-repo `tail -1` show
+    # only that line, so "could not be read" has to be said there, not in the
+    # callback's own output further up the log. Both failures still halt: an
+    # unreadable API reaches the next repo too. The re-run is cheap — with the
+    # tag on the remote, finish only verifies.
+    local repo="$1" tag="$2" missing="$3" rc=0
+    host_release_verify "$repo" "$tag" < /dev/null || rc=$?
+    case "$rc" in
+        0) return 0 ;;
+        3) echo "FAIL $repo: Release for $tag UNVERIFIED — the last API read before the deadline failed (quota or outage, see above), so its state at the deadline is unknown, which is not a missing Release; re-run finish once the API answers (post-tag — halting the sweep)" ;;
+        *) echo "FAIL $repo: $missing (post-tag — halting the sweep)" ;;
+    esac
+    return 1
 }
 
 fr_cleanup_release_branch() { # DIR GITDIR BRANCH VERSION PRID — tolerant;
