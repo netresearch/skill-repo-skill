@@ -46,6 +46,13 @@
 #   release_gate ci_status ahead nonci changelog_unreleased files_truncated
 #   tags_failed subjects files
 #   open_release_prs [{id,url,author,branch,title}] ci_tag_rules notes
+# fr_survey adds one key to every row whose `files` is a list, so a driver
+# need not compute it: `shipped`, the count of those files that do NOT match
+# FR_NOT_SHIPPED_RE (-1 when the count itself failed).
+# Optional driver key: `renames_counted: true` when `files` and `nonci` list a
+# renamed file under its old AND its new path. Without it a move from
+# skills/x/references/a.md to docs/a.md looks docs-only, so SKIP-NOT-SHIPPED
+# is granted only to rows that carry it; every other row stays BUMP.
 #
 # Every phase writes into $FR_WORKDIR:
 #   survey.jsonl   one row per repo (jq -nc: ROW COUNTS MUST EQUAL LINE COUNTS)
@@ -76,6 +83,26 @@ FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
 # is deliberate.
 # shellcheck disable=SC2034  # consumed by the host drivers' survey callbacks
 FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-config\.yaml$|^\.markdownlint(-cli2)?\.jsonc$|^\.yamllint\.yml$|^\.editorconfig$'
+# Inert-path filter: files no consumer loads. A path counts as SHIPPED unless
+# it matches here, so a path nobody thought of releases (BUMP) instead of
+# skipping — an allow-list of shipped paths failed exactly that way: styles/,
+# workflows/, config/ and package.json all reach consumers and none was on it.
+# Each entry, and why no install reads it (2026-10-23, 39 GitHub repos):
+#   README.md AGENTS.md CLAUDE.md CHANGELOG.md CONTRIBUTING.md
+#   CODE_OF_CONDUCT.md SECURITY*.md  contributor and repo documentation; npm
+#            packs README.md and some repos' AGENTS.md, but an agent reads
+#            AGENTS.md/CLAUDE.md from the project it works in, never from an
+#            installed package, and no SKILL.md in the fleet links to any of
+#            them. GEMINI.md is NOT here: a Gemini extension loads it.
+#   docs/ tests/ evals/  repo documentation, test suites, eval suites; the
+#            release archive and every npm `files` list leave the root ones out.
+#   skills/<name>/evals/ skills/<name>/tests/ skills/<name>/README.md
+#            outside the archive's per-skill allow-list; npm packs them with
+#            the skill dir, but nothing loads them.
+# Everything else — .gitignore, Build/, package.json, styles/, config/ … —
+# counts as shipped: being wrong there costs one release, not a skipped one.
+# shellcheck disable=SC2034  # consumed by fr_add_shipped
+FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$'
 # STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
 # use it as the release body when the plan row leaves `body` empty: a first
 # stable release ships a promise, and the promise has to be written where a
@@ -392,6 +419,22 @@ fr_summarize_logs() { # LOGDIR — count explicit end-state markers; a truncated
 # ---------------------------------------------------------------------------
 # Survey
 # ---------------------------------------------------------------------------
+fr_add_shipped() { # ROW-JSON — the row plus `shipped`, computed here from its
+    # own `files` so every host gets it from the engine: the files that are
+    # NOT inert. A row without a file list (unreachable, duplicate) passes
+    # through unchanged, and a count that cannot be made is -1, never 0: 0 is
+    # what skips a release.
+    local row="$1" out
+    if out=$(jq -c --arg re "$FR_NOT_SHIPPED_RE" \
+        'if (.files | type) == "array"
+         then .shipped = ([.files[] | select(test($re) | not)] | length) else . end' <<< "$row" 2> /dev/null); then
+        printf '%s\n' "$out"
+    else
+        jq -c '.shipped = -1' <<< "$row" 2> /dev/null || printf '%s\n' "$row"
+    fi
+    return 0
+}
+
 fr_survey() { # REPO... — remote-first; per-repo failures become rows, not aborts.
     # A re-survey of a SUBSET (the manifest's own "re-run survey --repos X"
     # advice) replaces exactly those rows and keeps the rest — truncating the
@@ -412,6 +455,7 @@ fr_survey() { # REPO... — remote-first; per-repo failures become rows, not abo
         row=$(host_survey_repo "$repo" < /dev/null) \
             || row=$(jq -nc --arg r "$repo" --arg h "$FR_HOST" \
                 '{host:$h, repo:$r, unreachable:true}')
+        row=$(fr_add_shipped "$row")
         # A renamed repo answers on both names (API redirect) — the SECOND row
         # for one resolved identity must not become a second bump PR.
         resolved=$(jq -r '.resolved // empty' <<< "$row")
@@ -460,6 +504,16 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
               elif (.ahead // 0) < 0 or (.nonci // 0) < 0 then "SURVEY-INCOMPLETE"
               elif (.ahead // 0) == 0 then "UP-TO-DATE"
               elif (.nonci // 0) == 0 then "SKIP-CI-ONLY"
+              # Only on a complete, reconciled file list: a truncated list, a
+              # missing or failed count (`shipped` absent or -1), a list
+              # whose length disagrees with nonci, or a driver that does not
+              # count renames under both paths is "unknown", and unknown
+              # releases.
+              elif (.files_truncated // false) != true
+                   and (.renames_counted // false) == true
+                   and (.shipped // -1) == 0
+                   and ((.files // []) | length) == .nonci
+              then "SKIP-NOT-SHIPPED"
               else "BUMP"
               end
         end' <<< "$1"
@@ -501,7 +555,12 @@ fr_manifest() {
                  (if (.last_tag // "") != "" and ((.last_tag | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+")) | not)
                   then "nonstandard tag convention" else empty end),
                  (if .files_truncated == true then "compare file list truncated" else empty end),
-                 (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY"))
+                 (if $cls == "SKIP-NOT-SHIPPED"
+                  then "delta touches only files no release ships: "
+                       + ((.files // [])[:5] | join(", "))
+                       + (if ((.files // []) | length) > 5 then ", …" else "" end)
+                  else empty end),
+                 (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY", "SKIP-NOT-SHIPPED"))
                      and (.claude_plugin // "") != "" and ((.claude_plugin | vparse)[0] == 0)
                   then "0.x: stabilization candidate — STABILIZE row in plan.stabilize.jsonl"
                   else empty end),
@@ -557,7 +616,7 @@ fr_manifest() {
         # it into the plan is the operator's decision — replace the repo's
         # skeleton row if it has one, the duplicate-row guard refuses both.
         case "$cls" in
-            BUMP|UP-TO-DATE|SKIP-CI-ONLY)
+            BUMP|UP-TO-DATE|SKIP-CI-ONLY|SKIP-NOT-SHIPPED)
                 jq -c "$FR_JQ_VPARSE"'
                     select(((.claude_plugin // "") | vparse)[0] == 0 and (.claude_plugin // "") != "")
                     | {repo, classification: "STABILIZE", default: (.default // "main"),

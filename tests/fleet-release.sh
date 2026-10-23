@@ -266,6 +266,75 @@ check "not ci-only: nested pre-commit config" 1 \
     "$(nonci '["skills/foo/templates/.pre-commit-config.yaml"]')"
 check "not ci-only: mixed delta still counts the content file" 1 \
     "$(nonci '[".pre-commit-config.yaml","skills/foo/SKILL.md"]')"
+# --- FR_NOT_SHIPPED_RE and SKIP-NOT-SHIPPED ----------------------------------
+# A delta of README/docs/tests commits ships nothing, so it is not a release.
+# The rule is an inert list: every path NOT on it counts as shipped, so a path
+# nobody thought of releases instead of being skipped. Same jq test() as
+# fr_add_shipped.
+shipped() { # FILES-JSON -> count of paths the inert filter does NOT absorb
+    local files="$1"
+    jq --arg f "$FR_NOT_SHIPPED_RE" '[.[] | select(test($f) | not)] | length' <<< "$files"
+    return 0
+}
+check "inert: README, AGENTS, CLAUDE, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT" 0 \
+    "$(shipped '["README.md","AGENTS.md","CLAUDE.md","CHANGELOG.md","CONTRIBUTING.md","CODE_OF_CONDUCT.md"]')"
+check "inert: SECURITY*.md" 0 "$(shipped '["SECURITY.md","SECURITY-AUDIT.md"]')"
+check "inert: root docs/, tests/, evals/" 0 \
+    "$(shipped '["docs/ARCHITECTURE.md","tests/fleet-release.sh","evals/evals.json"]')"
+check "inert: a skill's evals/, tests/ and README.md" 0 \
+    "$(shipped '["skills/foo/evals/evals.json","skills/foo/tests/t.sh","skills/foo/README.md"]')"
+check "shipped: skill SKILL.md, references, scripts, checkpoints" 4 \
+    "$(shipped '["skills/foo/SKILL.md","skills/foo/references/a.md","skills/foo/scripts/x.sh","skills/foo/checkpoints.yaml"]')"
+check "shipped: plugin surfaces and manifests at the root" 7 \
+    "$(shipped '[".claude-plugin/plugin.json","hooks/hooks.json","commands/c.md","outputStyles/o.md","LICENSE-MIT","plugin.json","composer.json"]')"
+# Review round 1: paths an allow-list of shipped paths missed.
+check "shipped: a styles/ file a SKILL.md reads (netresearch-jira)" 1 \
+    "$(shipped '["skills/netresearch-jira/styles/terse.md"]')"
+check "shipped: workflows/ and config/ (it-maintenance, customer-spec)" 2 \
+    "$(shipped '["skills/maintenance/workflows/update.md","skills/customer-spec/config/default.yml"]')"
+check "shipped: a root package.json (npm files, aiAgentSkill)" 1 "$(shipped '["package.json"]')"
+check "shipped: a skill's agents/openai.yaml" 1 "$(shipped '["skills/foo/agents/openai.yaml"]')"
+check "shipped: GEMINI.md, which a Gemini extension loads" 1 "$(shipped '["GEMINI.md"]')"
+check "shipped: a path that only resembles an inert one" 3 \
+    "$(shipped '["docs.md","skills/foo/docs/a.md","README.md.tmpl"]')"
+
+# The survey adds the count from the row's own files, for every host.
+jq_shipped='.shipped'
+check "survey: fr_add_shipped counts the non-inert files of the row" 1 \
+    "$(fr_add_shipped '{"repo":"r","files":["README.md","skills/x/SKILL.md"]}' | jq "$jq_shipped")"
+check "survey: a row without a file list gets no shipped key" null \
+    "$(fr_add_shipped '{"repo":"r","unreachable":true}' | jq "$jq_shipped")"
+check "survey: a count that cannot be made is -1, never 0" -1 \
+    "$(fr_add_shipped '{"repo":"r","files":[1]}' | jq "$jq_shipped")"
+
+docs_only='.files = ["README.md","docs/usage.md"] | .nonci = 2 | .shipped = 0 | .renames_counted = true'
+check "classify: README/docs-only delta is SKIP-NOT-SHIPPED" SKIP-NOT-SHIPPED \
+    "$(fr_classify "$(row "$docs_only")")"
+check "classify: a delta touching skills/x/SKILL.md stays BUMP" BUMP \
+    "$(fr_classify "$(row '.files = ["README.md","skills/x/SKILL.md"] | .nonci = 2 | .shipped = 1 | .renames_counted = true')")"
+for extra in skills/netresearch-jira/styles/terse.md package.json skills/maintenance/workflows/update.md; do
+    check "classify: README plus $extra stays BUMP" BUMP \
+        "$(fr_classify "$(fr_add_shipped "$(row ".files = [\"README.md\", \"$extra\"] | .nonci = 2 | .renames_counted = true")")")"
+done
+check "classify: a truncated file list stays BUMP (unknown, not 'nothing shipped')" BUMP \
+    "$(fr_classify "$(row "$docs_only | .files_truncated = true")")"
+check "classify: a row without shipped (older survey, other driver) stays BUMP" BUMP \
+    "$(fr_classify "$(row "$docs_only | del(.shipped)")")"
+check "classify: a failed shipped count (-1) stays BUMP" BUMP \
+    "$(fr_classify "$(row "$docs_only | .shipped = -1")")"
+check "classify: a file list that does not reconcile with nonci stays BUMP" BUMP \
+    "$(fr_classify "$(row '.files = [] | .nonci = 2 | .shipped = 0 | .renames_counted = true')")"
+# A driver that reads only the new path of a rename (GitLab's .diffs[].new_path)
+# cannot tell a move out of skills/ into docs/ from a docs edit.
+check "classify: a row without renames_counted stays BUMP" BUMP \
+    "$(fr_classify "$(row "$docs_only | del(.renames_counted)")")"
+check "classify: renames_counted = false stays BUMP" BUMP \
+    "$(fr_classify "$(row "$docs_only | .renames_counted = false")")"
+check "classify: CI-only still outranks not-shipped" SKIP-CI-ONLY \
+    "$(fr_classify "$(row '.files = [] | .nonci = 0 | .shipped = 0 | .renames_counted = true')")"
+check "classify: no commits is UP-TO-DATE, not SKIP-NOT-SHIPPED" UP-TO-DATE \
+    "$(fr_classify "$(row "$docs_only | .ahead = 0")")"
+
 # A FAILED compare measurement (sentinel -1) must never read as "no delta" —
 # that silently drops a repo with releasable commits from the sweep.
 check "classify: failed compare is SURVEY-INCOMPLETE, never UP-TO-DATE" SURVEY-INCOMPLETE \
@@ -379,6 +448,14 @@ check "partial re-survey replaced the requested row" 2 \
     "$(jq -r 'select(.repo == "beta") | .gen' "$FR_WORKDIR/survey.jsonl")"
 check "partial re-survey left the others at gen 1" "1 1" \
     "$(jq -r 'select(.repo != "beta") | .gen' "$FR_WORKDIR/survey.jsonl" | tr '\n' ' ' | sed 's/ $//')"
+# The shipped count comes from the engine, not the driver: a driver row that
+# carries only `files` must reach survey.jsonl with `shipped` filled in.
+# shellcheck disable=SC2329  # invoked indirectly by the sourced fr_survey
+host_survey_repo() { local repo="$1"; jq -nc --arg r "$repo" \
+    '{host: "test", repo: $r, resolved: ("o/" + $r), files: ["README.md", "skills/x/SKILL.md", "skills/x/references/a.md"]}'; return 0; }
+( FR_WORKDIR="$WORK/wd-shipped"; mkdir -p "$FR_WORKDIR"; fr_survey delta > /dev/null 2>&1 )
+check "survey: rows reach survey.jsonl with the engine's shipped count" 2 \
+    "$(jq -r "$jq_shipped" "$WORK/wd-shipped/survey.jsonl")"
 
 # --- commit retry: a reformatting hook aborts the first commit (#263) --------
 # pre-commit's pretty-format-json --autofix (and black, ruff format, …) rewrites
@@ -574,6 +651,8 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "cl-empty" | .resolved = "o/cl-empty" | .changelog_unreleased = "empty"'
         row '.repo = "zero-quiet" | .resolved = "o/zero-quiet" | .claude_plugin = "0.3.4" | .root_plugin = "0.3.4" | .last_tag = "v0.3.4" | .last_release = "v0.3.4" | .ahead = 0 | .nonci = 0'
         row '.repo = "zero-busy" | .resolved = "o/zero-busy" | .claude_plugin = "0.9.3" | .root_plugin = "0.9.3" | .last_tag = "v0.9.3" | .last_release = "v0.9.3"'
+        row '.repo = "docs-only" | .resolved = "o/docs-only" | .files = ["README.md","docs/a.md","tests/t.sh"] | .nonci = 3 | .shipped = 0 | .renames_counted = true'
+        row '.repo = "zero-docs" | .resolved = "o/zero-docs" | .claude_plugin = "0.4.0" | .root_plugin = "0.4.0" | .last_tag = "v0.4.0" | .last_release = "v0.4.0" | .files = ["README.md"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
     } > "$MWD/survey.jsonl"
     out=$(FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
     check "manifest: runs offline on a fixture survey" yes \
@@ -584,6 +663,12 @@ if command -v gh > /dev/null 2>&1; then
         "$(grep -q '| prepared | TAG-ONLY |' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: CI-only delta skipped" yes \
         "$(grep -q '| ci-only | SKIP-CI-ONLY |' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: not-shipped delta skipped, naming the files" yes \
+        "$(grep -q '| docs-only | SKIP-NOT-SHIPPED |.*only files no release ships: README.md, docs/a.md, tests/t.sh' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: a not-shipped delta gets no skeleton row" "" \
+        "$(jq -r 'select(.repo == "docs-only") | .repo' "$MWD/plan.skeleton.jsonl")"
+    check "manifest: a 0.x not-shipped repo is a stabilization candidate, like CI-only" STABILIZE \
+        "$(jq -r 'select(.repo == "zero-docs") | .classification' "$MWD/plan.stabilize.jsonl")"
     check "manifest: foreign PR blocked with author named" yes \
         "$(grep -q '| foreign | BLOCKED-FOREIGN-PR |.*@colleague' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: empty Unreleased flagged in column and note" yes \
@@ -925,6 +1010,47 @@ check "finish: a missing Release keeps its own FAIL line" yes \
     "$(grep -q '^FAIL demo: no verified Release for v1.0.0 (post-tag' <<< "$out" && echo yes || echo no)"
 out=$(verify_line 0)
 check "finish: a verified Release prints no FAIL line" "rc=0" "$out"
+
+# --- survey row: a rename counts with both of its paths ----------------------
+# host_survey_repo against a stub `gh` that answers the reads a released repo
+# needs and serves a compare fixture. Moving skills/x/references/a.md to
+# docs/a.md removes a shipped file; reading only the new name made it a
+# docs-only delta.
+echo
+echo "fleet-release-github.sh (survey row, stub gh)"
+SURV_BIN="$WORK/surv-bin"
+mkdir -p "$SURV_BIN"
+cat > "$SURV_BIN/gh" << 'STUB'
+#!/usr/bin/env bash
+[ "$1" = pr ] && { echo '[]'; exit 0; }
+for a in "$@"; do case "$a" in repos/*) path="$a" ;; esac; done
+case "$path" in
+    */compare/*) cat "$GH_STUB_COMPARE" ;;
+    */releases/latest) echo '{"tag_name":"v1.0.0"}' ;;
+    */tags\?*) echo '[{"name":"v1.0.0"}]' ;;
+    */commits/main) echo '{"sha":"abc123"}' ;;
+    */contents/.claude-plugin/plugin.json*) echo '{"name":"demo","version":"1.0.0"}' ;;
+    */contents/.github/workflows/release.yml*) echo '{"name":"release.yml"}' ;;
+    repos/*/*/*) echo '{"message":"Not Found"}'; echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
+    repos/*/*) echo '{"full_name":"o/demo","archived":false,"default_branch":"main"}' ;;
+esac
+STUB
+chmod +x "$SURV_BIN/gh"
+survey_class() { # COMPARE-JSON — "<class> <nonci> <shipped>" of the surveyed row
+    printf '%s\n' "$1" > "$WORK/surv-compare.json"
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    PATH="$SURV_BIN:$PATH" GH_STUB_COMPARE="$WORK/surv-compare.json" FR_SELF_LOGIN=sweep-bot \
+        timeout -k 5 20 bash -c 'source "$1" && row=$(fr_add_shipped "$(host_survey_repo demo)") \
+            && echo "$(fr_classify "$row") $(jq -r "[.nonci, .shipped] | map(tostring) | join(\" \")" <<< "$row")"' \
+        _ "$SCRIPTS/fleet-release-github.sh" 2> /dev/null < /dev/null
+    return 0
+}
+check "survey: a docs-only delta surveys as SKIP-NOT-SHIPPED (control)" "SKIP-NOT-SHIPPED 2 0" \
+    "$(survey_class '{"ahead_by":2,"commits":[{"commit":{"message":"docs: a"}}],"files":[{"filename":"docs/a.md"},{"filename":"README.md"}]}')"
+check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3 1" \
+    "$(survey_class '{"ahead_by":2,"commits":[{"commit":{"message":"docs: move"}}],"files":[{"filename":"docs/a.md","previous_filename":"skills/x/references/a.md","status":"renamed"},{"filename":"README.md"}]}')"
+check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
+    "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
 
 echo
 if [ "$fail" -eq 0 ]; then

@@ -214,11 +214,15 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         cmp=$(gh_json "repos/$FR_ORG/$r/compare/$base...$def" || echo "")
         if [[ -n "$cmp" ]]; then
             ahead=$(jq -r '.ahead_by // 0' <<< "$cmp")
+            # A rename counts with BOTH names: moving skills/x/references/a.md
+            # to docs/a.md removes a shipped file, and the new name alone
+            # would read as a docs-only (or CI-only) delta.
+            local jq_paths='[.files[] | .filename, (.previous_filename // empty)]'
             nonci=$(jq --arg f "$FR_CI_ONLY_RE" \
-                '[.files[].filename] | map(select(test($f) | not)) | length' <<< "$cmp" 2> /dev/null || echo -1)
+                "$jq_paths"' | map(select(test($f) | not)) | length' <<< "$cmp" 2> /dev/null || echo -1)
             subjects=$(jq '[.commits[].commit.message | split("\n")[0]]' <<< "$cmp" 2> /dev/null || echo '[]')
             files=$(jq --arg f "$FR_CI_ONLY_RE" \
-                '[.files[].filename | select(test($f) | not)]' <<< "$cmp" 2> /dev/null || echo '[]')
+                "$jq_paths"' | map(select(test($f) | not))' <<< "$cmp" 2> /dev/null || echo '[]')
             # the compare API caps .files at 300 — 0-vs-nonzero stays valid,
             # the file list itself may be partial
             [[ "$(jq '.files | length' <<< "$cmp")" -ge 300 ]] && files_truncated=true
@@ -241,7 +245,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
           root_plugin: $rootv, claude_plugin: $cpv,
           composer_has_version: $chv, release_gate: $gate, ci_status: $ci,
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
-          tags_failed: $tagsfailed,
+          tags_failed: $tagsfailed, renames_counted: true,
           changelog_unreleased: $clstate,
           subjects: $subjects, files: $files,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'
