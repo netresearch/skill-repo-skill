@@ -721,6 +721,8 @@ if command -v gh > /dev/null 2>&1; then
         "$(jq -r 'select(.repo == "docs-only") | .repo' "$MWD/plan.skeleton.jsonl")"
     check "manifest: a 0.x not-shipped repo is a stabilization candidate, like CI-only" STABILIZE \
         "$(jq -r 'select(.repo == "zero-docs") | .classification' "$MWD/plan.stabilize.jsonl")"
+    check "manifest: a 0.x not-shipped row carries the stabilization note" yes \
+        "$(grep -q '| zero-docs | SKIP-NOT-SHIPPED |.*0.x: stabilization candidate' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: foreign PR blocked with author named" yes \
         "$(grep -q '| foreign | BLOCKED-FOREIGN-PR |.*@colleague' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: empty Unreleased flagged in column and note" yes \
@@ -956,6 +958,12 @@ case "$1 $2" in
                 echo 'gh: Not Found (HTTP 404)' >&2
                 exit 1
                 ;;
+            NOTFOUND_BARE)
+                # an older error body: no "status" field, only the message
+                echo '{"message":"Not Found","documentation_url":"https://docs.github.com/rest"}'
+                echo 'gh: Not Found (HTTP 404)' >&2
+                exit 1
+                ;;
             *) cat "$f" ;;
         esac
         ;;
@@ -1022,6 +1030,27 @@ check "release verify: an answered 404 stays quiet" no \
     "$(grep -q 'gh api failed' <<< "$ver_out" && echo yes || echo no)"
 run_verify notfound-then-ok 60 NOTFOUND "$REL_OK"
 check "release verify: 404 while queued, then the Release -> verified" 0 "$ver_rc"
+# An answered read ends an unreadable streak: one failed read early, then 404s
+# until the deadline, is a missing Release, not an unverified one.
+run_verify fail-then-notfound 2 FAIL NOTFOUND
+check "release verify: unreadable once, then 404s until the deadline -> rc 1 (missing)" 1 "$ver_rc"
+check "release verify: …with the 'no Release with assets' message, not UNVERIFIED" yes \
+    "$(grep -q '^no Release with assets for v3.16.5' <<< "$ver_out" && ! grep -q 'UNVERIFIED' <<< "$ver_out" && echo yes || echo no)"
+# gh_json's 404 test must not depend on the "status" field newer API bodies
+# carry: an error body with only "message":"Not Found" is still an answered 404.
+gh_json_rc() { # FIXTURE — gh_json's exit status for one release read
+    local fixture="$1" dir="$WORK/ghjson-$1"
+    mkdir -p "$dir"
+    printf '%s\n' "$fixture" > "$dir/r1.json"
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    PATH="$REL_BIN:$PATH" GH_STUB_DIR="$dir" timeout -k 5 20 bash -c \
+        'source "$1"; rc=0; gh_json repos/netresearch/some-skill/releases/tags/v1.0.0 > /dev/null 2>&1 || rc=$?; echo "$rc"' \
+        _ "$SCRIPTS/fleet-release-github.sh" < /dev/null
+    return 0
+}
+check "gh_json: a 404 body without a status field still exits 4" 4 "$(gh_json_rc NOTFOUND_BARE)"
+check "gh_json: a 404 body with a status field exits 4" 4 "$(gh_json_rc NOTFOUND)"
+check "gh_json: a rate limit exits 1" 1 "$(gh_json_rc FAIL)"
 
 # Back-off: with a fake clock and a sleep that records its argument, an
 # always-unreadable read must wait 1x, 2x, 3x, then 4x the interval, stay at
