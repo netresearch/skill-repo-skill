@@ -167,9 +167,12 @@ for d in (skill / "scripts" if skill else None, repo / "scripts", repo / "hooks"
 # Disjoint alternatives (`$(` only as a substitution; `-X`/`-W` with their
 # argument or any other option): no exponential backtracking.
 arg = r"(?:\$\([^)]*\)|\$(?!\()|\"|[^\s\"$])*?"
+# Any directory counts, also one kept in a variable (`python3 "$S"/x.py`), but
+# there must be one: a bare `python3 x.py` is usually prose about a call. The
+# file name must be one the repository ships.
 call = re.compile(
     r"(?<![\w.-])(?:python3?|py\s+-3)(?:\s+-(?:[XW]\s+[^\s-]\S*|(?![XW]\s)[\w-]+))*\s+"
-    + arg + r"(?:scripts|hooks)[/\\]" + arg + r"(?P<name>[\w-]+\.py)\b"
+    + arg + r"[/\\](?P<name>[\w-]+\.py)\b"
 )
 for doc in map(Path, sys.argv[3:]):
     if not doc.is_file():
@@ -189,6 +192,9 @@ for doc in map(Path, sys.argv[3:]):
     for n, line in logical:
         for m in call.finditer(line):
             if m.group("name") not in shipped:
+                continue
+            # `python3 -c "…x.py…"` runs inline code that merely mentions the file.
+            if re.search(r"\s-c\b", m.group(0)):
                 continue
             # The command this interpreter belongs to starts after the last
             # `;`, `&` or `|`. `uv run --python X python …` is fine there;
