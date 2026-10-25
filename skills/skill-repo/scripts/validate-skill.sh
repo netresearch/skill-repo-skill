@@ -56,6 +56,125 @@ for f in "$REPO_DIR"/skills/*/SKILL.md; do
     fi
 done
 
+# --- Python floor: 3.11 through uv ---
+# `python3` names whatever interpreter the host has first on PATH; on macOS
+# with the Command Line Tools that is 3.9, and a script using
+# itertools.pairwise or datetime.UTC crashed there (retro-skill#201). An
+# executable scripts/*.py declares `requires-python = ">=3.11"` (3.11 is the
+# oldest Python upstream still supports) in a PEP 723 block and starts with
+# the shebang `#!/usr/bin/env -S uv run --script`, and the docs that start it
+# write `uv run <path>.py`. uv reads the block only when the script path
+# follows `uv run`; `uv run python x.py` takes the interpreter from
+# `.python-version` or the system unless `--python` names one. Non-executable
+# .py files are modules loaded by path and are not checked, and a call is
+# reported only when it names a script the repository ships, so example code
+# in a reference stays quiet. Warnings, so the fleet can follow before this
+# turns into an error. The parser is regex-only: the validator itself runs on
+# any python3.
+#
+# py_floor_scan <repo-dir> <skill-dir|""> <doc>... prints one line per finding,
+# `HEADER <path>: <spec>`, `SHEBANG <path>` or `CALL <path>:<line>: <call>`,
+# paths relative to the repository. With a skill dir it checks that skill's
+# scripts/; without one (the repository-level run over commands/*.md and
+# hooks/hooks.json) it checks the root scripts/ and hooks/ files that
+# hooks.json names, since a hook starts them on every matching tool call.
+# Calls count when they name any script the repository ships.
+py_floor_scan() {
+    python3 - "$@" <<'PYEOF' 2>/dev/null || true
+import os, re, sys
+from pathlib import Path
+
+repo = Path(sys.argv[1])
+skill = Path(sys.argv[2]) if sys.argv[2] else None
+SHEBANG = "#!/usr/bin/env -S uv run --script"
+block = re.compile(r"(?m)^# /// script$\s((?:^#(?:| .*)$\s)+)^# ///$")
+floor = re.compile(r"(?:>=|~=|==)\s*3\.(\d+)")
+hooks = repo / "hooks" / "hooks.json"
+named = set(re.findall(r"[\w-]+\.py", hooks.read_text(encoding="utf-8", errors="replace"))) if hooks.is_file() else set()
+root_dirs = {(repo / "scripts").resolve(), (repo / "hooks").resolve()}
+if skill:
+    checked = sorted((skill / "scripts").glob("*.py"))
+else:
+    # A root SKILL.md makes repo/scripts that skill's scripts/: already checked.
+    dirs = [repo / "hooks"] + ([] if (repo / "SKILL.md").is_file() else [repo / "scripts"])
+    checked = sorted(p for d in dirs for p in d.glob("*.py") if p.name in named)
+for path in checked:
+    executable = os.access(path, os.X_OK)
+    # A root scripts/ or hooks/ file that hooks.json names is an entry point
+    # whatever its mode: a hook starts it as `python3 <path>`, which needs no
+    # executable bit. That holds in the root-SKILL.md layout too.
+    hook_named = path.name in named and path.parent.resolve() in root_dirs
+    if not path.is_file() or not (executable or hook_named):
+        continue
+    text = path.read_text(encoding="utf-8", errors="replace")
+    m = block.search(text)
+    spec = None
+    if m:
+        r = re.search(r'(?m)^#\s*requires-python\s*=\s*["\']([^"\']*)["\']', m.group(1))
+        spec = r.group(1) if r else None
+    minor = [int(x) for x in floor.findall(spec or "")]
+    if not minor or min(minor) < 11:
+        print(f"HEADER {path.relative_to(repo)}: {spec or 'no requires-python'}")
+    # A file that is not executable is never run directly; its shebang is moot.
+    elif executable and text.split("\n", 1)[0].rstrip("\r") != SHEBANG:
+        print(f"SHEBANG {path.relative_to(repo)}")
+
+shipped = {p.name for p in repo.glob("skills/*/scripts/*.py")}
+for d in (skill / "scripts" if skill else None, repo / "scripts", repo / "hooks"):
+    if d:
+        shipped |= {p.name for p in d.glob("*.py")}
+
+# Disjoint alternatives (`$(` only as a substitution; `-X`/`-W` with their
+# argument or any other option): no exponential backtracking.
+arg = r"(?:\$\([^)]*\)|\$(?!\()|\"|[^\s\"$])*?"
+call = re.compile(
+    r"(?<![\w.-])(?:python3?|py\s+-3)(?:\s+-(?:[XW]\s+[^\s-]\S*|(?![XW]\s)[\w-]+))*\s+"
+    + arg + r"(?:scripts|hooks)[/\\]" + arg + r"(?P<name>[\w-]+\.py)\b"
+)
+for doc in map(Path, sys.argv[3:]):
+    if not doc.is_file():
+        continue
+    # Join shell continuations (a trailing `\`) into one logical line and
+    # report the line it starts on.
+    logical, first, buf = [], None, ""
+    for n, line in enumerate(doc.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        first = first or n
+        if line.endswith("\\"):
+            buf += line[:-1] + " "
+            continue
+        logical.append((first, buf + line))
+        first, buf = None, ""
+    if buf:
+        logical.append((first, buf))
+    for n, line in logical:
+        for m in call.finditer(line):
+            if m.group("name") not in shipped:
+                continue
+            # The command this interpreter belongs to starts after the last
+            # `;`, `&` or `|`. `uv run --python X python …` is fine there;
+            # `uv run python …` without --python is not.
+            segment = re.split(r"[;&|]", line[: m.start()])[-1]
+            if re.search(r"\buv run\b", segment) and re.search(r"--python\b", segment):
+                continue
+            # `\"` is a quote escaped inside a JSON string (hooks.json).
+            shown = m.group(0).replace('\\"', "").replace('"', "")
+            # warning() prints with `echo -e`; a Windows path's `\c` would end it.
+            print(f"CALL {doc.relative_to(repo)}:{n}: " + shown.replace("\\", "\\\\"))
+PYEOF
+}
+
+# py_floor_report <py_floor_scan output>
+py_floor_report() {
+    local line
+    while IFS= read -r line; do
+        case "$line" in
+            "HEADER "*) warning "${line#HEADER } - declare requires-python = \">=3.11\" in a PEP 723 block and the shebang '#!/usr/bin/env -S uv run --script'; see repository-quality-rules.md, section \"Python-Skripte\"" ;;
+            "SHEBANG "*) warning "${line#SHEBANG } - start the file with '#!/usr/bin/env -S uv run --script'; run directly, it otherwise starts the host python3 (macOS python3 is 3.9)" ;;
+            "CALL "*) warning "${line#CALL } - start Python scripts with 'uv run <path>.py' (or 'uv run --python 3.11 python ...'), not python3 (macOS python3 is 3.9)" ;;
+        esac
+    done <<<"$1"
+}
+
 # --- Per-skill checks ---
 # Every message names the file it is about, so a finding in a multi-skill repo
 # is attributable without counting output lines.
@@ -322,6 +441,16 @@ PYEOF
         warning "$rel has $count script reference(s) using relative paths instead of \${CLAUDE_SKILL_DIR}/scripts/"
     fi
 
+    # --- Python floor: 3.11 through uv ---------------------------------------
+    # See py_floor_scan above. SKILL.md and references/ are this skill's docs,
+    # checked also without a scripts/ of its own (they may start root scripts);
+    # commands/*.md and hooks/hooks.json are checked once at repository level.
+    if [[ -n "$skill_dir" ]]; then
+        local -a py_docs=("$skill_dir/SKILL.md")
+        for f in "$skill_dir"/references/*.md; do [[ -f "$f" ]] && py_docs+=("$f"); done
+        py_floor_report "$(py_floor_scan "$REPO_DIR" "$skill_dir" "${py_docs[@]}")"
+    fi
+
     # --- Flat discovery ------------------------------------------------------
     # Agent Skills spec: "Keep file references one level deep from SKILL.md.
     # Avoid deeply nested reference chains." The rule exists because each hop is
@@ -538,6 +667,15 @@ if [[ ${#SKILL_FILES[@]} -gt 0 ]]; then
 else
     error "SKILL.md not found (checked root and skills/*/)"
 fi
+
+# A plugin's slash commands and hooks start the scripts too (retro-skill#201
+# crashed from commands/retro.md; a hook runs on every matching tool call).
+# Repo-wide, so a multi-skill repo reports each once.
+py_repo_docs=()
+for f in "$REPO_DIR"/commands/*.md "$REPO_DIR"/hooks/hooks.json; do
+    [[ -f "$f" ]] && py_repo_docs+=("$f")
+done
+py_floor_report "$(py_floor_scan "$REPO_DIR" "" ${py_repo_docs[@]+"${py_repo_docs[@]}"})"
 
 # --- Shebang without the committed executable bit ---
 # Repo-wide, so it runs once rather than once per skill.

@@ -4,7 +4,7 @@
 name: skill-repo
 description: "Use when creating skill repositories, standardizing or validating skill repo structure, setting up composer/release workflows, configuring split licensing (MIT + CC-BY-SA-4.0), fixing plugin.json / SKILL.md validation or version-parity errors, writing, changing or validating evals/evals.json assertions and samples (graded as POSIX ERE by grep -qiE), or releasing a skill version (version bump, tagging)."
 license: "(MIT AND CC-BY-SA-4.0). See LICENSE-MIT and LICENSE-CC-BY-SA-4.0"
-compatibility: "Requires bash 4.3+, python3 3.11+."
+compatibility: "Requires bash 4.3+, python3 3.11+, and uv (runs the Python scripts)."
 metadata:
   author: Netresearch DTT GmbH
   version: "3.1.0"
@@ -105,7 +105,7 @@ Marketplace, release download, Composer, npm — commands and the npm `files` de
 
 ## Validation
 
-`scripts/validate-skill.sh` (layout, manifests, budgets, flat discovery). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
+`scripts/validate-skill.sh` (layout, manifests, budgets, flat discovery, Python scripts on 3.11+ through `uv run`). Shell portability: [authoring-ci-gotchas](references/authoring-ci-gotchas.md).
 
 Named here so they are findable: `bump-version.sh`, `check-version-parity.sh`, `sync-plugin-manifest.sh`, `roll-changelog.py`, `fleet-release-github.sh`, `migrate-licensing.sh`, `validate-evals.sh` — each with `--help`.
 

@@ -153,7 +153,7 @@ fr_changelog_state() { # RAW-CONTENT — "absent" | "empty" | "has-content" |
     tool=$(fr_tool roll-changelog.py 2> /dev/null) || { echo "unknown"; return 0; }
     tmp=$(mktemp "${TMPDIR:-/tmp}/fr-clstate.XXXXXX") || { echo "unknown"; return 0; }
     printf '%s\n' "$raw" > "$tmp"
-    state=$(python3 "$tool" --check-unreleased "$tmp" 2> /dev/null) || state="unknown"
+    state=$(uv run "$tool" --check-unreleased "$tmp" 2> /dev/null) || state="unknown"
     rm -f "$tmp"
     echo "${state:-unknown}"
 }
@@ -174,6 +174,14 @@ fr_preflight() { # PHASE TOOL...
         bump)
             command -v python3 > /dev/null 2>&1 \
                 || fr_die "python3 required for the changelog roll"
+            command -v uv > /dev/null 2>&1 \
+                || fr_die "uv required: roll-changelog.py runs through uv run (Python 3.11+)"
+            ;;
+        survey)
+            # fr_changelog_state runs roll-changelog.py; without uv every
+            # CHANGELOG would classify as "unknown" and the warning would vanish.
+            command -v uv > /dev/null 2>&1 \
+                || fr_die "uv required: the survey classifies CHANGELOGs with roll-changelog.py through uv run"
             ;;
         *) : ;;
     esac
@@ -854,7 +862,7 @@ fr_bump_one() { # ROW — runs inside the per-repo subshell; log via redirection
             roll_tool=$(fr_tool roll-changelog.py) || { echo "FAIL $repo: roll-changelog.py not found"; return 1; }
             local -a seed=()
             [[ "$cls" == "STABILIZE" ]] && seed=(--seed-entry "$FR_STABILIZE_ENTRY")
-            python3 "$roll_tool" "$wt/CHANGELOG.md" "$version" ${seed[@]+"${seed[@]}"} \
+            uv run "$roll_tool" "$wt/CHANGELOG.md" "$version" ${seed[@]+"${seed[@]}"} \
                 || { echo "FAIL $repo: changelog roll"; return 1; }
             fr_lint_changelog "$wt"
         fi

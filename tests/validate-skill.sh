@@ -453,6 +453,150 @@ script_test_case root root expect-absent \
 script_test_case none none expect-present \
     "no test references these script(s): x.sh" "a script no test names still warns"
 
+echo "== Python scripts declare >=3.11 and start through uv run (retro-skill#201) =="
+PY_MANIFEST='{"name":"d","version":"1.0.0"}'
+PY_PLAIN='#!/usr/bin/env python3\nprint(1)\n'
+# py_case <mode:755|644> <script head> <skill line> <expect-pattern> <want:present|absent> <label> [script name]
+py_case() {
+    local mode="$1" head="$2" line="$3" pat="$4" want="$5" label="$6" name="${7:-x.py}" dir out
+    dir="$(mktemp -d)"; mkdir -p "$dir/skills/d/scripts" "$dir/skills/d/references"
+    printf '%s\n' "$PY_MANIFEST" > "$dir/plugin.json"
+    printf '%b\nprint(1)\n' "$head" > "$dir/skills/d/scripts/$name"
+    chmod "$mode" "$dir/skills/d/scripts/$name"
+    {
+        printf -- '---\nname: d\ndescription: "Use when exercising the Python floor check."\n---\n\n# D\n\n'
+        printf 'Run %s.\n\n%s\n' "$name" "$line"
+    } > "$dir/skills/d/SKILL.md"
+    out="$(run_validator fallback "$dir")"
+    rm -rf "$dir"
+    if [[ "$want" == present ]] && grep -qF -- "$pat" <<<"$out"; then ((PASS++))
+    elif [[ "$want" == absent ]] && ! grep -qF -- "$pat" <<<"$out"; then ((PASS++))
+    else echo "  FAIL [python-floor] $label: expected '$pat' $want"; ((FAIL++)); fi
+    return 0
+}
+good_head='#!/usr/bin/env -S uv run --script\n#\n# /// script\n# requires-python = ">=3.11"\n# dependencies = []\n# ///'
+# shellcheck disable=SC2016  # the validator must see ${CLAUDE_SKILL_DIR} unexpanded
+uv_line='uv run ${CLAUDE_SKILL_DIR}/scripts/x.py'
+py_case 755 '#!/usr/bin/env python3' "$uv_line" 'scripts/x.py: no requires-python' present \
+    "an executable script without a PEP 723 block warns"
+py_case 755 "${good_head/3.11/3.10}" "$uv_line" 'scripts/x.py: >=3.10' present \
+    "a floor below 3.11 warns"
+py_case 755 "$good_head" "$uv_line" 'requires-python = ">=3.11" in a PEP 723' absent \
+    "a script declaring >=3.11 is quiet"
+py_case 755 "${good_head/-S uv run --script/python3}" "$uv_line" 'scripts/x.py - start the file with' present \
+    "a >=3.11 block under a python3 shebang warns"
+py_case 755 "$good_head" "$uv_line" 'start the file with' absent \
+    "the uv shebang is quiet"
+py_case 644 '# a module loaded by path' "$uv_line" 'requires-python = ">=3.11" in a PEP 723' absent \
+    "a non-executable module is not checked"
+# Case one is the line from retro-skill's commands/retro.md that crashed on macOS;
+# its trailing backslash is the line continuation of the original.
+# shellcheck disable=SC2016,SC1003
+py_case 755 "$good_head" 'python3 ${CLAUDE_SKILL_DIR}/scripts/x.py \' 'SKILL.md:10: python3 ${CLAUDE_SKILL_DIR}/scripts/x.py' present \
+    "a python3 call in SKILL.md warns with its line"
+# Copied from retro-skill's references/workflow.md: `\c` ends `echo -e` output.
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'py -3 -X utf8 "$skillDir\scripts\codex-transcript.py" --transcript-file $transcript --match $token |' 'SKILL.md:10: py -3 -X utf8 $skillDir\scripts\codex-transcript.py - start Python' present \
+    "a Windows py -3 call warns and its backslashes survive echo -e" codex-transcript.py
+# Copied from markdown-to-pdf-skill's SKILL.md: uv reads no header behind `python3`.
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'uv run --with markdown --with weasyprint python3 "${SKILL_DIR}/scripts/convert.py" in.md' 'SKILL.md:10: python3 ${SKILL_DIR}/scripts/convert.py - start Python' present \
+    "uv run python3 without --python warns" convert.py
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'uv run ${CLAUDE_SKILL_DIR}/scripts/x.py && python3 ${CLAUDE_SKILL_DIR}/scripts/x.py' 'SKILL.md:10: python3 ${CLAUDE_SKILL_DIR}/scripts/x.py - start Python' present \
+    "a python3 call after && warns although the line starts with uv run"
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'uv run --python 3.12 python ${CLAUDE_SKILL_DIR}/scripts/x.py && python3 ${CLAUDE_SKILL_DIR}/scripts/x.py' 'SKILL.md:10: python3 ${CLAUDE_SKILL_DIR}/scripts/x.py - start Python' present \
+    "the --python of an earlier command does not cover a later python3"
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'python3 \
+  ${CLAUDE_SKILL_DIR}/scripts/x.py --flag' 'SKILL.md:10: python3    ${CLAUDE_SKILL_DIR}/scripts/x.py - start Python' present \
+    "a call continued onto the next line warns at its first line"
+py_case 755 "$good_head" "$uv_line" 'start Python scripts with' absent \
+    "a uv run call is quiet"
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'uv run --python 3.12 python ${CLAUDE_SKILL_DIR}/scripts/x.py' 'start Python scripts with' absent \
+    "the CI form uv run --python X python is quiet"
+# Copied from git-workflow-skill's references/code-quality-tools.md: an example, no shipped script.
+py_case 755 "$good_head" 'guard() { python3 ./scripts/guard.py "$@"; }' 'start Python scripts with' absent \
+    "a call naming a script the repository does not ship is quiet"
+# A directory named like a script must not crash the scan and drop the other findings.
+dir_dir="$(mktemp -d)"; mkdir -p "$dir_dir/skills/d/scripts/bad.py"
+printf '%s\n' "$PY_MANIFEST" > "$dir_dir/plugin.json"
+printf '%b' "$PY_PLAIN" > "$dir_dir/skills/d/scripts/x.py"; chmod 755 "$dir_dir/skills/d/scripts/x.py"
+printf -- '---\nname: d\ndescription: "Use when exercising the Python floor check."\n---\n\n# D\n\nRun x.py.\n' > "$dir_dir/skills/d/SKILL.md"
+dir_out="$(run_validator fallback "$dir_dir")"
+rm -rf "$dir_dir"
+if grep -qF 'scripts/x.py: no requires-python' <<<"$dir_out"; then ((PASS++)); else
+    echo "  FAIL [python-floor] a directory named scripts/bad.py hides the other findings"; ((FAIL++)); fi
+
+# The crash itself came from a slash command, outside the skill directory.
+cmd_dir="$(mktemp -d)"; mkdir -p "$cmd_dir/skills/d/scripts" "$cmd_dir/commands"
+printf '%s\n' "$PY_MANIFEST" > "$cmd_dir/plugin.json"
+printf -- '---\nname: d\ndescription: "Use when exercising the Python floor check."\n---\n\n# D\n\nRun detect-mechanical.py.\n' > "$cmd_dir/skills/d/SKILL.md"
+printf '%b\nprint(1)\n' "$good_head" > "$cmd_dir/skills/d/scripts/detect-mechanical.py"; chmod 755 "$cmd_dir/skills/d/scripts/detect-mechanical.py"
+# shellcheck disable=SC2016,SC1003
+printf '%s\n' '---' 'description: "x"' '---' '' 'python3 ${CLAUDE_PLUGIN_ROOT}/skills/retro/scripts/detect-mechanical.py \' '  --transcript-file "$TF"' > "$cmd_dir/commands/retro.md"
+cmd_out="$(cd "$cmd_dir" && PYTHONPATH="$SHIM" bash "$VALIDATOR" . 2>&1)"
+rm -rf "$cmd_dir"
+# shellcheck disable=SC2016
+if grep -qF 'commands/retro.md:5: python3 ${CLAUDE_PLUGIN_ROOT}/skills/retro/scripts/detect-mechanical.py - start Python' <<<"$cmd_out"; then ((PASS++)); else
+    echo "  FAIL [python-floor] a python3 call in commands/*.md warns, run as 'validate-skill.sh .'"; ((FAIL++)); fi
+
+# Hooks start root scripts/ on every matching tool call. The command is copied
+# from data-tools-skill's hooks/hooks.json. A root script hooks.json does not
+# name is a maintenance tool and is not checked.
+hk_dir="$(mktemp -d)"; mkdir -p "$hk_dir/skills/d" "$hk_dir/scripts" "$hk_dir/hooks"
+printf '%s\n' "$PY_MANIFEST" > "$hk_dir/plugin.json"
+# shellcheck disable=SC2016
+printf -- '---\nname: d\ndescription: "Use when exercising the Python floor check."\n---\n\n# D\n\nRun:\n\npython3 ${CLAUDE_PLUGIN_ROOT}/scripts/maint.py\n' > "$hk_dir/skills/d/SKILL.md"
+for n in pre_bash_structured_warn.py maint.py; do
+    printf '%b' "$PY_PLAIN" > "$hk_dir/scripts/$n"; chmod 755 "$hk_dir/scripts/$n"
+done
+# shellcheck disable=SC2016
+printf '%s\n' '{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [' \
+    '  {"type": "command", "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre_bash_structured_warn.py"},' \
+    '  {"type": "command", "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/qa_gate_hook.py"},' \
+    '  {"type": "command", "command": "uv run ${CLAUDE_PLUGIN_ROOT}/hooks/floored_hook.py"},' \
+    '  {"type": "command", "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/pre_bash_structured_warn.py\" --x"}' \
+    ']}]}}' > "$hk_dir/hooks/hooks.json"
+# 100644, as in it-maintenance-skill: a hook needs no executable bit. The second
+# one declares the floor; not executable, its python3 shebang is never used.
+printf '%b' "$PY_PLAIN" > "$hk_dir/hooks/qa_gate_hook.py"; chmod 644 "$hk_dir/hooks/qa_gate_hook.py"
+printf '%b\nprint(1)\n' "${good_head/-S uv run --script/python3}" > "$hk_dir/hooks/floored_hook.py"; chmod 644 "$hk_dir/hooks/floored_hook.py"
+hk_out="$(cd "$hk_dir" && PYTHONPATH="$SHIM" bash "$VALIDATOR" . 2>&1)"
+rm -rf "$hk_dir"
+# shellcheck disable=SC2016
+for want in 'hooks/hooks.json:2: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre_bash_structured_warn.py - start Python' \
+            'scripts/pre_bash_structured_warn.py: no requires-python' \
+            'hooks/hooks.json:3: python3 ${CLAUDE_PLUGIN_ROOT}/hooks/qa_gate_hook.py - start Python' \
+            'hooks/qa_gate_hook.py: no requires-python' \
+            'hooks/hooks.json:5: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre_bash_structured_warn.py - start Python' \
+            'skills/d/SKILL.md:10: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/maint.py - start Python'; do
+    if grep -qF -- "$want" <<<"$hk_out"; then ((PASS++)); else
+        echo "  FAIL [python-floor] hooks and root scripts: expected '$want'"; ((FAIL++)); fi
+done
+if grep -qF 'hooks/floored_hook.py' <<<"$hk_out"; then
+    echo "  FAIL [python-floor] a non-executable hook script with the floor got a warning"; ((FAIL++)); else ((PASS++)); fi
+if grep -qF 'scripts/maint.py: no requires-python' <<<"$hk_out"; then
+    echo "  FAIL [python-floor] a root script hooks.json does not name was checked"; ((FAIL++)); else ((PASS++)); fi
+
+# Root SKILL.md layout, as in pagerangers-skill: repo/scripts is the skill's
+# scripts/, and a 100644 hook script there still needs the floor.
+rs_dir="$(mktemp -d)"; mkdir -p "$rs_dir/scripts" "$rs_dir/hooks"
+printf '%s\n' "$PY_MANIFEST" > "$rs_dir/plugin.json"
+printf -- '---\nname: d\ndescription: "Use when exercising the Python floor check."\n---\n\n# D\n\nRun detect_credentials.py.\n' > "$rs_dir/SKILL.md"
+printf '%b' "$PY_PLAIN" > "$rs_dir/scripts/detect_credentials.py"; chmod 644 "$rs_dir/scripts/detect_credentials.py"
+printf '%b' "$PY_PLAIN" > "$rs_dir/scripts/helper.py"; chmod 644 "$rs_dir/scripts/helper.py"
+# shellcheck disable=SC2016
+printf '%s\n' '{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "uv run ${CLAUDE_PLUGIN_ROOT}/scripts/detect_credentials.py"}]}]}}' > "$rs_dir/hooks/hooks.json"
+rs_out="$(cd "$rs_dir" && PYTHONPATH="$SHIM" bash "$VALIDATOR" . 2>&1)"
+rm -rf "$rs_dir"
+if [[ "$(grep -cF 'scripts/detect_credentials.py: no requires-python' <<<"$rs_out")" -eq 1 ]]; then ((PASS++)); else
+    echo "  FAIL [python-floor] root SKILL.md: a 100644 hook script is reported once"; ((FAIL++)); fi
+if grep -qF 'scripts/helper.py' <<<"$rs_out"; then
+    echo "  FAIL [python-floor] root SKILL.md: a 100644 module hooks.json does not name was checked"; ((FAIL++)); else ((PASS++)); fi
+
 echo "== Organisation reusables are called at @main =="
 # reusable_case <name> <want> <workflow line> <label>
 # Case one is the line that slipped into netresearch-branding-skill, copied.
