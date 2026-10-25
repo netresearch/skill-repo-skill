@@ -78,6 +78,18 @@ jobs:
           # only exposes it to later steps and artifacts.
           persist-credentials: false
 
+      # Skill scripts declare `requires-python = ">=3.11"` in a PEP 723 block
+      # and are started with `uv run` (repository-quality-rules.md, section
+      # "Python-Skripte"), and a test that runs a script the way the skill does
+      # needs uv on PATH. The ubuntu-latest image ships none, so without this
+      # step such a test fails with "uv: not found" (typo3-typoscript-ref-skill#63).
+      - name: Set up uv
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          # No lockfile in a skill repo: skip dependency-file discovery, as
+          # validate.yml does.
+          cache-dependency-glob: ""
+
       # Counted here, before any test runs: a test leg can leave by-products
       # next to the scripts (__pycache__/, coverage data, scratch files), and a
       # count taken after the legs reported those as shipped code. A shipped
