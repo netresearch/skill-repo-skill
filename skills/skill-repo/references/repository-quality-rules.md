@@ -115,6 +115,8 @@ Nach dem Umstellen einmal im Standardmodus durchlaufen, mit unveränderten Einst
 
 3.11 ist die älteste Python-Version, die upstream noch pflegt: 3.10 ist seit dem 2026-10-01 end-of-life. `python3` startet dagegen den Interpreter, der auf dem Host zuerst im `PATH` liegt. Auf macOS mit den Command Line Tools ist das 3.9.6. Dort brach `detect-mechanical.py` aus `retro-skill` an `itertools.pairwise` ab ([retro-skill#201](https://github.com/netresearch/retro-skill/issues/201)), und vier weitere Skripte desselben Skills hätten an `datetime.UTC` abgebrochen.
 
+Ob ein Skript auf einer älteren Version läuft, misst ein echter Interpreter, kein statisches Werkzeug. `vermin` 1.9.2 meldet für `def f(x: int | None) -> str | None` als Mindestversion 3.0, auch mit `--eval-annotations`; Python 3.9 bricht beim Import mit `TypeError: unsupported operand type(s) for |` ab. Also `uv run --python 3.9 <skript> --help` oder ein `python:3.9-slim`-Container, und vermin nur als Hinweis auf weitere Fundstellen. `uv run` installiert dabei die Abhängigkeiten aus dem PEP-723-Block; trägt der Block schon `requires-python = ">=3.11"`, warnt uv 0.13.1 nur und startet das Skript trotzdem auf 3.9. `uvx --python 3.9 python <skript>` liest den Block nicht, und ein Skript mit Fremdimport bricht dann an `ModuleNotFoundError` ab, bevor die Version überhaupt geprüft ist.
+
 Jedes ausführbare Skript trägt einen Block nach PEP 723 und diesen Shebang:
 
 ```python
