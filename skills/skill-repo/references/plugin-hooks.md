@@ -79,7 +79,16 @@ Decide per hook which way a failure to start should fall:
 | Hook | Command | A start failure |
 |---|---|---|
 | Guard (it denies) | `uv run "${CLAUDE_PLUGIN_ROOT}/…/guard.py"` with `"onFailure": "block"` | blocks: a guard that cannot run must not silently let everything through |
-| Hint (it only adds context), or a hook documented as fail-open | `uv run --offline "${CLAUDE_PLUGIN_ROOT}/…/hint.py" \|\| true` | lets the call through |
+| Hint (it only adds context; it denies, if at all, through JSON) | `uv run --offline "${CLAUDE_PLUGIN_ROOT}/…/hint.py" \|\| true` | lets the call through |
+| Guard that blocks with its own exit 2 but is documented as fail-open | `if uv python find --no-python-downloads ">=3.11" >/dev/null 2>&1; then uv run --offline "${CLAUDE_PLUGIN_ROOT}/…/gate.py"; fi` | lets the call through; once it runs, its exit 2 still blocks |
+
+`|| true` would turn the third hook's own exit 2 into a pass, so it never
+blocks; the bare guard form would block every call on a machine without
+Python 3.11. The `uv python find` test separates the two: measured, it exits 0
+on `python:3.9-slim` without starting the script, and passes the script's exit
+2 through on `python:3.12-slim`. Without uv the test fails and the hook is
+skipped. The script must declare only standard-library dependencies, because
+`--offline` makes a package missing from uv's cache an exit 2.
 
 `onFailure: "block"` turns every failure of the hook — crash, timeout, missing
 uv — into a block. Claude Code honours it from v2.1.295; older clients ignore

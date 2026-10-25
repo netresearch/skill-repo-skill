@@ -536,6 +536,16 @@ py_case 755 "$good_head" "$uv_line" 'start Python scripts with' absent \
 # shellcheck disable=SC2016
 py_case 755 "$good_head" 'uv run --python 3.12 python ${CLAUDE_SKILL_DIR}/scripts/x.py' 'start Python scripts with' absent \
     "the CI form uv run --python X python is quiet"
+# Copied from motion-video-skill's SKILL.md:256: the directory sits in a variable.
+# shellcheck disable=SC2016
+py_case 755 "$good_head" 'python3 "$S"/stt_check.py out/my-video.mp4 --words audio/vo.words.json --offset 0.5 --cues audio/mix.cues.json  # authorized speech check' 'SKILL.md:10: python3 $S/stt_check.py - start Python' present \
+    "a call whose directory is a variable warns" stt_check.py
+py_case 755 "$good_head" "python3 -c \"print(open('scripts/x.py').read())\"" 'start Python scripts with' absent \
+    "inline code that mentions a shipped script is quiet"
+# Copied from markdown-to-pdf-skill's SKILL.md:77: prose naming the wrong call.
+# shellcheck disable=SC2016  # the backticks are Markdown, not command substitution
+py_case 755 "$good_head" '| WeasyPrint missing | `uv run convert.py` installs it from the script'"'"'s inline metadata; if it was started as `python3 convert.py`, rerun it with `uv run` |' 'start Python scripts with' absent \
+    "a bare script name without a directory is quiet" convert.py
 # Copied from git-workflow-skill's references/code-quality-tools.md: an example, no shipped script.
 py_case 755 "$good_head" 'guard() { python3 ./scripts/guard.py "$@"; }' 'start Python scripts with' absent \
     "a call naming a script the repository does not ship is quiet"
