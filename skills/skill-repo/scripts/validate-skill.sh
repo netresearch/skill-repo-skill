@@ -519,8 +519,10 @@ PYEOF
     # skill shipped with scripts/ and references/ outside the declared skill
     # directory, so every path in SKILL.md was dead on a faithful install.
     # Skill-relative directories per the Agent Skills spec (scripts/,
-    # references/, assets/) plus evals/; `${CLAUDE_SKILL_DIR}/` resolves to the
-    # skill directory and is accepted as a prefix. Globs, placeholders and
+    # references/, assets/) plus evals/; shared ../references/ paths are
+    # checked too, so validating the unpacked skill catches a source-only
+    # dependency lost during installation. `${CLAUDE_SKILL_DIR}/` resolves to
+    # the skill directory and is accepted as a prefix. Globs, placeholders and
     # other variables are not paths and are skipped. An error since the fleet
     # was measured clean (skill-repo-skill#267): 40 GitHub and 37 GitLab skill
     # repositories, every finding fixed at its source first.
@@ -546,7 +548,11 @@ PYEOF
             rel="${token#\$\{CLAUDE_SKILL_DIR\}/}"
             # A link may point into a file: references/x.md#section is x.md.
             rel="${rel%%#*}"
-            case "$rel" in
+            resource_rel="$rel"
+            while [[ "$resource_rel" == ../* ]]; do
+                resource_rel="${resource_rel#../}"
+            done
+            case "$resource_rel" in
                 scripts/*|references/*|assets/*|evals/*) ;;
                 *) continue ;;
             esac

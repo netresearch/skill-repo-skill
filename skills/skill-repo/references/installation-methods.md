@@ -138,6 +138,16 @@ Release packages contain only skill-relevant files:
 - `assets/`
 - `templates/`
 
+Check the actual unpacked skill as well as its source tree. Run the skill
+validator on that directory and inspect resource findings even when unrelated
+repository-metadata checks do not apply there. A link such as
+`../../references/shared.md` can work in a monorepository and disappear when
+only the skill directory is installed. Required resources must ship with the
+payload; optional resources need an explicit reduced mode. The validator checks
+shared resource links too, but it does not execute prose examples or prove that
+an external program is installed. Test the documented invocation in a clean
+installation before claiming runtime support.
+
 ### Excluded from Packages
 
 - `README.md` (human documentation)

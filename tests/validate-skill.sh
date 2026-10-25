@@ -208,6 +208,25 @@ for absent in present.md present.sh 'references/*.md' 'references/<topic>.md' 'a
         echo "  FAIL [dangling] $absent wrongly reported"; ((FAIL++)); else ((PASS++)); fi
 done
 
+# A shared reference can resolve in the source tree and disappear when only
+# the skill directory is installed. Validate the unpacked directory as well.
+echo "== Shared references after standalone installation =="
+shared="$TMP/fx_shared"
+mkdir -p "$shared/skills/d" "$shared/references" "$TMP/installed/d"
+printf '# shared\n' > "$shared/references/shared.md"
+printf '%b' "${hdr}description: Use when doing X\n---\n# D\n" > "$shared/skills/d/SKILL.md"
+printf 'Read [the shared rule](../../references/shared.md).\n' >> "$shared/skills/d/SKILL.md"
+shared_out="$(run_validator fallback "$shared")"
+if grep -qF 'names path(s) that do not exist' <<<"$shared_out"; then
+    echo "  FAIL [shared] existing source reference was rejected"; ((FAIL++)); else ((PASS++)); fi
+cp "$shared/skills/d/SKILL.md" "$TMP/installed/d/SKILL.md"
+installed_out="$(run_validator fallback "$TMP/installed/d")"
+if grep -qE 'names path\(s\) that do not exist.*\.\./\.\./references/shared\.md' <<<"$installed_out"; then
+    ((PASS++))
+else
+    echo "  FAIL [shared] standalone install silently lost shared.md"; ((FAIL++))
+fi
+
 # --- allowed-tools: interpreter-wide rule in a skill that ships scripts (#271)
 # Warns only when both hold. A skill without scripts/ keeps its interpreter
 # rule without comment, and a converted rule must stay silent -- otherwise the

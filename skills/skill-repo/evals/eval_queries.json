@@ -1,0 +1,38 @@
+[
+  {
+    "query": "The skill installs successfully, but a linked reference is missing outside our source checkout. Fix the package.",
+    "should_trigger": true
+  },
+  {
+    "query": "Our evaluation claims tool execution based on a sentence in the answer. Help us correct the test and evidence.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review the structure, licensing and distribution files of this new agent skill repository.",
+    "should_trigger": true
+  },
+  {
+    "query": "Add meaningful regression examples and realistic selection tests to this skill.",
+    "should_trigger": true
+  },
+  {
+    "query": "The new skill description wins on the test set used to select it. Design a sound final comparison.",
+    "should_trigger": true
+  },
+  {
+    "query": "Review this application patch for a possible payment calculation error.",
+    "should_trigger": false
+  },
+  {
+    "query": "Turn this paragraph into a shorter email to a customer.",
+    "should_trigger": false
+  },
+  {
+    "query": "Find the failing unit test in our PHP application and repair the implementation.",
+    "should_trigger": false
+  },
+  {
+    "query": "Deploy the current application build to staging.",
+    "should_trigger": false
+  }
+]

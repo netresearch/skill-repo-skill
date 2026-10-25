@@ -683,5 +683,105 @@
         "Write a small script that builds the plan from the survey and sets version 1.0.0 for every repo below 1.0."
       ]
     }
+  },
+  {
+    "name": "agent_evidence_is_not_answer_regex",
+    "prompt": "Our text-only A/B run says tool_use passed because the answer mentions a validator. Can we report that the tool ran and that users will select this skill?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(trajectory|trace)"
+      },
+      {
+        "type": "content",
+        "pattern": "(text.only|answer text|no tools)"
+      }
+    ],
+    "samples": {
+      "passing": "The text-only run grades answer text with no tools. Use a captured trajectory to observe selection and actual tool calls, then independently verify the outcome.",
+      "failing": [
+        "The tool_use assertion passed, so the validator ran and selection works."
+      ]
+    }
+  },
+  {
+    "name": "negative_selection_error_stays_incomplete",
+    "prompt": "A negative skill-selection trial timed out before recording a tool call. Should it pass because the skill was not invoked? What should our evidence record say?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "incomplete"
+      },
+      {
+        "type": "content",
+        "pattern": "(timeout|timed out)"
+      }
+    ],
+    "samples": {
+      "passing": "Record the timeout as incomplete, not a correct negative. A completed run is needed to measure not_triggered.",
+      "failing": [
+        "Pass the negative because the skill was not invoked before timeout."
+      ]
+    }
+  },
+  {
+    "name": "validation_selection_needs_final_holdout",
+    "prompt": "The description optimizer cannot see test labels, but we choose the best iteration by its test score. Can we use that score as the final generalization result?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "validation"
+      },
+      {
+        "type": "content",
+        "pattern": "(holdout|untouched)"
+      }
+    ],
+    "samples": {
+      "passing": "That reused score is validation data because it selects the iteration. Fix the candidate and evaluate once on an untouched final holdout.",
+      "failing": [
+        "Yes. Hidden labels make the test score an unbiased final result."
+      ]
+    }
+  },
+  {
+    "name": "portable_review_text_is_not_execution",
+    "prompt": "We include SKILL.md in a managed reviewer. The body links to scripts and supporting files. Can the review report that those scripts executed?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(self.contained|standalone)"
+      },
+      {
+        "type": "content",
+        "pattern": "(text import|body.only|body only)"
+      }
+    ],
+    "samples": {
+      "passing": "A text import is body only and executes no scripts. Export self-contained review criteria and test which rules reach the host; preserve execution in the executable skill.",
+      "failing": [
+        "Including SKILL.md runs its scripts and follows every supporting link."
+      ]
+    }
+  },
+  {
+    "name": "shared_reference_must_survive_installation",
+    "prompt": "Our SKILL.md links to ../../references/shared.md. It resolves in the source checkout. Is that enough to ship a standalone package?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(unpacked|installed|standalone)"
+      },
+      {
+        "type": "content",
+        "pattern": "(ship|payload)"
+      }
+    ],
+    "samples": {
+      "passing": "Validate the unpacked standalone skill. Ship required resources in its payload; source-tree reachability alone does not prove the installed link resolves.",
+      "failing": [
+        "Yes. The source-tree link resolves, so no package check is necessary."
+      ]
+    }
   }
 ]

@@ -254,6 +254,12 @@ Nothing else about validation changed, and no evals.json in the fleet changes ve
 
 ### What these evals cannot measure, and why it matters
 
+For captured agent runs, keep selection, returned tools and independent outcomes
+as separate measurements. The collector contract and executable consistency
+check are in [agent-evidence.md](agent-evidence.md). An error, timeout or blocked
+run never becomes a correct negative selection, and validation-selected scores
+need an additional untouched final holdout before a generalization claim.
+
 `run-ab-evals.sh` builds the "with" arm by pasting the whole `SKILL.md` into
 `--append-system-prompt`, and runs both arms with `--tools ""`. The skill is
 force-fed. **There is no routing in this harness at all**, so no eval in any
