@@ -150,6 +150,20 @@ jobs:
           fi
           echo "${COUNT} tracked JSON file(s) parse"
 
+      # JSON syntax says nothing about the schema Packagist enforces. A
+      # composer.json that listed the package itself under `replace` parsed
+      # fine here and was rejected by Packagist for 30 tags
+      # (automated-assessment-skill#135). Errors fail the step; warnings do
+      # not, because Packagist rejects only on errors. Composer ships with the
+      # ubuntu-latest image.
+      - name: Composer schema
+        run: |
+          if [[ ! -f composer.json ]]; then
+            echo "No composer.json"
+            exit 0
+          fi
+          composer validate --no-check-all --no-check-lock --no-interaction
+
       - name: Validate plugin version format
         run: |
           PLUGIN_FILE=".claude-plugin/plugin.json"

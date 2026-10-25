@@ -17,7 +17,7 @@ skill-repo-skill defines the standard structure for all Netresearch skill reposi
 
 Located in `.github/workflows/`, these are called by other skill repos via `uses: netresearch/skill-repo-skill/.github/workflows/<name>.yml@main`:
 
-- **`validate.yml`** -- Main validation pipeline. Runs structure checks, frontmatter validation, licensing, metadata consistency, markdown/YAML lint, ShellCheck, Python lint, and checkpoint schema validation.
+- **`validate.yml`** -- Main validation pipeline. Runs structure checks, frontmatter validation, licensing, metadata consistency, markdown/YAML lint, the composer.json schema (`composer validate`), ShellCheck, Python lint, and checkpoint schema validation.
 - **`release.yml`** -- Triggered on `v*` tags. Validates tag matches `plugin.json` version, packages each skill standalone and full plugin with checksums.
 - **`pr-quality.yml`** -- PR quality gates (auto-approve coordination, etc.).
 - **`harness-verify.yml`** -- Verifies AGENTS.md / harness consistency.
