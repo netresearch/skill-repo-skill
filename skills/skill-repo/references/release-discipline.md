@@ -641,6 +641,20 @@ written* notes, where agent/bot credit must not be added). Do not rewrite
 generated bodies, do not strip credits, do not make releases depend on a
 CHANGELOG the repo does not maintain — in the 2026-08-27 sweep most repos had
 no CHANGELOG.md and five with one had an empty `[Unreleased]` at bump time.
+
+The generated list names PR authors only, never the people who reported the
+issues those PRs fixed. Add each reporter at the PR that fixed the issue, as a
+suffix on its bullet, and change nothing else:
+
+```
+* fix: … by @author in https://github.com/netresearch/x-skill/pull/12 — reported by @reporter in #11
+```
+
+An issue in another repository takes the full reference
+(`reported by @1Laurman in netresearch/retro-skill#201`). github-release's
+`release-notes-status.sh` accepts such a body as kept and reports a reporter
+that `harvest-contributors.sh` finds but the body does not name.
+
 Curate a body only where it is otherwise a dead pointer: the GitLab
 `claude-code-skill` component writes a fixed "see CHANGELOG.md for details."
 description, which the GitLab fleet driver's finish replaces with the tag's
