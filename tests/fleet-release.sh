@@ -1133,6 +1133,26 @@ check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3
 check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
     "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
 
+# --- preflight: survey and bump run roll-changelog.py through uv (retro-skill#201)
+# Without uv the survey classified every CHANGELOG as "unknown" without a word,
+# and the bump failed after bump-version.sh had already changed the worktree.
+nouv_bin="$WORK/nouv-bin"; mkdir -p "$nouv_bin"
+for t in git jq python3 mkdir; do ln -sf "$(command -v "$t")" "$nouv_bin/$t"; done
+printf '#!/bin/sh\nexit 0\n' > "$nouv_bin/gh"; chmod 755 "$nouv_bin/gh"
+# `trap - EXIT` in each subshell: fr_die exits it, and the inherited trap
+# would otherwise remove $WORK in the middle of this run.
+for phase in survey bump; do
+    out=$( (trap - EXIT; PATH="$nouv_bin"; fr_preflight "$phase" gh) 2>&1 ) && rc=0 || rc=$?
+    check "preflight $phase without uv stops before any work" "1 yes" \
+        "$rc $(grep -qF 'uv required' <<<"$out" && echo yes || echo no)"
+done
+# A stub, so the control does not depend on the runner having uv installed.
+uv_bin="$WORK/uv-bin"; mkdir -p "$uv_bin"
+printf '#!/bin/sh\nexit 0\n' > "$uv_bin/uv"; chmod 755 "$uv_bin/uv"
+out=$( (trap - EXIT; PATH="$nouv_bin:$uv_bin"; fr_preflight survey gh) 2>&1 ) && rc=0 || rc=$?
+check "preflight survey with uv passes (control)" "0" "$rc"
+[[ "$rc" -eq 0 ]] || printf '       %s\n' "$out"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All fleet-release tests passed"

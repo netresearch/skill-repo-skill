@@ -11,6 +11,7 @@
 - Pflicht für README-Oberfläche
 - SKILL.md vs. Discovery
 - allowed-tools (vorab gewährte Rechte)
+- Python-Skripte
 - Related Skills (Repo-Ebene)
 - Marketplace-Sync (Quelle bleibt Repo)
 - GitHub Repository SEO
@@ -92,7 +93,7 @@ allowed-tools: Bash(bash:*) Read Glob Grep
 allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(bash ${CLAUDE_SKILL_DIR}/scripts/*) Read Glob Grep
 ```
 
-Beide Formen gehören in die Zeile: ein Muster greift über das Präfix, und `./foo.sh` und `bash foo.sh` haben verschiedene. Wer Python-Skripte mitliefert, braucht `Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/*)` zusätzlich — oder ruft sie direkt auf, was Ausführungsbit und Shebang voraussetzt.
+Beide Formen gehören in die Zeile: ein Muster greift über das Präfix, und `./foo.sh` und `bash foo.sh` haben verschiedene. Wer Python-Skripte mitliefert, braucht `Bash(uv run ${CLAUDE_SKILL_DIR}/scripts/*)` zusätzlich, nicht `python3`; warum, steht unter [Python-Skripte](#python-skripte).
 
 Das Muster begrenzt auf ein Präfix, nicht auf eine Dateimenge: `*` schließt `/` ein, ein Aufruf mit `..` im Pfad liegt also formal noch darin. Wer eine harte Grenze braucht, zählt die Skripte einzeln auf — das kostet einen Eintrag je Skript und muss beim nächsten neuen Skript nachgezogen werden. Für die meisten Skills ist das Verzeichnismuster der richtige Tausch, solange man es als das liest, was es ist.
 
@@ -105,6 +106,37 @@ Drei Fallstricke:
 - **Eine Shell-Variable im Skill-Text hebelt die Regel aus.** Ein Block, der mit `S=${CLAUDE_SKILL_DIR}/scripts` beginnt und dann `uv run $S/foo.py` schreibt, läuft in der Shell korrekt — die Berechtigungsprüfung sieht aber das Kommando, wie es abgesetzt wird, also das wörtliche `$S/…`. Kein einziger so geschriebener Aufruf trifft ein Muster auf den Vollpfad. Im `matrix-communication`-Skill betraf das alle 20 dokumentierten Aufrufe. Den Pfad ausschreiben; das Zeilenbudget gibt es her (dort 61 von 500 Zeilen).
 
 Nach dem Umstellen einmal im Standardmodus durchlaufen, mit unveränderten Einstellungen — nicht unter `--dangerously-skip-permissions`, und nicht mit einer `permissions.allow`-Regel, die dasselbe Kommando ohnehin freigibt. Sonst beweist keines der beiden Ergebnisse etwas: eine ausbleibende Rückfrage kann von einer anderen Freigabe kommen, und eine Rückfrage kann aus einer `ask`-Regel stammen, die `allowed-tools` unabhängig vom Muster sticht. Eine `deny`-Regel wiederum blockiert ohne jede Rückfrage, und ein zusammengesetztes Kommando braucht ohnehin für jeden Teil einen Treffer. Im Zweifel das tatsächlich abgefragte Kommando gegen die geltenden Regeln halten, bevor das Muster geändert wird.
+
+---
+
+## Python-Skripte
+
+**Regel: Ein ausführbares `scripts/*.py` eines Skills verlangt Python 3.11 oder neuer und wird mit `uv run` gestartet. Dasselbe gilt für ein Skript im Repo-Root `scripts/` oder in `hooks/`, das ein Hook aus `hooks/hooks.json` startet.**
+
+3.11 ist die älteste Python-Version, die upstream noch pflegt: 3.10 ist seit dem 2026-10-01 end-of-life. `python3` startet dagegen den Interpreter, der auf dem Host zuerst im `PATH` liegt. Auf macOS mit den Command Line Tools ist das 3.9.6. Dort brach `detect-mechanical.py` aus `retro-skill` an `itertools.pairwise` ab ([retro-skill#201](https://github.com/netresearch/retro-skill/issues/201)), und vier weitere Skripte desselben Skills hätten an `datetime.UTC` abgebrochen.
+
+Jedes ausführbare Skript trägt einen Block nach PEP 723 und diesen Shebang:
+
+```python
+#!/usr/bin/env -S uv run --script
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+#
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+```
+
+`SKILL.md` und `references/` starten das Skript mit `uv run ${CLAUDE_SKILL_DIR}/scripts/x.py`. uv liest `requires-python` und wählt einen passenden Interpreter, auch wenn das Projekt des Nutzers eine `.python-version` mit 3.9 trägt; fehlt einer, lädt uv ihn herunter. Der Block allein schützt nicht, solange die Doku `python3 x.py` schreibt: dann liest niemand den Block. Das gilt auch für `uv run python x.py` und `uv run --with … python3 x.py`: uv liest den Block nur, wenn der Skriptpfad direkt auf `uv run` folgt, und nimmt sonst den Interpreter aus `.python-version` oder vom System. Wer einen Interpreter ausdrücklich braucht, schreibt `uv run --python 3.11 python x.py`. Darum gehören Block und Aufruf in denselben Commit.
+
+Nicht ausführbare `.py`-Dateien sind Module, die ein anderes Skript per Pfad lädt; sie brauchen keinen Block. Ausgenommen ist eine Datei, die `hooks/hooks.json` nennt: Der Hook startet sie als `python3 <pfad>`, dafür braucht sie kein Ausführungsbit, aber den Block, und die Prüfung verlangt ihn auch bei 100644. Die `compatibility`-Zeile der `SKILL.md` nennt uv und die Mindestversion, z. B. `"Requires uv (runs the scripts on Python 3.11 or later), jq."`.
+
+`validate-skill.sh` meldet als Warnung:
+
+- jedes ausführbare `scripts/*.py` eines Skills ohne `requires-python` mit mindestens 3.11, und ebenso jedes Root-`scripts/*.py` oder `hooks/*.py`, das `hooks/hooks.json` nennt; ein Hook startet es bei jedem passenden Tool-Aufruf,
+- jedes solche Skript mit Block, aber ohne den Shebang oben, denn direkt gestartet nimmt es sonst das `python3` des Hosts,
+- jeden Aufruf eines mitgelieferten Skripts unter `scripts/` oder `hooks/` über `python3`, `python` oder `py -3` in `SKILL.md`, `references/`, den Slash-Commands unter `commands/*.md` und in `hooks/hooks.json`. Aus `commands/retro.md` kam der Absturz. Ein Aufruf über eine mit `\` fortgesetzte Zeile zählt als ein Befehl. Ausgenommen ist nur `uv run --python X python …` im selben Befehl. Ein Skript, das das Repo nicht mitliefert, etwa in Beispielcode, meldet die Prüfung nicht.
 
 ---
 
