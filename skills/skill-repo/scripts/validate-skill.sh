@@ -68,9 +68,16 @@ done
 # `.python-version` or the system unless `--python` names one. Non-executable
 # .py files are modules loaded by path and are not checked, and a call is
 # reported only when it names a script the repository ships, so example code
-# in a reference stays quiet. Warnings, so the fleet can follow before this
-# turns into an error. The parser is regex-only: the validator itself runs on
-# any python3.
+# in a reference stays quiet. Errors since every netresearch skill repository
+# on GitHub that calls this validator was migrated (2026-10-25). The parser is
+# regex-only: the validator itself runs on any python3.
+#
+# The repository-level run also reads hooks/hooks.json for a path placeholder
+# (`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}`)
+# outside quotes in a shell-form command: Claude Code runs it through `sh -c`,
+# a space in the install path splits it, and the hook cannot open its script.
+# A guard then fails with uv's exit 2, which blocks the tool call. A warning,
+# reported as `QUOTE <path>: <command>`.
 #
 # py_floor_scan <repo-dir> <skill-dir|""> <doc>... prints one line per finding,
 # `HEADER <path>: <spec>`, `SHEBANG <path>` or `CALL <path>:<line>: <call>`,
@@ -101,7 +108,7 @@ else:
 for path in checked:
     executable = os.access(path, os.X_OK)
     # A root scripts/ or hooks/ file that hooks.json names is an entry point
-    # whatever its mode: a hook starts it as `python3 <path>`, which needs no
+    # whatever its mode: a hook starts it as `uv run <path>`, which needs no
     # executable bit. That holds in the root-SKILL.md layout too.
     hook_named = path.name in named and path.parent.resolve() in root_dirs
     if not path.is_file() or not (executable or hook_named):
@@ -118,6 +125,37 @@ for path in checked:
     # A file that is not executable is never run directly; its shebang is moot.
     elif executable and text.split("\n", 1)[0].rstrip("\r") != SHEBANG:
         print(f"SHEBANG {path.relative_to(repo)}")
+
+if not skill and hooks.is_file():
+    import json
+
+    def unquoted(cmd):
+        # Track shell quoting; a placeholder counts when it starts outside quotes.
+        quote, i = None, 0
+        while i < len(cmd):
+            c = cmd[i]
+            if quote is None and cmd.startswith("${CLAUDE_", i) and re.match(
+                r"\$\{CLAUDE_(?:PLUGIN_ROOT|PLUGIN_DATA|PROJECT_DIR)\}", cmd[i:]
+            ):
+                return True
+            if c == "\\" and quote != "'":
+                i += 2
+                continue
+            if c in "\"'" and quote in (None, c):
+                quote = None if quote else c
+            i += 1
+        return False
+
+    try:
+        config = json.loads(hooks.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = {}
+    for groups in (config.get("hooks") or {}).values() if isinstance(config, dict) else ():
+        for group in groups if isinstance(groups, list) else ():
+            for h in (group.get("hooks") or []) if isinstance(group, dict) else ():
+                # Exec form (`args` set) passes each element as one argument.
+                if isinstance(h, dict) and isinstance(h.get("command"), str) and "args" not in h and unquoted(h["command"]):
+                    print(f"QUOTE {hooks.relative_to(repo)}: " + h["command"].replace("\\", "\\\\"))
 
 shipped = {p.name for p in repo.glob("skills/*/scripts/*.py")}
 for d in (skill / "scripts" if skill else None, repo / "scripts", repo / "hooks"):
@@ -168,9 +206,10 @@ py_floor_report() {
     local line
     while IFS= read -r line; do
         case "$line" in
-            "HEADER "*) warning "${line#HEADER } - declare requires-python = \">=3.11\" in a PEP 723 block and the shebang '#!/usr/bin/env -S uv run --script'; see repository-quality-rules.md, section \"Python-Skripte\"" ;;
-            "SHEBANG "*) warning "${line#SHEBANG } - start the file with '#!/usr/bin/env -S uv run --script'; run directly, it otherwise starts the host python3 (macOS python3 is 3.9)" ;;
-            "CALL "*) warning "${line#CALL } - start Python scripts with 'uv run <path>.py' (or 'uv run --python 3.11 python ...'), not python3 (macOS python3 is 3.9)" ;;
+            "HEADER "*) error "${line#HEADER } - declare requires-python = \">=3.11\" in a PEP 723 block and the shebang '#!/usr/bin/env -S uv run --script'; see repository-quality-rules.md, section \"Python-Skripte\"" ;;
+            "SHEBANG "*) error "${line#SHEBANG } - start the file with '#!/usr/bin/env -S uv run --script'; run directly, it otherwise starts the host python3 (macOS python3 is 3.9)" ;;
+            "CALL "*) error "${line#CALL } - start Python scripts with 'uv run <path>.py' (or 'uv run --python 3.11 python ...'), not python3 (macOS python3 is 3.9)" ;;
+            "QUOTE "*) warning "${line#QUOTE } - put the placeholder in double quotes (\"\${CLAUDE_PLUGIN_ROOT}/...\") or use exec form with args; unquoted, a space in the install path splits it; see plugin-hooks.md" ;;
         esac
     done <<<"$1"
 }

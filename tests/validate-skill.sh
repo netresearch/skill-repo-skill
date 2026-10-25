@@ -595,7 +595,8 @@ for want in 'hooks/hooks.json:2: python3 ${CLAUDE_PLUGIN_ROOT}/scripts/pre_bash_
     if grep -qF -- "$want" <<<"$hk_out"; then ((PASS++)); else
         echo "  FAIL [python-floor] hooks and root scripts: expected '$want'"; ((FAIL++)); fi
 done
-if grep -qF 'hooks/floored_hook.py' <<<"$hk_out"; then
+# The fixture's commands are unquoted, so the quoting check names this file too.
+if grep -F 'hooks/floored_hook.py' <<<"$hk_out" | grep -qvF 'put the placeholder'; then
     echo "  FAIL [python-floor] a non-executable hook script with the floor got a warning"; ((FAIL++)); else ((PASS++)); fi
 if grep -qF 'scripts/maint.py: no requires-python' <<<"$hk_out"; then
     echo "  FAIL [python-floor] a root script hooks.json does not name was checked"; ((FAIL++)); else ((PASS++)); fi
@@ -615,6 +616,37 @@ if [[ "$(grep -cF 'scripts/detect_credentials.py: no requires-python' <<<"$rs_ou
     echo "  FAIL [python-floor] root SKILL.md: a 100644 hook script is reported once"; ((FAIL++)); fi
 if grep -qF 'scripts/helper.py' <<<"$rs_out"; then
     echo "  FAIL [python-floor] root SKILL.md: a 100644 module hooks.json does not name was checked"; ((FAIL++)); else ((PASS++)); fi
+# The Python floor is an error, not a warning: read the severity, not the wording.
+if grep -F 'scripts/detect_credentials.py: no requires-python' <<<"$rs_out" | grep -qF 'ERROR:'; then ((PASS++)); else
+    echo "  FAIL [python-floor] a script without the floor is reported as an ERROR"; ((FAIL++)); fi
+
+echo "== Hook commands quote their path placeholders =="
+# Case one is github-release-skill's guard command before #204 quoted it: under
+# a plugin root with a space, uv could not open the script and exited 2.
+q_dir="$(mktemp -d)"; mkdir -p "$q_dir/skills/d" "$q_dir/hooks"
+printf '%s\n' "$PY_MANIFEST" > "$q_dir/plugin.json"
+printf -- '---\nname: d\ndescription: "Use when exercising the hook quoting check."\n---\n\n# D\n' > "$q_dir/skills/d/SKILL.md"
+# shellcheck disable=SC2016
+printf '%s\n' '{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [' \
+    '  {"type": "command", "command": "uv run ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py", "onFailure": "block"},' \
+    '  {"type": "command", "command": "bash ${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh"},' \
+    '  {"type": "command", "command": "uv run --offline \"${CLAUDE_PLUGIN_ROOT}/scripts/quoted.py\" || true"},' \
+    '  {"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/format.js --fix"},' \
+    '  {"type": "command", "command": "sh -c '"'"'cat ${CLAUDE_PLUGIN_ROOT}/single.txt'"'"'"},' \
+    '  {"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/exec.py", "args": ["--check"]}' \
+    ']}]}}' > "$q_dir/hooks/hooks.json"
+q_out="$(cd "$q_dir" && PYTHONPATH="$SHIM" bash "$VALIDATOR" . 2>&1)"
+rm -rf "$q_dir"
+# shellcheck disable=SC2016
+for want in 'hooks/hooks.json: uv run ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py - put the placeholder' \
+            'hooks/hooks.json: bash ${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh - put the placeholder'; do
+    if grep -F -- "$want" <<<"$q_out" | grep -qF 'WARNING:'; then ((PASS++)); else
+        echo "  FAIL [hook-quote] expected a WARNING '$want'"; ((FAIL++)); fi
+done
+for quiet in quoted.py format.js single.txt exec.py; do
+    if grep -F 'put the placeholder' <<<"$q_out" | grep -qF -- "$quiet"; then
+        echo "  FAIL [hook-quote] $quiet is quoted or exec form and must stay quiet"; ((FAIL++)); else ((PASS++)); fi
+done
 
 echo "== Organisation reusables are called at @main =="
 # reusable_case <name> <want> <workflow line> <label>

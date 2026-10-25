@@ -130,13 +130,17 @@ Jedes ausführbare Skript trägt einen Block nach PEP 723 und diesen Shebang:
 
 `SKILL.md` und `references/` starten das Skript mit `uv run ${CLAUDE_SKILL_DIR}/scripts/x.py`. uv liest `requires-python` und wählt einen passenden Interpreter, auch wenn das Projekt des Nutzers eine `.python-version` mit 3.9 trägt; fehlt einer, lädt uv ihn herunter. Der Block allein schützt nicht, solange die Doku `python3 x.py` schreibt: dann liest niemand den Block. Das gilt auch für `uv run python x.py` und `uv run --with … python3 x.py`: uv liest den Block nur, wenn der Skriptpfad direkt auf `uv run` folgt, und nimmt sonst den Interpreter aus `.python-version` oder vom System. Wer einen Interpreter ausdrücklich braucht, schreibt `uv run --python 3.11 python x.py`. Darum gehören Block und Aufruf in denselben Commit.
 
-Nicht ausführbare `.py`-Dateien sind Module, die ein anderes Skript per Pfad lädt; sie brauchen keinen Block. Ausgenommen ist eine Datei, die `hooks/hooks.json` nennt: Der Hook startet sie als `python3 <pfad>`, dafür braucht sie kein Ausführungsbit, aber den Block, und die Prüfung verlangt ihn auch bei 100644. Die `compatibility`-Zeile der `SKILL.md` nennt uv und die Mindestversion, z. B. `"Requires uv (runs the scripts on Python 3.11 or later), jq."`.
+Nicht ausführbare `.py`-Dateien sind Module, die ein anderes Skript per Pfad lädt; sie brauchen keinen Block. Ausgenommen ist eine Datei, die `hooks/hooks.json` nennt: Der Hook startet sie als `uv run "<pfad>"`, dafür braucht sie kein Ausführungsbit, aber den Block, und die Prüfung verlangt ihn auch bei 100644. Wie der Hook-Befehl aussieht, ob ein Startfehler blockiert oder durchlässt und warum ein Hinweis-Hook `--offline` braucht, steht in `plugin-hooks.md`, Abschnitt „Start the hook script“.
 
-`validate-skill.sh` meldet als Warnung:
+Ein Diagnose-Skript, das fehlende Abhängigkeiten melden soll, deklariert selbst keine (`dependencies = []`). Es prüft die Umgebung der anderen Skripte in einem Unterprozess, etwa mit `uv run --no-project --python ">=3.11" --with "<paket>" python -c "<probe>"`, und meldet den Fehler von uv als Befund. Mit der Abhängigkeit im eigenen Block baut uv sie vor dem Start: `matrix-doctor.py` brach so auf Python 3.13 ohne libolm im Build von `python-olm` ab und gab keinen einzigen Befund aus, obwohl es genau diesen Zustand melden sollte. Die `compatibility`-Zeile der `SKILL.md` nennt uv und die Mindestversion, z. B. `"Requires uv (runs the scripts on Python 3.11 or later), jq."`.
+
+`validate-skill.sh` meldet als Fehler (bis zur Umstellung der Flotte am 2026-10-25 als Warnung):
 
 - jedes ausführbare `scripts/*.py` eines Skills ohne `requires-python` mit mindestens 3.11, und ebenso jedes Root-`scripts/*.py` oder `hooks/*.py`, das `hooks/hooks.json` nennt; ein Hook startet es bei jedem passenden Tool-Aufruf,
 - jedes solche Skript mit Block, aber ohne den Shebang oben, denn direkt gestartet nimmt es sonst das `python3` des Hosts,
 - jeden Aufruf eines mitgelieferten Skripts unter `scripts/` oder `hooks/` über `python3`, `python` oder `py -3` in `SKILL.md`, `references/`, den Slash-Commands unter `commands/*.md` und in `hooks/hooks.json`. Aus `commands/retro.md` kam der Absturz. Ein Aufruf über eine mit `\` fortgesetzte Zeile zählt als ein Befehl. Ausgenommen ist nur `uv run --python X python …` im selben Befehl. Ein Skript, das das Repo nicht mitliefert, etwa in Beispielcode, meldet die Prüfung nicht.
+
+Als Warnung meldet sie außerdem in `hooks/hooks.json` jeden Befehl ohne `args`, in dem `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` oder `${CLAUDE_PROJECT_DIR}` außerhalb von Anführungszeichen steht.
 
 ---
 
