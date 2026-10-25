@@ -288,6 +288,10 @@ llm_reviews:
       2. Does it have Installation section with marketplace/release/composer options?
       3. Does the License section correctly describe split licensing (MIT + CC-BY-SA-4.0)?
       4. Is the structure diagram accurate (shows LICENSE-MIT, LICENSE-CC-BY-SA-4.0)?
+      5. Are shipped validators and references discoverable in SKILL.md, with
+         their contracts and regression tests identified in repository docs?
+         Check the actual inventory; do not require skill-repo-skill-specific
+         resources such as validate-agent-evidence.py in every consuming repo.
     severity: warning
     desc: "README structure and content quality"
 

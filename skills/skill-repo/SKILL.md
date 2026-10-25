@@ -109,9 +109,9 @@ Marketplace, release download, Composer, npm — commands and the npm `files` de
 
 Validate the unpacked/installed payload too: a shared reference that exists in the source tree may be absent from a standalone skill. Supply runtime resources or explicit optional fallbacks; never count a missing check as success.
 
-For behavior changes, separate structural checks, normal skill selection, recorded tools and independent task outcomes. Use [agent-evidence](references/agent-evidence.md) and `uv run ${CLAUDE_SKILL_DIR}/scripts/validate-agent-evidence.py RUN.json` for captured ATIF/Claude evidence; errors/timeouts are incomplete, including negative selection cases. The text-only A/B runner cannot establish routing or tool execution.
+For behavior changes, separate structural checks, normal skill selection, recorded tools and independent task outcomes. From the run directory, use [agent-evidence](references/agent-evidence.md) and `uv run ${CLAUDE_SKILL_DIR}/scripts/validate-agent-evidence.py RUN.json` for captured ATIF/Claude evidence; errors/timeouts are incomplete, including negative selection cases. The text-only A/B runner cannot establish routing or tool execution.
 
-Named here so they are findable: `bump-version.sh`, `check-version-parity.sh`, `sync-plugin-manifest.sh`, `roll-changelog.py`, `fleet-release-github.sh`, `migrate-licensing.sh`, `validate-evals.sh` — each with `--help`.
+Named here so they are findable: `bump-version.sh`, `check-version-parity.sh`, `sync-plugin-manifest.sh`, `roll-changelog.py`, `fleet-release-github.sh`, `migrate-licensing.sh`, `validate-evals.sh`, `validate-agent-evidence.py` — each with `--help`.
 
 ## References (`references/`)
 

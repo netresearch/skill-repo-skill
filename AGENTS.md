@@ -25,6 +25,7 @@ This repository (`netresearch/skill-repo-skill`) defines the standard structure 
 | `.claude-plugin/plugin.json` | Claude Code manifest, generated from `plugin.json` by `sync-plugin-manifest.sh`; holds the Claude-only keys (skills array, …) |
 | `composer.json` | PHP/Composer distribution as `ai-agent-skill` type |
 | `.github/workflows/` | Reusable workflows consumed by other skill repos plus this repo's own CI. Canonical inventory in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#reusable-ci-workflows). Auto-merge for Dependabot/Renovate is delegated to `netresearch/.github` via a thin local caller — NOT hosted here. |
+| `skills/skill-repo/scripts/validate-agent-evidence.py` | Validates captured ATIF/Claude runs against `references/agent-evidence.md`; regressions in `tests/agent-evidence.py` |
 | `skills/skill-repo/scripts/validate-skill.sh` | Validates skill repo structure, licensing, metadata consistency |
 | `skills/skill-repo/scripts/migrate-licensing.sh` | Migrates repos from single LICENSE to split licensing |
 | `skills/skill-repo/scripts/sync-plugin-manifest.sh` | Projects `plugin.json` into `.claude-plugin/plugin.json` (`--check` in CI) |

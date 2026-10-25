@@ -59,9 +59,12 @@ by its SHA-256. Capture artifacts outside the agent's writable evaluation input.
 }
 ```
 
-Run `uv run scripts/validate-agent-evidence.py /path/to/run.json` from the skill
-directory. The script emits JSON and exits 0 for a measured pass, 1 for a
-measured failure, or 2 for incomplete/invalid evidence. A task outcome artifact
+Change into the run directory, then run
+`uv run /absolute/path/to/skill/scripts/validate-agent-evidence.py run.json`.
+The run record must resolve inside the working directory, including through
+symlinks; its artifacts must resolve beside it or in its subdirectories.
+The script emits JSON and exits 0 for a measured pass, 1 for a measured failure,
+or 2 for incomplete/invalid evidence. A task outcome artifact
 contains boolean `passed`, an independent `verifier` identifier/version, and
 `target_revision` matching the run. Record the verifier's checks and outputs in
 that artifact too; a boolean supplied by the working agent is not an oracle.
@@ -70,20 +73,27 @@ Use `evaluation: selection` for a selection-only trial; no outcome is then
 measured. `Skill`/`InvokeSkill` calls must name the exact skill. On a Read-based
 host, set `expected.skill_path` to its exact installed SKILL.md path. Required
 tools need a structured call and a returned, non-error observation;
-`arguments_contains` is a literal in the serialized call arguments. This proves
+`arguments_contains` is a literal in the JSON-serialized call arguments with
+Unicode characters preserved. Quotes and backslashes remain JSON-escaped;
+write literals against that serialized form. This proves
 an observed invocation/return, not that a shell command succeeded semantically.
 The independent outcome verifier decides that. Prose and reasoning are ignored.
 
 `error`, `timeout` and `blocked` remain incomplete even for expected non-use.
 Never count them as correct negatives or silently remove them from totals.
-For Claude stream-json, retain the terminal result and complete messages;
+For Claude stream-json, retain the terminal result (`subtype: success` and
+`is_error: false`) and complete messages;
 partial stream deltas alone do not establish a completed run. The last
 conversation event must be that result, so an earlier result cannot certify a
 later unfinished turn.
 
-Every recorded call must have a returned, non-error observation. Open calls or
-explicit failed returns make the evidence incomplete even when the terminal
-event reports success. ATIF collectors may normalize a failure as
+Every recorded call must have a returned observation; open calls remain
+incomplete. Selection-only trials with any failed return remain incomplete,
+including expected non-use. In task mode, a recovered tool failure may coexist
+with a verified successful outcome: routing and required-tool checks count only
+successful returned calls, and `failed_tool_calls` preserves failed IDs. A failed
+required tool without a successful retry fails the tool check even if the
+outcome passes. ATIF collectors may normalize a failure as
 `extra.is_error: true` (or top-level `is_error`); no failure is inferred from
 prose. A `continued_trajectory_ref` means the single supplied segment is
 incomplete. ATIF has no required terminal marker, so a text-only ATIF trajectory

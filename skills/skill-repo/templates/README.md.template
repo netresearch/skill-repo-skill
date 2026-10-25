@@ -164,6 +164,10 @@ Split licensing:
         └── templates/              # Bootstrap templates
 ```
 
+Keep this tree and SKILL.md inventories aligned with shipped resources. Name
+custom validators in SKILL.md and link their contracts and regression tests;
+include a captured-evidence validator only when the skill actually ships one.
+
 ## References
 
 - `skills/{skill-name}/references/example.md` — {short description}
