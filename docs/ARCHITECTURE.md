@@ -64,6 +64,7 @@ jobs:
 
 ### Validation Scripts
 
+- `skills/skill-repo/scripts/validate-agent-evidence.py` -- Validates hash-bound ATIF/Claude run evidence within the working directory; separates skill routing, recorded tool execution, and independent outcomes. Contract: `skills/skill-repo/references/agent-evidence.md`; regressions: `tests/agent-evidence.py`.
 - `skills/skill-repo/scripts/validate-skill.sh` -- Core validation: SKILL.md structure, frontmatter, licensing (split model), composer.json/plugin.json metadata consistency.
 - `skills/skill-repo/scripts/migrate-licensing.sh` -- Migrates repos from single LICENSE to split licensing (LICENSE-MIT + LICENSE-CC-BY-SA-4.0).
 - `Build/Scripts/check-plugin-version.sh` -- Validates plugin.json version format.

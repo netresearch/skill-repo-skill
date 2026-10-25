@@ -205,12 +205,15 @@ skill-repo-skill/
 │   └── dashboard/
 ├── scripts/
 ├── tests/
+│   └── agent-evidence.py          # Evidence contract regressions
 └── skills/skill-repo/
     ├── SKILL.md
     ├── checkpoints.yaml
     ├── evals/evals.json
     ├── references/
+    │   └── agent-evidence.md     # Captured-run contract and trust boundaries
     ├── scripts/
+    │   └── validate-agent-evidence.py  # Validate ATIF / Claude run evidence
     └── templates/
 ```
 
@@ -237,7 +240,7 @@ Contributions welcome. Please open PRs for:
 
 ### Tests
 
-The suite lives in `tests/`: one Bash script per area plus `tests/renovate-custom-manager.py`. It needs Bash 4.3+, Python 3.11+ (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
+The suite lives in `tests/`: Bash and Python scripts per area. It needs Bash 4.3+, Python 3.11+ (standard library), Git and `jq`. `tests/validate-skill.sh` also runs the PyYAML path of the validator when `python3` can import `yaml` or `uv` is installed, and skips it with a notice otherwise; `tests/fleet-release.sh` skips its manifest cases without `gh`. No test calls a model: `tests/run-ab-evals.sh` puts a stub `claude` on `PATH`. The only download is PyYAML through `uv`, for that optional path. Run everything the way CI does:
 
 ```bash
 rc=0
@@ -247,6 +250,7 @@ for t in tests/*.py; do python3 "$t" || { echo "FAILED: $t"; rc=1; }; done
 ```
 
 - `validate-skill.sh`, `validate-skill-architecture.sh`, `portable-manifest.sh`, `mechanical-coverage.sh`: the validator's verdicts (frontmatter parsing on both parser paths, multi-skill discovery, size budgets, dangling paths, `allowed-tools`, README install lines, release path, script-test lookup, `plugin.json`) and `sync-plugin-manifest.sh`, `bump-version.sh`, `check-version-parity.sh`.
+- `agent-evidence.py`: captured ATIF/Claude evidence, completion and failure paths, Unicode, artifact integrity and path confinement.
 - `validate-evals.sh`, `run-ab-evals.sh`: the eval validator on the three eval formats, and the A/B runner's provenance, sampling, gates and argument handling.
 - `fleet-release.sh`, `roll-changelog.sh`, `migrate-licensing.sh`, `release-archive-layout.sh`: the fleet release driver offline, the changelog roll, the licensing migration on throwaway repositories, and the archive layout `release.yml` builds.
 - `usage-text.sh`, `audit-skills.sh`, `renovate-custom-manager.py`: `--help` output of the shipped scripts, `scripts/audit-skills.sh`, and the Renovate regex manager in `renovate.json`.
