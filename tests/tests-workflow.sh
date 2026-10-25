@@ -104,6 +104,36 @@ output_of() { # output_of <repo dir> <key>
 
 echo "tests.yml: steps against fixture repositories ($WORKFLOW)"
 
+# --- 0. uv is on PATH before any test leg runs ------------------------------
+# Skill scripts start through `uv run` and its shebang, and the runner image
+# ships no uv. The step is a `uses:` step, so no run_step below exercises it:
+# without this check, deleting it or moving it behind a leg stays green.
+uv_setup_order="$(python3 - "$WORKFLOW" <<'PY'
+import sys
+
+lines = open(sys.argv[1]).read().splitlines()
+starts = [i for i, l in enumerate(lines) if l.strip().startswith("- name:")]
+
+def block(name):
+    for n, i in enumerate(starts):
+        if lines[i].strip() == f"- name: {name}":
+            end = starts[n + 1] if n + 1 < len(starts) else len(lines)
+            return i, end
+    return None
+
+setup = block("Set up uv")
+legs = [block(n) for n in ("Shell tests", "Python tests", "PHP tests")]
+ok = (
+    setup is not None
+    and all(leg is not None for leg in legs)
+    and any(l.strip().startswith("uses: astral-sh/setup-uv@") for l in lines[setup[0]:setup[1]])
+    and all(setup[0] < leg[0] for leg in legs)
+)
+print("yes" if ok else "no")
+PY
+)"
+check "setup-uv runs before every test leg" yes "$uv_setup_order"
+
 # --- 1. shipped scripts are counted before the tests, regular files only ----
 # Three scripts: by extension (.sh, .py) and by the executable bit. Everything
 # else is a directory, a data file or a by-product of a test run, and counting
