@@ -120,7 +120,7 @@ def atif_results(event):
             returned.add(call_id)
             if result.get("is_error") or extra.get("is_error"):
                 failed.add(call_id)
-    return returned, failed, False
+    return returned, failed, False, []
 
 
 def claude_blocks(event):
@@ -146,18 +146,23 @@ def claude_calls(event):
 
 def claude_results(event):
     """Keep returned IDs, tool failures, and terminal run errors distinct."""
-    broken = event.get("type") == "result" and bool(event.get("is_error"))
     returned, failed = set(), set()
-    if event.get("type") == "user":
-        for block in claude_blocks(event):
-            if block.get("type") != "tool_result":
-                continue
-            call_id = block.get("tool_use_id")
-            if call_id:
-                returned.add(call_id)
-                if block.get("is_error"):
-                    failed.add(call_id)
-    return returned, failed, broken
+    if event.get("type") == "result":
+        denials = optional_container(
+            event.get("permission_denials"), list, "Claude permission denials"
+        )
+        return returned, failed, bool(event.get("is_error")), denials
+    if event.get("type") != "user":
+        return returned, failed, False, []
+    for block in claude_blocks(event):
+        if block.get("type") != "tool_result":
+            continue
+        call_id = block.get("tool_use_id")
+        if call_id:
+            returned.add(call_id)
+            if block.get("is_error"):
+                failed.add(call_id)
+    return returned, failed, False, []
 
 
 def claude_completed(events):
@@ -174,14 +179,14 @@ def claude_completed(events):
 
 
 def recorded_calls(text):
-    """Return calls, successful return IDs, run completeness, and failed call IDs.
+    """Read calls, successful returns, completeness, failures, and permission denials.
 
     ATIF is Harbor's steps/tool_calls/observation format. Claude stream-json
     uses complete assistant/user messages, so partial deltas cannot count twice.
     """
     fmt, events, continued = trajectory_events(text)
     require(all(isinstance(e, dict) for e in events), "invalid trajectory event")
-    calls, returned, failed = [], set(), set()
+    calls, returned, failed, denials = [], set(), set(), []
     broken = continued
     if fmt == "atif":
         require(
@@ -194,9 +199,12 @@ def recorded_calls(text):
         extract_calls, extract_results = claude_calls, claude_results
     for event in events:
         calls.extend(extract_calls(event))
-        event_returns, event_failures, event_error = extract_results(event)
+        event_returns, event_failures, event_error, event_denials = extract_results(
+            event
+        )
         returned.update(event_returns)
         failed.update(event_failures)
+        denials.extend(event_denials)
         broken = broken or event_error
     require(
         all(
@@ -212,8 +220,9 @@ def recorded_calls(text):
         len(call_ids) == len(calls),
         "duplicate tool call id makes the evidence ambiguous",
     )
+    require(returned.issubset(call_ids), "tool result has no matching recorded call")
     broken = broken or not call_ids.issubset(returned)
-    return calls, returned - failed, broken, failed
+    return calls, returned - failed, broken, failed, denials
 
 
 def selected(calls, expected):
@@ -312,11 +321,12 @@ def evaluate(record, root):
     }
     if record["status"] != "completed":
         return result
-    calls, returned, broken, failed = recorded_calls(
+    calls, returned, broken, failed, denials = recorded_calls(
         artifact(record.get("trajectory"), root)
     )
     result["failed_tool_calls"] = sorted(failed)
-    if broken or (record["evaluation"] == "selection" and failed):
+    result["permission_denials"] = denials
+    if broken or (record["evaluation"] == "selection" and (failed or denials)):
         result["run_status"] = "error"
         return result
     triggered = selected([c for c in calls if c["id"] in returned], expected)

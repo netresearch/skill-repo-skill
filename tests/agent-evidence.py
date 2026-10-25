@@ -387,9 +387,127 @@ class EvidenceTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     self.evaluate()
 
+    def test_terminal_permission_denials_cannot_certify_negative_selection(self):
+        """Retain native terminal permission denials even without tool messages."""
+        self.record["evaluation"] = "selection"
+        self.record["expected"] = {"skill": "review", "should_trigger": False}
+        self.record["trajectory"] = self.artifact(
+            "trajectory.json",
+            [
+                {
+                    "type": "assistant",
+                    "message": {"content": [{"type": "text", "text": "Cannot load."}]},
+                },
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "permission_denials": [
+                        {
+                            "tool_name": "Skill",
+                            "tool_use_id": "denied",
+                            "tool_input": {"skill": "review"},
+                        }
+                    ],
+                },
+            ],
+        )
+        result = self.evaluate()
+        self.assertEqual(result["verdict"], "incomplete")
+        self.assertIsNone(result["routing_pass"])
+        self.assertEqual(result["permission_denials"][0]["tool_use_id"], "denied")
+
+    def test_terminal_denials_do_not_erase_independently_verified_task_recovery(self):
+        """A terminal denial log alone does not invalidate successful task recovery."""
+        self.record["trajectory"] = self.artifact(
+            "trajectory.json",
+            [
+                {
+                    "type": "assistant",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_use",
+                                "id": "s",
+                                "name": "Skill",
+                                "input": {"skill": "review"},
+                            },
+                            {
+                                "type": "tool_use",
+                                "id": "t",
+                                "name": "Bash",
+                                "input": {"command": "run-tests"},
+                            },
+                        ]
+                    },
+                },
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "s",
+                                "content": "loaded",
+                            },
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "t",
+                                "content": "ok",
+                            },
+                        ]
+                    },
+                },
+                {
+                    "type": "result",
+                    "subtype": "success",
+                    "is_error": False,
+                    "permission_denials": [
+                        {
+                            "tool_name": "Bash",
+                            "tool_use_id": "denied",
+                            "tool_input": {"command": "unneeded-command"},
+                        }
+                    ],
+                },
+            ],
+        )
+        self.assertEqual(self.evaluate()["verdict"], "pass")
+
+    def test_tool_returns_without_matching_calls_are_invalid(self):
+        """Reject orphan results that could be spliced in from another run."""
+        self.trace["steps"][0]["observation"]["results"].append(
+            {"source_call_id": "foreign-call", "content": "ok"}
+        )
+        self.record["trajectory"] = self.artifact("trajectory.json", self.trace)
+        with self.assertRaisesRegex(ValueError, "matching recorded call"):
+            self.evaluate()
+        self.record["trajectory"] = self.artifact(
+            "trajectory.json",
+            [
+                {"type": "assistant", "message": {"content": []}},
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "foreign-call",
+                                "content": "ok",
+                            },
+                        ]
+                    },
+                },
+                {"type": "result", "subtype": "success", "is_error": False},
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "matching recorded call"):
+            self.evaluate()
+
     def test_answer_claim_is_not_a_tool_call(self):
         """Answer claim is not a tool call."""
         self.trace["steps"][0]["tool_calls"] = []
+        self.trace["steps"][0]["observation"]["results"] = []
         self.trace["steps"][0]["message"] = (
             "Skill review invoked. Bash run-tests succeeded."
         )
@@ -544,6 +662,7 @@ class EvidenceTests(unittest.TestCase):
         self.record["evaluation"] = "selection"
         self.record["expected"] = {"skill": "review", "should_trigger": False}
         self.trace["steps"][0]["tool_calls"] = []
+        self.trace["steps"][0]["observation"]["results"] = []
         self.record["trajectory"] = self.artifact("trajectory.json", self.trace)
         self.record.pop("outcome")
         self.assertEqual(self.evaluate()["verdict"], "pass")
@@ -591,6 +710,7 @@ class EvidenceTests(unittest.TestCase):
             self.evaluate()
         quoted = copy.deepcopy(self.trace["steps"][0])
         quoted["source"] = "user"
+        quoted.pop("observation")
         self.record["trajectory"] = self.artifact(
             "trajectory.json",
             {

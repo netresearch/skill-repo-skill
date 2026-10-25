@@ -89,7 +89,9 @@ later unfinished turn.
 
 Every recorded call must have a returned observation; open calls remain
 incomplete. Selection-only trials with any failed return remain incomplete,
-including expected non-use. In task mode, a recovered tool failure may coexist
+including expected non-use; native Claude `permission_denials` are retained and
+also prevent a selection pass. Tool returns without matching recorded call IDs
+are invalid evidence. In task mode, a recovered tool failure may coexist
 with a verified successful outcome: routing and required-tool checks count only
 successful returned calls, and `failed_tool_calls` preserves failed IDs. A failed
 required tool without a successful retry fails the tool check even if the
