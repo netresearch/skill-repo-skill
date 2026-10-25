@@ -253,8 +253,8 @@ def measured_verdict(result):
     return "pass" if all(checks) else "fail"
 
 
-def evaluate(record, root):
-    """Measure routing, tool execution, and independent task outcomes separately."""
+def validate_record(record):
+    """Validate the collector's run contract before reading trajectory artifacts."""
     require(
         isinstance(record, dict)
         and type(record.get("schema_version")) is int
@@ -305,6 +305,12 @@ def evaluate(record, root):
             "arguments_contains" not in item or nonempty(item["arguments_contains"]),
             "arguments_contains must be a nonempty literal",
         )
+    return provenance, expected, requirements
+
+
+def evaluate(record, root):
+    """Measure routing, tool execution, and independent task outcomes separately."""
+    provenance, expected, requirements = validate_record(record)
     result = {
         "schema_version": 1,
         "run_id": record["run_id"],
