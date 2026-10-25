@@ -14,6 +14,7 @@ and a live session (2026-09).
 - Pick the event that fires
 - Read the input the event actually carries
 - Plain stdout does not reach the model
+- Start the hook script
 - Verify live, not only in unit tests
 
 ## Pick the event that fires
@@ -49,9 +50,49 @@ the failed or completed call. Use it for a genuine objection, not for advice
 on a call that behaved normally.
 
 Keep the text to what the hook knows: a shell's `command not found` means the
-name did not resolve on PATH, not that the tool is absent. Fail open — any
-exception exits 0 with no output — so a hook can never break the call it
-observes.
+name did not resolve on PATH, not that the tool is absent. A hint hook fails
+open — any exception exits 0 with no output — so it can never break the call
+it observes. A guard is the exception: see the next section.
+
+## Start the hook script
+
+A hook `command` without `args` runs through `sh -c`. Three things decide
+whether it starts at all, and each was measured in the 2026-10 rollout of
+Python 3.11 across the skill repositories.
+
+**Quote the path placeholder.** An unquoted `${CLAUDE_PLUGIN_ROOT}` is split
+at every space in the install path. Under a plugin root containing a space,
+all nine hook commands of the fleet failed to open their script ("No such file
+or directory"); quoted, all nine started. Write
+`uv run "${CLAUDE_PLUGIN_ROOT}/scripts/x.py"` — double quotes; in single
+quotes the placeholder reaches the program unexpanded, or an inner
+`sh -c '…'` expands and splits it — or use exec form, where
+`command` is the executable and `args` holds one argument per element without
+any shell. `validate-skill.sh` warns about an unquoted placeholder.
+
+**The launcher's own exit code counts.** Exit 2 blocks the call; any other
+non-zero exit, a timeout or "command not found" (127) lets it through. `uv run`
+exits **2** when it finds no Python that satisfies the script's
+`requires-python`, so a hook that cannot start blocks as if it had objected.
+Decide per hook which way a failure to start should fall:
+
+| Hook | Command | A start failure |
+|---|---|---|
+| Guard (it denies) | `uv run "${CLAUDE_PLUGIN_ROOT}/…/guard.py"` with `"onFailure": "block"` | blocks: a guard that cannot run must not silently let everything through |
+| Hint (it only adds context), or a hook documented as fail-open | `uv run --offline "${CLAUDE_PLUGIN_ROOT}/…/hint.py" \|\| true` | lets the call through |
+
+`onFailure: "block"` turns every failure of the hook — crash, timeout, missing
+uv — into a block. Claude Code honours it from v2.1.295; older clients ignore
+the field, so say so in the `compatibility` line of `SKILL.md`. A guard's
+timeout must cover the first start on a machine without Python 3.11, when uv
+downloads one (36 MiB, 1.8 s in a `python:3.9-slim` container).
+
+**A hint hook stays off the network.** Without `--offline`, that first start
+downloads the interpreter inside the hook. With `--offline`, uv uses only what
+is installed: on Python 3.9 it exits 2 after 0.3 s without a download, which
+`|| true` turns into a pass; on 3.12 the script runs as before. Any other
+`uv run` of a skill script installs the interpreter, and the hook works from
+then on.
 
 ## Verify live, not only in unit tests
 
