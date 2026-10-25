@@ -74,7 +74,7 @@ done
 #
 # The repository-level run also reads hooks/hooks.json for a path placeholder
 # (`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}`, `${CLAUDE_PROJECT_DIR}`)
-# outside quotes in a shell-form command: Claude Code runs it through `sh -c`,
+# outside double quotes in a shell-form command: Claude Code runs it through `sh -c`,
 # a space in the install path splits it, and the hook cannot open its script.
 # A guard then fails with uv's exit 2, which blocks the tool call. A warning,
 # reported as `QUOTE <path>: <command>`.
@@ -130,11 +130,13 @@ if not skill and hooks.is_file():
     import json
 
     def unquoted(cmd):
-        # Track shell quoting; a placeholder counts when it starts outside quotes.
+        # Track shell quoting; only double quotes make a placeholder safe. In
+        # single quotes `sh -c` passes it on unexpanded: as a literal path, or
+        # to an inner `sh -c '…'` that expands and splits it.
         quote, i = None, 0
         while i < len(cmd):
             c = cmd[i]
-            if quote is None and cmd.startswith("${CLAUDE_", i) and re.match(
+            if quote != '"' and cmd.startswith("${CLAUDE_", i) and re.match(
                 r"\$\{CLAUDE_(?:PLUGIN_ROOT|PLUGIN_DATA|PROJECT_DIR)\}", cmd[i:]
             ):
                 return True

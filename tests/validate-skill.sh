@@ -632,18 +632,21 @@ printf '%s\n' '{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [' \
     '  {"type": "command", "command": "bash ${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh"},' \
     '  {"type": "command", "command": "uv run --offline \"${CLAUDE_PLUGIN_ROOT}/scripts/quoted.py\" || true"},' \
     '  {"type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}\"/scripts/format.js --fix"},' \
-    '  {"type": "command", "command": "sh -c '"'"'cat ${CLAUDE_PLUGIN_ROOT}/single.txt'"'"'"},' \
+    '  {"type": "command", "command": "sh -c '"'"'uv run ${CLAUDE_PLUGIN_ROOT}/nested.py'"'"'"},' \
+    '  {"type": "command", "command": "uv run '"'"'${CLAUDE_PLUGIN_ROOT}/single.py'"'"'"},' \
     '  {"type": "command", "command": "${CLAUDE_PLUGIN_ROOT}/hooks/exec.py", "args": ["--check"]}' \
     ']}]}}' > "$q_dir/hooks/hooks.json"
 q_out="$(cd "$q_dir" && PYTHONPATH="$SHIM" bash "$VALIDATOR" . 2>&1)"
 rm -rf "$q_dir"
 # shellcheck disable=SC2016
 for want in 'hooks/hooks.json: uv run ${CLAUDE_PLUGIN_ROOT}/skills/github-release/scripts/guard-gh-release.py - put the placeholder' \
-            'hooks/hooks.json: bash ${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh - put the placeholder'; do
+            'hooks/hooks.json: bash ${CLAUDE_PROJECT_DIR}/.claude/hooks/check.sh - put the placeholder' \
+            "hooks/hooks.json: sh -c 'uv run \${CLAUDE_PLUGIN_ROOT}/nested.py' - put the placeholder" \
+            "hooks/hooks.json: uv run '\${CLAUDE_PLUGIN_ROOT}/single.py' - put the placeholder"; do
     if grep -F -- "$want" <<<"$q_out" | grep -qF 'WARNING:'; then ((PASS++)); else
         echo "  FAIL [hook-quote] expected a WARNING '$want'"; ((FAIL++)); fi
 done
-for quiet in quoted.py format.js single.txt exec.py; do
+for quiet in quoted.py format.js exec.py; do
     if grep -F 'put the placeholder' <<<"$q_out" | grep -qF -- "$quiet"; then
         echo "  FAIL [hook-quote] $quiet is quoted or exec form and must stay quiet"; ((FAIL++)); else ((PASS++)); fi
 done

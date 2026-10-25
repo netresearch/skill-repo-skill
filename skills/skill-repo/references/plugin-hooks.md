@@ -64,7 +64,9 @@ Python 3.11 across the skill repositories.
 at every space in the install path. Under a plugin root containing a space,
 all nine hook commands of the fleet failed to open their script ("No such file
 or directory"); quoted, all nine started. Write
-`uv run "${CLAUDE_PLUGIN_ROOT}/scripts/x.py"`, or use exec form, where
+`uv run "${CLAUDE_PLUGIN_ROOT}/scripts/x.py"` — double quotes; in single
+quotes the placeholder reaches the program unexpanded, or an inner
+`sh -c '…'` expands and splits it — or use exec form, where
 `command` is the executable and `args` holds one argument per element without
 any shell. `validate-skill.sh` warns about an unquoted placeholder.
 

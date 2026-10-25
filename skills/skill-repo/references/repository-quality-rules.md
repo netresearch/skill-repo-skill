@@ -140,7 +140,7 @@ Ein Diagnose-Skript, das fehlende Abhängigkeiten melden soll, deklariert selbst
 - jedes solche Skript mit Block, aber ohne den Shebang oben, denn direkt gestartet nimmt es sonst das `python3` des Hosts,
 - jeden Aufruf eines mitgelieferten Skripts unter `scripts/` oder `hooks/` über `python3`, `python` oder `py -3` in `SKILL.md`, `references/`, den Slash-Commands unter `commands/*.md` und in `hooks/hooks.json`. Aus `commands/retro.md` kam der Absturz. Ein Aufruf über eine mit `\` fortgesetzte Zeile zählt als ein Befehl. Ausgenommen ist nur `uv run --python X python …` im selben Befehl. Ein Skript, das das Repo nicht mitliefert, etwa in Beispielcode, meldet die Prüfung nicht.
 
-Als Warnung meldet sie außerdem in `hooks/hooks.json` jeden Befehl ohne `args`, in dem `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` oder `${CLAUDE_PROJECT_DIR}` außerhalb von Anführungszeichen steht.
+Als Warnung meldet sie außerdem in `hooks/hooks.json` jeden Befehl ohne `args`, in dem `${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PLUGIN_DATA}` oder `${CLAUDE_PROJECT_DIR}` nicht in doppelten Anführungszeichen steht. Einfache genügen nicht: Die äußere Shell reicht den Platzhalter dann unexpandiert weiter, als wörtlichen Pfad oder an ein inneres `sh -c '…'`, das ihn expandiert und am Leerzeichen trennt.
 
 ---
 
