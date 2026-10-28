@@ -6,6 +6,11 @@
   "pre-commit": {
     "enabled": true
   },
+  "pip_requirements": {
+    "managerFilePatterns": [
+      "/^\\.github/requirements/[^/]+\\.txt$/"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",
