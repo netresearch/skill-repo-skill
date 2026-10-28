@@ -6,9 +6,14 @@
   "pre-commit": {
     "enabled": true
   },
+  "pip-compile": {
+    "managerFilePatterns": [
+      "/^\\.github/requirements/pip-audit\\.txt$/"
+    ]
+  },
   "pip_requirements": {
     "managerFilePatterns": [
-      "/^\\.github/requirements/[^/]+\\.txt$/"
+      "/^\\.github/requirements/bandit\\.txt$/"
     ]
   },
   "customManagers": [

@@ -270,9 +270,13 @@ and install therefore disagree, and only the install fails.
 Pass the floor the consumer actually runs on:
 
 ```bash
-uv pip compile --universal --generate-hashes --python-version 3.12 \
-  requirements.in -o .github/requirements/pip-audit.txt
+uv pip compile --universal --generate-hashes --python-version=3.12 \
+  --output-file=.github/requirements/pip-audit.txt .github/requirements/pip-audit.in
 ```
+
+Write every option with an argument as `--option=value` and name the `.in`
+file. Renovate's `pip-compile` manager re-runs the command from the header to
+update the lock, and it rejects `-o`, `--option value` and stdin input.
 
 Two things follow. **The compile command belongs in a comment next to the file
 it produces, with the floor in it** — ours said only
