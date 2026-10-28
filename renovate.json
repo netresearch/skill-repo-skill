@@ -8,12 +8,7 @@
   },
   "pip-compile": {
     "managerFilePatterns": [
-      "/^\\.github/requirements/pip-audit\\.txt$/"
-    ]
-  },
-  "pip_requirements": {
-    "managerFilePatterns": [
-      "/^\\.github/requirements/bandit\\.txt$/"
+      "/^\\.github/requirements/[^/]+\\.txt$/"
     ]
   },
   "customManagers": [
