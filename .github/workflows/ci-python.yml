@@ -141,7 +141,8 @@ jobs:
           # by cyclonedx-python-lib only below 3.13) and the install then
           # fails here, not at compile time. --require-hashes
           # rejects any artifact not pinned by digest, --only-binary blocks
-          # sdist setup scripts. Bump via .github/requirements/bandit.txt.
+          # sdist setup scripts. Renovate regenerates the lock from
+          # .github/requirements/bandit.in with the command in its header.
           # `uv venv --seed` is what puts the pip that reads it into the venv;
           # verified on 3.14 that the 3.12-compiled lock installs unchanged.
           "$RUNNER_TEMP/bandit-env/bin/pip" install --quiet --require-hashes --only-binary :all: -r .skill-repo-ci/.github/requirements/bandit.txt
