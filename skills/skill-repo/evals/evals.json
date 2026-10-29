@@ -783,5 +783,69 @@
         "Yes. The source-tree link resolves, so no package check is necessary."
       ]
     }
+  },
+  {
+    "name": "trimmed_skill_text_keeps_matching_evals",
+    "prompt": "A reviewer asked us to cut a skill section from twelve lines to three sentences. The eval cases for that section stay. Can we push the trimmed text with the eval file unchanged?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "(each|every) (expectation|assertion)"
+      },
+      {
+        "type": "content",
+        "pattern": "(remaining|trimmed|kept) (text|guidance|sentences)"
+      },
+      {
+        "type": "content",
+        "pattern": "(keep|retain|preserve)[a-z]* (the |these |all |existing )?eval"
+      },
+      {
+        "type": "content",
+        "pattern": "((remove|delete|drop) only|only (remove|delete|drop)).*expectations"
+      },
+      {
+        "type": "content",
+        "pattern": "(re-?)?run (the |these |all )?eval"
+      }
+    ],
+    "samples": {
+      "passing": "Keep the eval cases, but check each expectation against the remaining text. Remove only the expectations whose guidance the cut removed, then run the eval checks.",
+      "failing": [
+        "Yes. The evals stay as they are, so the shorter section is covered."
+      ]
+    }
+  },
+  {
+    "name": "foreign_skill_rule_needs_baseline_delta",
+    "prompt": "We want to send a pull request that adds a new rule to another organisation's public skills repository. The rule reads well. What evidence should go with it?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "baseline"
+      },
+      {
+        "type": "content",
+        "pattern": "(closed|rejected|merged) (pull requests|PRs)"
+      },
+      {
+        "type": "content",
+        "pattern": "(without the rule|with and without|with/without)"
+      },
+      {
+        "type": "content",
+        "pattern": "reference model"
+      },
+      {
+        "type": "content",
+        "pattern": "contributing"
+      }
+    ],
+    "samples": {
+      "passing": "Add an eval that the baseline fails without the rule and passes with it, measured on the repository's reference model. Read CONTRIBUTING and the maintainer's recently closed pull requests first.",
+      "failing": [
+        "The rule is good practice, so a clear description of the rule is enough evidence."
+      ]
+    }
   }
 ]
