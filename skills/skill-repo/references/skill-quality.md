@@ -53,6 +53,27 @@ every eval needs a delta-discriminating assertion"), together with the
 `samples` self-check. What follows is the other half: how to report a number
 once you have one.
 
+### Cutting skill text: reconcile the evals, do not drop or keep them wholesale
+
+When a review asks for shorter skill text, the eval cases for that text stay.
+Deleting them loses the evidence the reviewer did not ask to lose. Keeping the
+file unchanged is wrong too: an expectation that tests guidance the cut removed
+now fails, or passes on the base model alone, and either way it measures
+nothing. Check each expectation against the remaining text, remove only those
+whose guidance is gone, and re-run the eval checks before reporting the evals
+as kept.
+
+### A rule for a foreign skill repository carries its own delta
+
+Inside our repos, categories 3 and 5 above count as value even when they
+read as prose. A maintainer of another organisation's skill repository need
+not accept that: one closed six of twelve pull requests because the new text
+did not change a decision the model would otherwise get wrong, and the pull
+requests had claimed no measurement. Before proposing a rule there, add an eval
+that the no-skill baseline fails and the rule makes pass, on the model the
+repository treats as its reference, and read its `CONTRIBUTING` file and the
+maintainer's recently closed pull requests for the bar actually applied.
+
 ### A delta belongs to an actor, not to a skill
 
 ```text
