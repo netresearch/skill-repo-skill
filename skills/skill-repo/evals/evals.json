@@ -795,6 +795,18 @@
       {
         "type": "content",
         "pattern": "(remaining|trimmed|kept) (text|guidance|sentences)"
+      },
+      {
+        "type": "content",
+        "pattern": "(keep|retain|preserve)[a-z]* (the |these |all |existing )?eval"
+      },
+      {
+        "type": "content",
+        "pattern": "((remove|delete|drop) only|only (remove|delete|drop)).*expectations"
+      },
+      {
+        "type": "content",
+        "pattern": "(re-?)?run (the |these |all )?eval"
       }
     ],
     "samples": {
@@ -815,10 +827,22 @@
       {
         "type": "content",
         "pattern": "(closed|rejected|merged) (pull requests|PRs)"
+      },
+      {
+        "type": "content",
+        "pattern": "(without the rule|with and without|with/without)"
+      },
+      {
+        "type": "content",
+        "pattern": "reference model"
+      },
+      {
+        "type": "content",
+        "pattern": "contributing"
       }
     ],
     "samples": {
-      "passing": "Add an eval that the baseline fails without the rule and passes with it, measured on the model the repository treats as its reference. Read CONTRIBUTING and the maintainer's recently closed pull requests first.",
+      "passing": "Add an eval that the baseline fails without the rule and passes with it, measured on the repository's reference model. Read CONTRIBUTING and the maintainer's recently closed pull requests first.",
       "failing": [
         "The rule is good practice, so a clear description of the rule is enough evidence."
       ]
