@@ -377,6 +377,26 @@ check "seed: roll with the entry already present succeeds" 0 \
     "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"
 check "seed: an entry already present is not duplicated" 1 "$(grep -cxF -- "- $SEED" "$f")"
 
+# A file whose bullets wrap gets the promise wrapped at its own widest line, so
+# a markdownlint MD013 limit the file already meets is not broken by the seed
+# (ecom-phpstorm-index-skill v1.0.0, 2026-11-04: a 235-column line at limit 120).
+LONG='First stable release. From 1.0.0 on, an incompatible change to what this plugin exposes ships only in a new major version.'
+printf '# C\n\n## [Unreleased]\n\n## [0.3.0] - 2026-01-01\n\n- a wrapped entry that runs over\n  two lines of the file\n' > "$f"
+check "seed: wrapped file is seeded and rolled" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$LONG")"
+check "seed: no line wider than the file's widest" 32 \
+    "$(awk '{ if (length > m) m = length } END { print m }' "$f")"
+check "seed: the wrapped promise reads back as the whole sentence" yes \
+    "$(awk '/^## \[1\.0\.0\]/ { on = 1; next } on && /^## / { exit } on' "$f" | tr -s ' \n' ' ' | grep -qF -- "- $LONG" && echo yes || echo no)"
+printf '# C\n\n## [Unreleased]\n\n### Changed\n\n- First stable release. From 1.0.0 on, an incompatible\n  change to what this plugin exposes ships only in a new\n  major version.\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
+check "seed: a wrapped promise already present is recognized" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$LONG")"
+check "seed: the wrapped promise is not added a second time" 1 "$(grep -c 'First stable' "$f")"
+printf '# C\n\n## [Unreleased]\n\n## [0.3.0] - 2026-01-01\n\n- short\n' > "$f"
+check "seed: unwrapped file keeps the promise on one line" 0 \
+    "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$LONG")"
+check "seed: one-line promise in an unwrapped file" 1 "$(grep -cxF -- "- $LONG" "$f")"
+
 printf '# C\n\n## \\[Unreleased\\]\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
 check "seed: an escaped \\[Unreleased\\] heading is recognized, not duplicated" 0 \
     "$(roll "$f" 1.0.0 --date 2026-09-29 --seed-entry "$SEED")"

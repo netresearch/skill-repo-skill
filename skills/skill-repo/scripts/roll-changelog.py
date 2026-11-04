@@ -42,10 +42,12 @@ partially written (temp file + atomic replace).
 
 import argparse
 import datetime
+import itertools
 import os
 import re
 import sys
 import tempfile
+import textwrap
 
 # `\[Unreleased\]` is the same heading with escaped brackets, valid Markdown
 # that some formatters emit; missing it would seed a second heading above it.
@@ -269,7 +271,20 @@ def seed_unreleased(lines, text):
     '### Changed' subsection rather than opening a second one (MD024), and is
     a no-op when the bullet is already there. Fence-aware like every scan here.
     """
-    bullet = f"- {text}"
+    width = wrap_width(lines)
+    bullet_lines = (
+        textwrap.wrap(
+            text,
+            width=width,
+            initial_indent="- ",
+            subsequent_indent="  ",
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+        if width
+        else [f"- {text}"]
+    )
+    wanted = " ".join(f"- {text}".split())
     unreleased = None
     first_heading = None
     for i, line, in_fence in scan(lines):
@@ -293,7 +308,9 @@ def seed_unreleased(lines, text):
     visible = [(i, line) for i, line, f in scan(lines) if not f and i > unreleased]
     end = next((i for i, line in visible if line.startswith("## ")), len(lines))
     section = [(i, line) for i, line in visible if i < end]
-    if any(line == bullet for _, line in section):
+    # Compare the whitespace-collapsed section text, so a promise already
+    # present in wrapped form is recognized as well as a one-line one.
+    if wanted in " ".join(" ".join(line for _, line in section).split()):
         return lines
     changed = next((i for i, line in section if line.strip() == "### Changed"), None)
     if changed is not None:
@@ -301,10 +318,28 @@ def seed_unreleased(lines, text):
         at = changed + 1
         while at < end and not lines[at].strip():
             at += 1
-        lines[at:at] = [bullet]
+        lines[at:at] = bullet_lines
     else:
-        lines[unreleased + 1 : unreleased + 1] = ["", "### Changed", "", bullet]
+        lines[unreleased + 1 : unreleased + 1] = ["", "### Changed", ""] + bullet_lines
     return lines
+
+
+def wrap_width(lines):
+    """Width to wrap a generated bullet at, or None to keep it on one line.
+
+    A file whose list items continue on indented lines is hard-wrapped; a
+    bullet longer than its widest line would break the line-length limit the
+    file already meets (markdownlint MD013 in CI). Such a file gets the width
+    of its widest non-fenced line; a file of one-line bullets gets None.
+    """
+    visible = [line for _, line, in_fence in scan(lines) if not in_fence]
+    wrapped = any(
+        prev.lstrip().startswith(("- ", "* ")) and re.match(r"^ {2,}\S", line)
+        for prev, line in itertools.pairwise(visible)
+    )
+    if not wrapped:
+        return None
+    return max(len(line) for line in visible)
 
 
 def main() -> None:

@@ -563,7 +563,11 @@ now does it:
 - **bump** passes `--seed-entry` to `roll-changelog.py`, which puts the promise
   as a `### Changed` bullet into `[Unreleased]` — creating the heading when the
   file has none, joining an existing `### Changed`, never twice — and then
-  rolls as usual. A row with an empty `body` gets the same sentence as its PR
+  rolls as usual. In a file whose bullets continue on indented lines the
+  promise is wrapped at that file's widest line, because one 235-column line
+  failed the MD013 limit of 120 that `ecom-phpstorm-index-skill` enforces and
+  held its 1.0.0 bump MR red (2026-11-04); a file of one-line bullets keeps it
+  on one line. A row with an empty `body` gets the same sentence as its PR
   body. The sentence is `FR_STABILIZE_ENTRY`; override it in the environment for
   a fleet whose promise reads differently.
 - **finish** tags and verifies like any other bump.
