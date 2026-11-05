@@ -385,6 +385,53 @@ readme_case live_badge "$LIVE_BADGE" expect-absent \
     "static version badge" "the live release badge does not warn"
 
 echo "----------------------------------------"
+echo "Licence model (LICENSE_MODEL)"
+echo "----------------------------------------"
+# Internal repositories keep the licence their author chose; only public ones
+# need the split files. Each case is checked in both directions, so a validator
+# that ignores LICENSE_MODEL fails the declared cases and one that ignores the
+# licence files altogether fails the split and the no-file cases.
+
+# licence_case <name> <model|-> <files (space-separated)> <expect-present|expect-absent> <pattern> <label>
+licence_case() {
+    local name="$1" model="$2" files="$3" want="$4" pat="$5" label="$6" dir out f
+    dir="$TMP/lic_$name"
+    rm -rf "$dir"; mkdir -p "$dir"
+    for f in $files; do printf 'licence text\n' > "$dir/$f"; done
+    if [[ "$model" == "-" ]]; then
+        out="$(env -u LICENSE_MODEL bash "$VALIDATOR" "$dir" 2>&1)"
+    else
+        out="$(LICENSE_MODEL="$model" bash "$VALIDATOR" "$dir" 2>&1)"
+    fi
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+
+licence_case default_single - "LICENSE" expect-present \
+    "LICENSE-MIT not found" "default model still demands the split files"
+licence_case split_single split "LICENSE" expect-present \
+    "LICENSE-CC-BY-SA-4.0 not found" "split model demands the split files"
+licence_case declared_single declared "LICENSE" expect-absent \
+    "LICENSE-MIT not found" "declared model accepts a single LICENSE"
+licence_case declared_single_ok declared "LICENSE" expect-present \
+    "licence file(s) present (LICENSE_MODEL=declared): LICENSE" "declared model names the file it found"
+licence_case declared_none declared "" expect-present \
+    "no licence file found" "declared model still needs a licence file"
+licence_case declared_split declared "LICENSE-MIT LICENSE-CC-BY-SA-4.0" expect-absent \
+    "no licence file found" "declared model accepts the split files too"
+licence_case bad_value spilt "LICENSE" expect-present \
+    "LICENSE_MODEL must be 'split' or 'declared'" "a misspelt model is an error"
+licence_case bad_value_falls_back spilt "LICENSE" expect-present \
+    "LICENSE-MIT not found" "a misspelt model falls back to split"
+
+echo "----------------------------------------"
 echo "Release path checks (issue #341)"
 echo "----------------------------------------"
 # A GitLab skill repository has no release.yml and must not have one: the

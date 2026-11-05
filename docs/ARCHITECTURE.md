@@ -74,7 +74,7 @@ jobs:
 `validate-skill.sh` checks:
 
 - SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, body line count (error above 500 lines, warning above 300)
-- Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`
+- Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`; with `LICENSE_MODEL=declared` (internal repositories) any licence file (`LICENSE*`, `LICENCE*`, `COPYING*`) instead of the two split files, and composer.json may declare any licence
 - No stale `LICENSE` file alongside `LICENSE-MIT`
 - A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)
 - No `composer.lock` committed
@@ -110,7 +110,7 @@ Consuming skill repo
 
 ## Licensing Model
 
-All skill repos use split licensing:
+All public skill repos use split licensing. Internal repositories (GitLab, visibility `internal` or `private`) keep the licence their author chose; the GitLab CI component runs the validator with `LICENSE_MODEL=declared` there.
 - Code (scripts, workflows, configs) -> MIT
 - Content (skill definitions, docs, references) -> CC-BY-SA-4.0
 - SPDX expression: `(MIT AND CC-BY-SA-4.0)`

@@ -41,7 +41,7 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(bash ${CLAUDE_SKILL_DIR}
 | `scripts/**`, `.github/workflows/**`, `*.sh`, `*.py`, `*.php` | MIT |
 | `composer.json`, `plugin.json`, config files | MIT |
 
-SPDX: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` — split files only.
+SPDX: `(MIT AND CC-BY-SA-4.0)`. Copyright: `Netresearch DTT GmbH`. No bare `LICENSE` — split files only. Internal repositories keep their author's licence (`LICENSE_MODEL=declared`).
 
 ## SKILL.md Frontmatter
 

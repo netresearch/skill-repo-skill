@@ -7,6 +7,7 @@
 # Checks: SKILL.md frontmatter, body line count, composer.json, plugin.json,
 #          cross-file consistency, required files
 # Env:    STRICT_README=1 (also true/yes, case-insensitive) promotes README heading misses from warnings to errors
+#         LICENSE_MODEL=declared (internal repos) accepts any licence file instead of LICENSE-MIT + LICENSE-CC-BY-SA-4.0
 # Exit: 0 = valid, 1 = errors found
 
 set -euo pipefail
@@ -791,7 +792,20 @@ if [[ -d "$REPO_DIR/.github/workflows" ]]; then
 fi
 
 # --- Required files ---
-for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
+# LICENSE_MODEL=split (default) demands the split licence files of the public
+# repositories. LICENSE_MODEL=declared is for internal repositories, which keep
+# whatever licence their author chose (proprietary, AGPL, plain MIT): they need
+# a licence file, not this one. The GitLab CI component sets it for projects
+# whose visibility is not public.
+LICENSE_MODEL="${LICENSE_MODEL:-split}"
+case "$LICENSE_MODEL" in
+    split)    REQUIRED_FILES=(README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore) ;;
+    declared) REQUIRED_FILES=(README.md .gitignore) ;;
+    *)        error "LICENSE_MODEL must be 'split' or 'declared', got: $LICENSE_MODEL"
+              LICENSE_MODEL="split"
+              REQUIRED_FILES=(README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore) ;;
+esac
+for file in "${REQUIRED_FILES[@]}"; do
     if [[ -f "$REPO_DIR/$file" ]]; then
         success "$file exists"
     else
@@ -799,8 +813,18 @@ for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
     fi
 done
 
+if [[ "$LICENSE_MODEL" == declared ]]; then
+    license_files=""
+    for f in "$REPO_DIR"/LICENSE* "$REPO_DIR"/LICENCE* "$REPO_DIR"/COPYING*; do
+        [[ -f "$f" ]] && license_files+="${f##*/} "
+    done
+    if [[ -n "$license_files" ]]; then
+        success "licence file(s) present (LICENSE_MODEL=declared): ${license_files% }"
+    else
+        error "no licence file found (LICENSE_MODEL=declared needs LICENSE, LICENSE-*, LICENCE* or COPYING*)"
+    fi
 # Warn about old single LICENSE file
-if [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
+elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
     warning "Old LICENSE file still exists alongside LICENSE-MIT — remove it"
 elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ ! -f "$REPO_DIR/LICENSE-MIT" ]]; then
     warning "Single LICENSE file found — migrate to LICENSE-MIT + LICENSE-CC-BY-SA-4.0"
@@ -853,6 +877,8 @@ PYEOF
 )
     if [[ "$COMP_LICENSE" == "(MIT AND CC-BY-SA-4.0)" ]]; then
         success "composer.json license is correct SPDX expression"
+    elif [[ "$LICENSE_MODEL" == declared && -n "$COMP_LICENSE" ]]; then
+        success "composer.json license declared: $COMP_LICENSE (LICENSE_MODEL=declared)"
     else
         warning "composer.json license should be '(MIT AND CC-BY-SA-4.0)', got: $COMP_LICENSE"
     fi
