@@ -443,6 +443,12 @@ licence_case declared_none declared "" expect-present \
     "no licence file found" "declared model still needs a licence file"
 licence_case declared_split declared "LICENSE-MIT LICENSE-CC-BY-SA-4.0" expect-absent \
     "no licence file found" "declared model accepts the split files too"
+# The argument form, for a pre-commit hook, which passes args but sets no env.
+ARG_DIR="$TMP/lic_arg"; rm -rf "$ARG_DIR"; mkdir -p "$ARG_DIR"; printf 'licence text\n' > "$ARG_DIR/LICENSE"
+ARG_OUT="$(env -u LICENSE_MODEL bash "$VALIDATOR" --license-model=declared "$ARG_DIR" 2>&1)"
+if grep -qF "licence file(s) present (LICENSE_MODEL=declared): LICENSE" <<< "$ARG_OUT" \
+    && ! grep -qF "LICENSE-MIT not found" <<< "$ARG_OUT"; then ((PASS++)); else
+    echo "  FAIL --license-model=declared is not applied"; ((FAIL++)); fi
 licence_case bad_value spilt "LICENSE" expect-present \
     "LICENSE_MODEL must be 'split' or 'declared'" "a misspelt model is an error"
 licence_case bad_value_falls_back spilt "LICENSE" expect-present \

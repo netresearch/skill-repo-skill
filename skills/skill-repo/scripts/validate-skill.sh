@@ -2,16 +2,21 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # validate-skill.sh - Validate Netresearch skill repository structure
-# Usage: ./validate-skill.sh [repo-root-path]
+# Usage: ./validate-skill.sh [--license-model=split|declared] [repo-root-path]
 #
 # Checks: SKILL.md frontmatter, body line count, composer.json, plugin.json,
 #          cross-file consistency, required files
 # Env:    STRICT_README=1 (also true/yes, case-insensitive) promotes README heading misses from warnings to errors
-#         LICENSE_MODEL=declared (internal repos) accepts any licence file instead of LICENSE-MIT + LICENSE-CC-BY-SA-4.0
+#         LICENSE_MODEL=declared (internal repos) accepts any licence file instead of LICENSE-MIT + LICENSE-CC-BY-SA-4.0;
+#         --license-model=declared does the same where no environment can be set (a pre-commit hook's args)
 # Exit: 0 = valid, 1 = errors found
 
 set -euo pipefail
 
+if [[ "${1:-}" == --license-model=* ]]; then
+    LICENSE_MODEL="${1#--license-model=}"
+    shift
+fi
 REPO_DIR="${1:-.}"
 ERRORS=0
 WARNINGS=0
