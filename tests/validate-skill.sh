@@ -407,6 +407,23 @@ echo "----------------------------------------"
 # that ignores LICENSE_MODEL fails the declared cases and one that ignores the
 # licence files altogether fails the split and the no-file cases.
 
+# expect_output <expect-present|expect-absent> <pattern> <label> <validator output>
+expect_output() {
+    local want="$1" pat="$2" label="$3" out="$4"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+        *)  echo "  FAIL $label: unknown expectation '$want'"; ((FAIL++)) ;;
+    esac
+    return 0
+}
+
+SINGLE=LICENSE  # the one licence file an internal repository carries
+
 # licence_case <name> <model|-> <files (space-separated)> <expect-present|expect-absent> <pattern> <label>
 licence_case() {
     local name="$1" model="$2" files="$3" want="$4" pat="$5" label="$6" dir out f
@@ -418,40 +435,33 @@ licence_case() {
     else
         out="$(LICENSE_MODEL="$model" bash "$VALIDATOR" "$dir" 2>&1)"
     fi
-    case "$want" in
-        expect-present)
-            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
-                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
-        expect-absent)
-            if grep -qF -- "$pat" <<< "$out"; then
-                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
-    esac
+    expect_output "$want" "$pat" "$label" "$out"
     return 0
 }
 
-licence_case default_single - "LICENSE" expect-present \
+licence_case default_single - "$SINGLE" expect-present \
     "LICENSE-MIT not found" "default model still demands the split files"
-licence_case split_single split "LICENSE" expect-present \
+licence_case split_single split "$SINGLE" expect-present \
     "LICENSE-CC-BY-SA-4.0 not found" "split model demands the split files"
-licence_case declared_single declared "LICENSE" expect-absent \
+licence_case declared_single declared "$SINGLE" expect-absent \
     "LICENSE-MIT not found" "declared model accepts a single LICENSE"
-licence_case declared_single_cc declared "LICENSE" expect-absent \
+licence_case declared_single_cc declared "$SINGLE" expect-absent \
     "LICENSE-CC-BY-SA-4.0 not found" "declared model does not demand the CC file either"
-licence_case declared_single_ok declared "LICENSE" expect-present \
+licence_case declared_single_ok declared "$SINGLE" expect-present \
     "licence file(s) present (LICENSE_MODEL=declared): LICENSE" "declared model names the file it found"
 licence_case declared_none declared "" expect-present \
     "no licence file found" "declared model still needs a licence file"
 licence_case declared_split declared "LICENSE-MIT LICENSE-CC-BY-SA-4.0" expect-absent \
     "no licence file found" "declared model accepts the split files too"
 # The argument form, for a pre-commit hook, which passes args but sets no env.
-ARG_DIR="$TMP/lic_arg"; rm -rf "$ARG_DIR"; mkdir -p "$ARG_DIR"; printf 'licence text\n' > "$ARG_DIR/LICENSE"
+ARG_DIR="$TMP/lic_arg"; rm -rf "$ARG_DIR"; mkdir -p "$ARG_DIR"; printf 'licence text\n' > "$ARG_DIR/$SINGLE"
 ARG_OUT="$(env -u LICENSE_MODEL bash "$VALIDATOR" --license-model=declared "$ARG_DIR" 2>&1)"
 if grep -qF "licence file(s) present (LICENSE_MODEL=declared): LICENSE" <<< "$ARG_OUT" \
     && ! grep -qF "LICENSE-MIT not found" <<< "$ARG_OUT"; then ((PASS++)); else
     echo "  FAIL --license-model=declared is not applied"; ((FAIL++)); fi
-licence_case bad_value spilt "LICENSE" expect-present \
+licence_case bad_value spilt "$SINGLE" expect-present \
     "LICENSE_MODEL must be 'split' or 'declared'" "a misspelt model is an error"
-licence_case bad_value_falls_back spilt "LICENSE" expect-present \
+licence_case bad_value_falls_back spilt "$SINGLE" expect-present \
     "LICENSE-MIT not found" "a misspelt model falls back to split"
 
 # composer_licence_case <name> <license JSON value> <expect-present|expect-absent> <pattern> <label>
@@ -459,17 +469,10 @@ composer_licence_case() {
     local name="$1" value="$2" want="$3" pat="$4" label="$5" dir out
     dir="$TMP/clic_$name"
     rm -rf "$dir"; mkdir -p "$dir"
-    printf 'licence text\n' > "$dir/LICENSE"
+    printf 'licence text\n' > "$dir/$SINGLE"
     printf '{"name": "netresearch/x", "type": "ai-agent-skill", "license": %s}\n' "$value" > "$dir/composer.json"
     out="$(LICENSE_MODEL=declared bash "$VALIDATOR" "$dir" 2>&1)"
-    case "$want" in
-        expect-present)
-            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
-                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
-        expect-absent)
-            if grep -qF -- "$pat" <<< "$out"; then
-                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
-    esac
+    expect_output "$want" "$pat" "$label" "$out"
     return 0
 }
 composer_licence_case proprietary '"proprietary"' expect-present \
