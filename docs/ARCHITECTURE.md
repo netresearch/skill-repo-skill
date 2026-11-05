@@ -74,7 +74,7 @@ jobs:
 `validate-skill.sh` checks:
 
 - SKILL.md exists (root or `skills/*/SKILL.md`), has valid frontmatter, name format, description prefix, body line count (error above 500 lines, warning above 300)
-- Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`; with `LICENSE_MODEL=declared` or `--license-model=declared` (internal repositories; the argument is for the pre-commit hook, `args: [--license-model=declared]`) any licence file (`LICENSE*`, `LICENCE*`, `COPYING*`) instead of the two split files, and composer.json may declare any licence
+- Required files: `README.md`, `LICENSE-MIT`, `LICENSE-CC-BY-SA-4.0`, `.gitignore`; with `LICENSE_MODEL=declared` or `--license-model=declared` (internal repositories; the argument is for the pre-commit hook, `args: [--license-model=declared]`) any licence file (`LICENSE*`, `LICENCE*`, `COPYING*`) instead of the two split files (none at all is a warning), and composer.json may declare any licence
 - No stale `LICENSE` file alongside `LICENSE-MIT`
 - A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)
 - No `composer.lock` committed

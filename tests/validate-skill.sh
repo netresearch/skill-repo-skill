@@ -450,7 +450,14 @@ licence_case declared_single_cc declared "$SINGLE" expect-absent \
 licence_case declared_single_ok declared "$SINGLE" expect-present \
     "licence file(s) present (LICENSE_MODEL=declared): LICENSE" "declared model names the file it found"
 licence_case declared_none declared "" expect-present \
-    "no licence file found" "declared model still needs a licence file"
+    "no licence file found" "declared model names a missing licence file"
+# ... as a warning: internal repositories keep what their author set, which
+# can be no licence at all.
+NONE_DIR="$TMP/lic_none_level"; rm -rf "$NONE_DIR"; mkdir -p "$NONE_DIR"
+NONE_OUT="$(LICENSE_MODEL=declared bash "$VALIDATOR" "$NONE_DIR" 2>&1)"
+if grep -qE 'WARNING.*no licence file found' <<< "$NONE_OUT" \
+    && ! grep -qE 'ERROR.*no licence file found' <<< "$NONE_OUT"; then ((PASS++)); else
+    echo "  FAIL a missing licence file in declared mode must warn, not error"; ((FAIL++)); fi
 licence_case declared_split declared "LICENSE-MIT LICENSE-CC-BY-SA-4.0" expect-absent \
     "no licence file found" "declared model accepts the split files too"
 # The argument form, for a pre-commit hook, which passes args but sets no env.
