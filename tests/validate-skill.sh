@@ -435,6 +435,8 @@ licence_case split_single split "LICENSE" expect-present \
     "LICENSE-CC-BY-SA-4.0 not found" "split model demands the split files"
 licence_case declared_single declared "LICENSE" expect-absent \
     "LICENSE-MIT not found" "declared model accepts a single LICENSE"
+licence_case declared_single_cc declared "LICENSE" expect-absent \
+    "LICENSE-CC-BY-SA-4.0 not found" "declared model does not demand the CC file either"
 licence_case declared_single_ok declared "LICENSE" expect-present \
     "licence file(s) present (LICENSE_MODEL=declared): LICENSE" "declared model names the file it found"
 licence_case declared_none declared "" expect-present \
@@ -445,6 +447,33 @@ licence_case bad_value spilt "LICENSE" expect-present \
     "LICENSE_MODEL must be 'split' or 'declared'" "a misspelt model is an error"
 licence_case bad_value_falls_back spilt "LICENSE" expect-present \
     "LICENSE-MIT not found" "a misspelt model falls back to split"
+
+# composer_licence_case <name> <license JSON value> <expect-present|expect-absent> <pattern> <label>
+composer_licence_case() {
+    local name="$1" value="$2" want="$3" pat="$4" label="$5" dir out
+    dir="$TMP/clic_$name"
+    rm -rf "$dir"; mkdir -p "$dir"
+    printf 'licence text\n' > "$dir/LICENSE"
+    printf '{"name": "netresearch/x", "type": "ai-agent-skill", "license": %s}\n' "$value" > "$dir/composer.json"
+    out="$(LICENSE_MODEL=declared bash "$VALIDATOR" "$dir" 2>&1)"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+    esac
+    return 0
+}
+composer_licence_case proprietary '"proprietary"' expect-present \
+    "composer.json license declared: proprietary" "declared model accepts a declared licence"
+composer_licence_case list '["MIT", "GPL-2.0-or-later"]' expect-present \
+    "composer.json license declared: MIT OR GPL-2.0-or-later" "declared model reads composer's list form"
+composer_licence_case null 'null' expect-absent \
+    "composer.json license declared" "declared model does not accept a null licence"
+composer_licence_case empty_list '[]' expect-absent \
+    "composer.json license declared" "declared model does not accept an empty licence list"
 
 echo "----------------------------------------"
 echo "Release path checks (issue #341)"

@@ -875,7 +875,11 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
     COMP_LICENSE=$(python3 - "$REPO_DIR" <<'PYEOF' 2>/dev/null || echo ""
 import json, sys
 with open(f'{sys.argv[1]}/composer.json', 'r') as f:
-    print(json.load(f).get('license', ''))
+    lic = json.load(f).get('license', '')
+# A string, or composer's list form; null, [] and other shapes print nothing.
+if isinstance(lic, list) and lic and all(isinstance(x, str) and x for x in lic):
+    lic = ' OR '.join(lic)
+print(lic if isinstance(lic, str) else '')
 PYEOF
 )
     if [[ "$COMP_LICENSE" == "(MIT AND CC-BY-SA-4.0)" ]]; then
