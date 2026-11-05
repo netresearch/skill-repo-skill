@@ -829,7 +829,10 @@ if [[ "$LICENSE_MODEL" == declared ]]; then
     if [[ -n "$license_files" ]]; then
         success "licence file(s) present (LICENSE_MODEL=declared): ${license_files% }"
     else
-        error "no licence file found (LICENSE_MODEL=declared needs LICENSE, LICENSE-*, LICENCE* or COPYING*)"
+        # A warning, not an error: an internal repository keeps whatever its
+        # author set, and some set no licence at all ("internal repo, no
+        # license"). The validator names the gap; it does not decide it.
+        warning "no licence file found (LICENSE_MODEL=declared looks for LICENSE, LICENSE-*, LICENCE* or COPYING*)"
     fi
 # Warn about old single LICENSE file
 elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
