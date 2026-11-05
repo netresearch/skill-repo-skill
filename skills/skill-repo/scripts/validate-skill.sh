@@ -246,9 +246,13 @@ validate_skill_md() {
     success "SKILL.md found: $rel"
 
     # Frontmatter delimiter
-    if head -1 "$skill_file" | grep -q "^---$"; then
+    if [[ "$(head -n 1 "$skill_file")" == "---" ]]; then
         # Verify closing --- delimiter exists (within first 30 lines)
-        closing_line=$(sed -n '2,30{/^---$/=}' "$skill_file" | head -1)
+        # One process, no pipe: under pipefail `sed ... | head -1` dies with
+        # 141 when sed writes a second match after head has exited, which
+        # BusyBox sed (alpine CI images) does for most SKILL.md files with a
+        # horizontal rule in their first 30 lines.
+        closing_line=$(awk 'NR > 1 && NR <= 30 && /^---$/ { print NR; exit }' "$skill_file")
         if [[ -z "$closing_line" ]]; then
             error "$rel frontmatter has opening --- but no closing --- delimiter"
         else
@@ -317,15 +321,14 @@ validate_skill_md() {
                     printf "\n"
                 }
             ' | sed -e 's/^-$//' -e '/^$/d')
-            if [[ -n "$at_tokens" ]] && echo "$at_tokens" \
-                | grep -qE '^(Bash$|Bash\(([^)]*[^.[:alnum:]_])?(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+            if [[ -n "$at_tokens" ]] && grep -qE '^(Bash$|Bash\(([^)]*[^.[:alnum:]_])?(bash|sh|python3?|uv|node|perl|ruby):\*)' <<<"$at_tokens"; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi
 
         # Check name field
-        if echo "$frontmatter" | grep -q "^name:"; then
-            skill_name=$(echo "$frontmatter" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
+        if grep -q "^name:" <<<"$frontmatter"; then
+            skill_name=$(awk '/^name:/ { sub(/^name: */, ""); print; exit }' <<<"$frontmatter" | tr -d '"')
             # The plugin.json comparison further down uses one name. Single-skill
             # repos keep the behaviour they had; multi-skill repos skip that
             # comparison anyway, since plugin.json names the plugin, not a skill.
@@ -349,7 +352,7 @@ validate_skill_md() {
         fi
 
         # Check description field and prefix
-        if echo "$frontmatter" | grep -q "^description:"; then
+        if grep -q "^description:" <<<"$frontmatter"; then
             # Parse the *YAML value* of description so every valid scalar style
             # (plain, single/double-quoted, block) is accepted as long as the
             # parsed value starts with "Use when". Uses PyYAML when available,
@@ -447,12 +450,12 @@ PYEOF
 
         # compatibility: spec caps it at 500 characters, and most skills should
         # not carry the field at all.
-        if echo "$frontmatter" | grep -q "^compatibility:"; then
+        if grep -q "^compatibility:" <<<"$frontmatter"; then
             # Octal escapes for the two quote characters: a literal quote here
             # would terminate the string it lives in (the same trap the awk
             # programs in this file avoid the same way).
-            compat=$(echo "$frontmatter" | grep "^compatibility:" | head -1 \
-                     | sed 's/compatibility: *//' | tr -d '\42\47')
+            compat=$(awk '/^compatibility:/ { sub(/^compatibility: */, ""); print; exit }' <<<"$frontmatter" \
+                     | tr -d '\42\47')
             if (( ${#compat} > 500 )); then
                 error "$rel compatibility is ${#compat} chars (spec max 500)"
             fi

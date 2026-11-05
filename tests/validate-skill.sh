@@ -385,6 +385,21 @@ readme_case live_badge "$LIVE_BADGE" expect-absent \
     "static version badge" "the live release badge does not warn"
 
 echo "----------------------------------------"
+echo "No early-exit reader behind a pipe (SIGPIPE under pipefail)"
+echo "----------------------------------------"
+# `sed ... | head -1` under `set -o pipefail` exits 141 whenever the writer
+# writes after the reader has left. GNU sed on a workstation never showed it
+# (0 of 2000 runs); BusyBox sed in python:3.12-alpine, the image of the GitLab
+# validate:skill job, killed the whole validator in 10 of 10 runs on
+# dxp-project-maintenance, whose SKILL.md files have a horizontal rule in their
+# first 30 lines. The race depends on the platform and the file, so a fixture
+# cannot pin it; the source assertion can: no early-exiting reader may sit
+# behind a pipe in the validator.
+SIGPIPE_HITS=$(grep -nE '\|[[:space:]]*(head -(1|n ?1)|grep -q)' "$VALIDATOR" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+if [[ -z "$SIGPIPE_HITS" ]]; then ((PASS++)); else
+    echo "  FAIL validator pipes into an early-exiting reader:"; printf '    %s\n' "$SIGPIPE_HITS"; ((FAIL++)); fi
+
+echo "----------------------------------------"
 echo "Licence model (LICENSE_MODEL)"
 echo "----------------------------------------"
 # Internal repositories keep the licence their author chose; only public ones
