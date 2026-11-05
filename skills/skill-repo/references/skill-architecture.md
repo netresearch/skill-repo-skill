@@ -11,6 +11,7 @@
   - What a description can move, measured
 - What a reference reaches, measured
 - What gets executed, measured
+- A script looks up the state it can query
 - Flat discovery: one level, always
 - What belongs in SKILL.md and what does not
 - Long references need a Contents section
@@ -253,6 +254,24 @@ Two consequences for writing a body, and one limit.
   instruction is followed is a property of the model reading it, not of the
   body, and the stack is measured on the model that does not follow it because
   that is where a shortcut has something to shorten.
+
+## A script looks up the state it can query
+
+An identifier that one call prints and a later call needs is state, and state
+the script can query belongs to the script. When a body tells the agent to keep
+an id from one call's output and pass it to the next, the agent has to hold that
+id across turns, copy it without error, and re-read it after a compaction. Each
+of those steps costs tokens, and each one can fail.
+
+Give the script the lookup instead. The agent names what it wants changed, and
+the script finds its own earlier output — its own entries, by sender and key —
+and acts on it. `matrix-react.py --replace OLD NEW` in `netresearch/matrix-skill`
+swaps a status reaction this way: it reads the event's annotations through the
+relations API, keeps the ones the configured user sent, and redacts those. The
+agent never sees a reaction id.
+
+Keep the id in the output for a human or a log. Do not make a later step of the
+documented workflow depend on the agent carrying it.
 
 ## Flat discovery: one level, always
 
