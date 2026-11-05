@@ -385,6 +385,106 @@ readme_case live_badge "$LIVE_BADGE" expect-absent \
     "static version badge" "the live release badge does not warn"
 
 echo "----------------------------------------"
+echo "No early-exit reader behind a pipe (SIGPIPE under pipefail)"
+echo "----------------------------------------"
+# `sed ... | head -1` under `set -o pipefail` exits 141 whenever the writer
+# writes after the reader has left. GNU sed on a workstation never showed it
+# (0 of 2000 runs); BusyBox sed in python:3.12-alpine, the image of the GitLab
+# validate:skill job, killed the whole validator in 10 of 10 runs on
+# dxp-project-maintenance, whose SKILL.md files have a horizontal rule in their
+# first 30 lines. The race depends on the platform and the file, so a fixture
+# cannot pin it; the source assertion can: no early-exiting reader may sit
+# behind a pipe in the validator.
+SIGPIPE_HITS=$(grep -nE '\|[[:space:]]*(head -(1|n ?1)|grep -q)' "$VALIDATOR" | grep -vE '^[0-9]+:[[:space:]]*#' || true)
+if [[ -z "$SIGPIPE_HITS" ]]; then ((PASS++)); else
+    echo "  FAIL validator pipes into an early-exiting reader:"; printf '    %s\n' "$SIGPIPE_HITS"; ((FAIL++)); fi
+
+echo "----------------------------------------"
+echo "Licence model (LICENSE_MODEL)"
+echo "----------------------------------------"
+# Internal repositories keep the licence their author chose; only public ones
+# need the split files. Each case is checked in both directions, so a validator
+# that ignores LICENSE_MODEL fails the declared cases and one that ignores the
+# licence files altogether fails the split and the no-file cases.
+
+# expect_output <expect-present|expect-absent> <pattern> <label> <validator output>
+expect_output() {
+    local want="$1" pat="$2" label="$3" out="$4"
+    case "$want" in
+        expect-present)
+            if grep -qF -- "$pat" <<< "$out"; then ((PASS++)); else
+                echo "  FAIL $label: expected output matching '$pat'"; ((FAIL++)); fi ;;
+        expect-absent)
+            if grep -qF -- "$pat" <<< "$out"; then
+                echo "  FAIL $label: '$pat' should NOT have fired"; ((FAIL++)); else ((PASS++)); fi ;;
+        *)  echo "  FAIL $label: unknown expectation '$want'"; ((FAIL++)) ;;
+    esac
+    return 0
+}
+
+SINGLE=LICENSE  # the one licence file an internal repository carries
+
+# licence_case <name> <model|-> <files (space-separated)> <expect-present|expect-absent> <pattern> <label>
+licence_case() {
+    local name="$1" model="$2" files="$3" want="$4" pat="$5" label="$6" dir out f
+    dir="$TMP/lic_$name"
+    rm -rf "$dir"; mkdir -p "$dir"
+    for f in $files; do printf 'licence text\n' > "$dir/$f"; done
+    if [[ "$model" == "-" ]]; then
+        out="$(env -u LICENSE_MODEL bash "$VALIDATOR" "$dir" 2>&1)"
+    else
+        out="$(LICENSE_MODEL="$model" bash "$VALIDATOR" "$dir" 2>&1)"
+    fi
+    expect_output "$want" "$pat" "$label" "$out"
+    return 0
+}
+
+licence_case default_single - "$SINGLE" expect-present \
+    "LICENSE-MIT not found" "default model still demands the split files"
+licence_case split_single split "$SINGLE" expect-present \
+    "LICENSE-CC-BY-SA-4.0 not found" "split model demands the split files"
+licence_case declared_single declared "$SINGLE" expect-absent \
+    "LICENSE-MIT not found" "declared model accepts a single LICENSE"
+licence_case declared_single_cc declared "$SINGLE" expect-absent \
+    "LICENSE-CC-BY-SA-4.0 not found" "declared model does not demand the CC file either"
+licence_case declared_single_ok declared "$SINGLE" expect-present \
+    "licence file(s) present (LICENSE_MODEL=declared): LICENSE" "declared model names the file it found"
+licence_case declared_none declared "" expect-present \
+    "no licence file found" "declared model still needs a licence file"
+licence_case declared_split declared "LICENSE-MIT LICENSE-CC-BY-SA-4.0" expect-absent \
+    "no licence file found" "declared model accepts the split files too"
+# The argument form, for a pre-commit hook, which passes args but sets no env.
+ARG_DIR="$TMP/lic_arg"; rm -rf "$ARG_DIR"; mkdir -p "$ARG_DIR"; printf 'licence text\n' > "$ARG_DIR/$SINGLE"
+ARG_OUT="$(env -u LICENSE_MODEL bash "$VALIDATOR" --license-model=declared "$ARG_DIR" 2>&1)"
+if grep -qF "licence file(s) present (LICENSE_MODEL=declared): LICENSE" <<< "$ARG_OUT" \
+    && ! grep -qF "LICENSE-MIT not found" <<< "$ARG_OUT"; then ((PASS++)); else
+    echo "  FAIL --license-model=declared is not applied"; ((FAIL++)); fi
+licence_case bad_value spilt "$SINGLE" expect-present \
+    "LICENSE_MODEL must be 'split' or 'declared'" "a misspelt model is an error"
+licence_case bad_value_falls_back spilt "$SINGLE" expect-present \
+    "LICENSE-MIT not found" "a misspelt model falls back to split"
+
+# composer_licence_case <name> <license JSON value> <expect-present|expect-absent> <pattern> <label>
+composer_licence_case() {
+    local name="$1" value="$2" want="$3" pat="$4" label="$5" dir out
+    dir="$TMP/clic_$name"
+    rm -rf "$dir"; mkdir -p "$dir"
+    printf 'licence text\n' > "$dir/$SINGLE"
+    printf '{"name": "netresearch/x", "type": "ai-agent-skill", "license": %s}\n' "$value" > "$dir/composer.json"
+    out="$(LICENSE_MODEL=declared bash "$VALIDATOR" "$dir" 2>&1)"
+    expect_output "$want" "$pat" "$label" "$out"
+    return 0
+}
+composer_licence_case proprietary '"proprietary"' expect-present \
+    "composer.json license declared: proprietary" "declared model accepts a declared licence"
+composer_licence_case list '["MIT", "GPL-2.0-or-later"]' expect-present \
+    "composer.json license declared: MIT OR GPL-2.0-or-later" "declared model reads composer's list form"
+composer_licence_case null 'null' expect-absent \
+    "composer.json license declared" "declared model does not accept a null licence"
+composer_licence_case empty_list '[]' expect-absent \
+    "composer.json license declared" "declared model does not accept an empty licence list"
+
+echo "----------------------------------------"
 echo "Release path checks (issue #341)"
 echo "----------------------------------------"
 # A GitLab skill repository has no release.yml and must not have one: the

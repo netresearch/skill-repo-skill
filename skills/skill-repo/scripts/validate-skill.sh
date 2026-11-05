@@ -2,15 +2,21 @@
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # validate-skill.sh - Validate Netresearch skill repository structure
-# Usage: ./validate-skill.sh [repo-root-path]
+# Usage: ./validate-skill.sh [--license-model=split|declared] [repo-root-path]
 #
 # Checks: SKILL.md frontmatter, body line count, composer.json, plugin.json,
 #          cross-file consistency, required files
 # Env:    STRICT_README=1 (also true/yes, case-insensitive) promotes README heading misses from warnings to errors
+#         LICENSE_MODEL=declared (internal repos) accepts any licence file instead of LICENSE-MIT + LICENSE-CC-BY-SA-4.0;
+#         --license-model=declared does the same where no environment can be set (a pre-commit hook's args)
 # Exit: 0 = valid, 1 = errors found
 
 set -euo pipefail
 
+if [[ "${1:-}" == --license-model=* ]]; then
+    LICENSE_MODEL="${1#--license-model=}"
+    shift
+fi
 REPO_DIR="${1:-.}"
 ERRORS=0
 WARNINGS=0
@@ -245,9 +251,13 @@ validate_skill_md() {
     success "SKILL.md found: $rel"
 
     # Frontmatter delimiter
-    if head -1 "$skill_file" | grep -q "^---$"; then
+    if [[ "$(head -n 1 "$skill_file")" == "---" ]]; then
         # Verify closing --- delimiter exists (within first 30 lines)
-        closing_line=$(sed -n '2,30{/^---$/=}' "$skill_file" | head -1)
+        # One process, no pipe: under pipefail `sed ... | head -1` dies with
+        # 141 when sed writes a second match after head has exited, which
+        # BusyBox sed (alpine CI images) does for most SKILL.md files with a
+        # horizontal rule in their first 30 lines.
+        closing_line=$(awk 'NR > 1 && NR <= 30 && /^---$/ { print NR; exit }' "$skill_file")
         if [[ -z "$closing_line" ]]; then
             error "$rel frontmatter has opening --- but no closing --- delimiter"
         else
@@ -316,15 +326,14 @@ validate_skill_md() {
                     printf "\n"
                 }
             ' | sed -e 's/^-$//' -e '/^$/d')
-            if [[ -n "$at_tokens" ]] && echo "$at_tokens" \
-                | grep -qE '^(Bash$|Bash\(([^)]*[^.[:alnum:]_])?(bash|sh|python3?|uv|node|perl|ruby):\*)'; then
+            if [[ -n "$at_tokens" ]] && grep -qE '^(Bash$|Bash\(([^)]*[^.[:alnum:]_])?(bash|sh|python3?|uv|node|perl|ruby):\*)' <<<"$at_tokens"; then
                 warning "$rel ships scripts/ but allowed-tools grants an interpreter (or bare Bash) - name the scripts instead, e.g. Bash(\${CLAUDE_SKILL_DIR}/scripts/*); see repository-quality-rules.md"
             fi
         fi
 
         # Check name field
-        if echo "$frontmatter" | grep -q "^name:"; then
-            skill_name=$(echo "$frontmatter" | grep "^name:" | head -1 | sed 's/name: *//' | tr -d '"')
+        if grep -q "^name:" <<<"$frontmatter"; then
+            skill_name=$(awk '/^name:/ { sub(/^name: */, ""); print; exit }' <<<"$frontmatter" | tr -d '"')
             # The plugin.json comparison further down uses one name. Single-skill
             # repos keep the behaviour they had; multi-skill repos skip that
             # comparison anyway, since plugin.json names the plugin, not a skill.
@@ -348,7 +357,7 @@ validate_skill_md() {
         fi
 
         # Check description field and prefix
-        if echo "$frontmatter" | grep -q "^description:"; then
+        if grep -q "^description:" <<<"$frontmatter"; then
             # Parse the *YAML value* of description so every valid scalar style
             # (plain, single/double-quoted, block) is accepted as long as the
             # parsed value starts with "Use when". Uses PyYAML when available,
@@ -446,12 +455,12 @@ PYEOF
 
         # compatibility: spec caps it at 500 characters, and most skills should
         # not carry the field at all.
-        if echo "$frontmatter" | grep -q "^compatibility:"; then
+        if grep -q "^compatibility:" <<<"$frontmatter"; then
             # Octal escapes for the two quote characters: a literal quote here
             # would terminate the string it lives in (the same trap the awk
             # programs in this file avoid the same way).
-            compat=$(echo "$frontmatter" | grep "^compatibility:" | head -1 \
-                     | sed 's/compatibility: *//' | tr -d '\42\47')
+            compat=$(awk '/^compatibility:/ { sub(/^compatibility: */, ""); print; exit }' <<<"$frontmatter" \
+                     | tr -d '\42\47')
             if (( ${#compat} > 500 )); then
                 error "$rel compatibility is ${#compat} chars (spec max 500)"
             fi
@@ -791,7 +800,20 @@ if [[ -d "$REPO_DIR/.github/workflows" ]]; then
 fi
 
 # --- Required files ---
-for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
+# LICENSE_MODEL=split (default) demands the split licence files of the public
+# repositories. LICENSE_MODEL=declared is for internal repositories, which keep
+# whatever licence their author chose (proprietary, AGPL, plain MIT): they need
+# a licence file, not this one. The GitLab CI component sets it for projects
+# whose visibility is not public.
+LICENSE_MODEL="${LICENSE_MODEL:-split}"
+case "$LICENSE_MODEL" in
+    split)    REQUIRED_FILES=(README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore) ;;
+    declared) REQUIRED_FILES=(README.md .gitignore) ;;
+    *)        error "LICENSE_MODEL must be 'split' or 'declared', got: $LICENSE_MODEL"
+              LICENSE_MODEL="split"
+              REQUIRED_FILES=(README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore) ;;
+esac
+for file in "${REQUIRED_FILES[@]}"; do
     if [[ -f "$REPO_DIR/$file" ]]; then
         success "$file exists"
     else
@@ -799,8 +821,18 @@ for file in README.md LICENSE-MIT LICENSE-CC-BY-SA-4.0 .gitignore; do
     fi
 done
 
+if [[ "$LICENSE_MODEL" == declared ]]; then
+    license_files=""
+    for f in "$REPO_DIR"/LICENSE* "$REPO_DIR"/LICENCE* "$REPO_DIR"/COPYING*; do
+        [[ -f "$f" ]] && license_files+="${f##*/} "
+    done
+    if [[ -n "$license_files" ]]; then
+        success "licence file(s) present (LICENSE_MODEL=declared): ${license_files% }"
+    else
+        error "no licence file found (LICENSE_MODEL=declared needs LICENSE, LICENSE-*, LICENCE* or COPYING*)"
+    fi
 # Warn about old single LICENSE file
-if [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
+elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ -f "$REPO_DIR/LICENSE-MIT" ]]; then
     warning "Old LICENSE file still exists alongside LICENSE-MIT — remove it"
 elif [[ -f "$REPO_DIR/LICENSE" ]] && [[ ! -f "$REPO_DIR/LICENSE-MIT" ]]; then
     warning "Single LICENSE file found — migrate to LICENSE-MIT + LICENSE-CC-BY-SA-4.0"
@@ -848,11 +880,17 @@ if [[ -f "$REPO_DIR/composer.json" ]]; then
     COMP_LICENSE=$(python3 - "$REPO_DIR" <<'PYEOF' 2>/dev/null || echo ""
 import json, sys
 with open(f'{sys.argv[1]}/composer.json', 'r') as f:
-    print(json.load(f).get('license', ''))
+    lic = json.load(f).get('license', '')
+# A string, or composer's list form; null, [] and other shapes print nothing.
+if isinstance(lic, list) and lic and all(isinstance(x, str) and x for x in lic):
+    lic = ' OR '.join(lic)
+print(lic if isinstance(lic, str) else '')
 PYEOF
 )
     if [[ "$COMP_LICENSE" == "(MIT AND CC-BY-SA-4.0)" ]]; then
         success "composer.json license is correct SPDX expression"
+    elif [[ "$LICENSE_MODEL" == declared && -n "$COMP_LICENSE" ]]; then
+        success "composer.json license declared: $COMP_LICENSE (LICENSE_MODEL=declared)"
     else
         warning "composer.json license should be '(MIT AND CC-BY-SA-4.0)', got: $COMP_LICENSE"
     fi
