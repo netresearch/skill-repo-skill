@@ -78,6 +78,7 @@ jobs:
 - No stale `LICENSE` file alongside `LICENSE-MIT`
 - A release path: `.github/workflows/release.yml` on GitHub; on GitLab, a `.gitlab-ci.yml` that includes the `claude-code-skill` CI component (which creates the Release from the tag pipeline — no `release.yml` there)
 - No `composer.lock` committed
+- No Python bytecode committed (`*.pyc`, `*.pyo`, anything under a `__pycache__/` directory) — a **warning**, read from the git index, so an untracked cache on disk is no finding
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
 - `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`); a **warning** for a static `img.shields.io/badge/version-` badge, which no release step updates (the live form is `img.shields.io/github/v/release/netresearch/<repo>?sort=semver`)
