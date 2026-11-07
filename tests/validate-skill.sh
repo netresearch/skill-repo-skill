@@ -801,6 +801,50 @@ reusable_case thirdparty accept \
     '    uses: actions/checkout/.github/workflows/x.yml@0123456789abcdef0123456789abcdef01234567' \
     "a third-party SHA pin is not this check's business"
 
+echo "== Committed Python bytecode =="
+# bytecode_case <name> <tracked path|-> <untracked path|-> <warn|quiet> <label>
+# Case one is the file that reached main in coding-ai/ecom-phpstorm-index-skill.
+bytecode_case() {
+    local name="$1" tracked="$2" untracked="$3" want="$4" label="$5" dir out got=quiet
+    dir="$(fixture "bytecode_$name" "${hdr}description: Use when doing X\n---\n# T\n")"
+    git -C "$dir" init -q
+    if [[ "$tracked" != - ]]; then
+        mkdir -p "$dir/$(dirname "$tracked")"; printf 'bytecode' > "$dir/$tracked"
+        git -C "$dir" add -- "$tracked"
+    fi
+    if [[ "$untracked" != - ]]; then
+        mkdir -p "$dir/$(dirname "$untracked")"; printf 'bytecode' > "$dir/$untracked"
+    fi
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    if grep -qE 'WARNING.*Python bytecode is committed' <<<"$out"; then got=warn; fi
+    if [[ "$got" == "$want" ]]; then ((PASS++)); else
+        echo "  FAIL $label: expected $want, got $got"; ((FAIL++)); fi
+    return 0
+}
+bytecode_case real evals/__pycache__/answerable_search.cpython-315.pyc - warn \
+    "the cache committed to ecom-phpstorm-index-skill warns"
+bytecode_case root_pyc helper.pyc - warn "a .pyc outside __pycache__ warns"
+bytecode_case pyo scripts/x.pyo - warn "a .pyo warns"
+bytecode_case cache_other scripts/__pycache__/notes.txt - warn \
+    "anything inside a __pycache__ directory warns"
+bytecode_case root_cache __pycache__/stale.txt - warn \
+    "a __pycache__ directory at the repository root warns"
+bytecode_case untracked - evals/__pycache__/answerable_search.cpython-315.pyc quiet \
+    "an untracked cache on disk is no finding"
+bytecode_case lookalike scripts/pycache_notes.py - quiet \
+    "a source file whose name only contains pycache is no finding"
+# The message names the file, so the reader can act on it without a search.
+BC_DIR="$(fixture bytecode_named "${hdr}description: Use when doing X\n---\n# T\n")"
+git -C "$BC_DIR" init -q; mkdir -p "$BC_DIR/evals/__pycache__"
+printf 'bytecode' > "$BC_DIR/evals/__pycache__/a.cpython-315.pyc"; git -C "$BC_DIR" add -A
+expect_output expect-present "(1 file(s)): evals/__pycache__/a.cpython-315.pyc —" \
+    "the bytecode warning names the file" "$(bash "$VALIDATOR" "$BC_DIR" 2>&1)"
+# Several files are separated by commas, and a non-ASCII name is printed as
+# itself rather than as git's octal quoting, so it can be copied into git rm.
+printf 'bytecode' > "$BC_DIR/evals/__pycache__/ü b.pyc"; git -C "$BC_DIR" add -A
+expect_output expect-present "(2 file(s)): evals/__pycache__/a.cpython-315.pyc, evals/__pycache__/ü b.pyc —" \
+    "the bytecode warning lists several files readably" "$(bash "$VALIDATOR" "$BC_DIR" 2>&1)"
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }
