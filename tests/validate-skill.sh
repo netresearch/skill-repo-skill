@@ -827,6 +827,8 @@ bytecode_case root_pyc helper.pyc - warn "a .pyc outside __pycache__ warns"
 bytecode_case pyo scripts/x.pyo - warn "a .pyo warns"
 bytecode_case cache_other scripts/__pycache__/notes.txt - warn \
     "anything inside a __pycache__ directory warns"
+bytecode_case root_cache __pycache__/stale.txt - warn \
+    "a __pycache__ directory at the repository root warns"
 bytecode_case untracked - evals/__pycache__/answerable_search.cpython-315.pyc quiet \
     "an untracked cache on disk is no finding"
 bytecode_case lookalike scripts/pycache_notes.py - quiet \
@@ -835,8 +837,13 @@ bytecode_case lookalike scripts/pycache_notes.py - quiet \
 BC_DIR="$(fixture bytecode_named "${hdr}description: Use when doing X\n---\n# T\n")"
 git -C "$BC_DIR" init -q; mkdir -p "$BC_DIR/evals/__pycache__"
 printf 'bytecode' > "$BC_DIR/evals/__pycache__/a.cpython-315.pyc"; git -C "$BC_DIR" add -A
-expect_output expect-present "(1 file(s)): evals/__pycache__/a.cpython-315.pyc" \
+expect_output expect-present "(1 file(s)): evals/__pycache__/a.cpython-315.pyc —" \
     "the bytecode warning names the file" "$(bash "$VALIDATOR" "$BC_DIR" 2>&1)"
+# Several files are separated by commas, and a non-ASCII name is printed as
+# itself rather than as git's octal quoting, so it can be copied into git rm.
+printf 'bytecode' > "$BC_DIR/evals/__pycache__/ü b.pyc"; git -C "$BC_DIR" add -A
+expect_output expect-present "(2 file(s)): evals/__pycache__/a.cpython-315.pyc, evals/__pycache__/ü b.pyc —" \
+    "the bytecode warning lists several files readably" "$(bash "$VALIDATOR" "$BC_DIR" 2>&1)"
 
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"

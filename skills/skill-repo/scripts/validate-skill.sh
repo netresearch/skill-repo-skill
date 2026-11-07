@@ -786,13 +786,15 @@ fi
 # index, like the shebang check, so an untracked cache on disk is no finding.
 if git -C "$REPO_DIR" rev-parse --git-dir >/dev/null 2>&1; then
     bytecode_rc=0
-    BYTECODE="$(git -C "$REPO_DIR" ls-files -- '*.pyc' '*.pyo' ':(glob)**/__pycache__/**')" || bytecode_rc=$?
+    # core.quotePath=false prints a non-ASCII path as itself, so the path in
+    # the message can be copied into the `git rm` it suggests.
+    BYTECODE="$(git -c core.quotePath=false -C "$REPO_DIR" ls-files -- '*.pyc' '*.pyo' ':(glob)**/__pycache__/**')" || bytecode_rc=$?
     if [[ $bytecode_rc -ne 0 ]]; then
         warning "could not list the committed files to look for Python bytecode (git ls-files exit $bytecode_rc)"
     elif [[ -n "$BYTECODE" ]]; then
         bytecode_count="$(grep -c '' <<<"$BYTECODE")"
-        bytecode_list="$(tr '\n' ' ' <<<"$BYTECODE")"
-        warning "Python bytecode is committed (${bytecode_count} file(s)): ${bytecode_list% } — it is build output for one interpreter version. Fix: git rm -r --cached <path>, and add __pycache__/ and *.py[co] to .gitignore"
+        bytecode_list="${BYTECODE//$'\n'/, }"
+        warning "Python bytecode is committed (${bytecode_count} file(s)): ${bytecode_list} — it is build output for one interpreter version. Fix: git rm -r --cached <path>, and add __pycache__/ and *.py[co] to .gitignore"
     else
         success "no Python bytecode is committed"
     fi
