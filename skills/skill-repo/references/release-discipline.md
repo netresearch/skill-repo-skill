@@ -171,7 +171,7 @@ A skill repository's public surface is how its skills and commands are invoked a
 | Content leaves a distribution channel, e.g. a skill becomes a command in `commands/`, which a Composer install (`extra.ai-agent-skill` names `SKILL.md` files) does not carry | major | loses it on `composer update`, although Claude Code still finds the command under the same name |
 | A new skill, command, reference, script option, or a channel that did not exist (a first `composer.json`) | minor | sees only additions |
 | A fix or a wording change in shipped files | patch | gets the same names and channels |
-| Only `.github/**`, `.gitlab-ci.yml` or `renovate.json` | no release | — see "CI-only deltas are not releases" below |
+| Only CI configuration, or only files no install receives (`README.md`, `tests/`, `evals/`, … — `FR_NOT_SHIPPED_RE`) | no release | gets nothing new; the survey classifies these `SKIP-CI-ONLY` and `SKIP-NOT-SHIPPED` (below) |
 
 Below 1.0.0 a breaking change raises the minor version instead; lifting such a repo to 1.0.0 is the STABILIZE class further down.
 
