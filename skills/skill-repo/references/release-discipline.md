@@ -163,19 +163,20 @@ RIGHT: open bump PR → merge → pull main → git tag -s v1.2.4 → git push
 
 ## Choosing the version step
 
-A skill repository's public surface is how its skills and commands are invoked and what each distribution channel delivers, not its code. Read the step from what a consumer of the last release would notice, using the files the release ships: `git diff --name-only <last tag> origin/main`, never the commit subjects. When one release mixes changes, the highest step wins.
+A skill repository's public surface is how its skills, commands, scripts and hooks are invoked, what they return, and what each distribution channel delivers. Read the step from what a consumer of the last release would notice, never from the commit subjects: list the shipped files with `git diff --name-only <last tag> origin/<default branch>`, then read the content diff of every `SKILL.md` frontmatter, `plugin.json`, `commands/` file and script among them, because a skill renamed in its frontmatter keeps its path. When one release mixes changes, the highest step wins. The table spells out the promise every 1.0.0 seeds into the CHANGELOG (`FR_STABILIZE_ENTRY` in `fleet-release-common.sh`).
 
 | Change since the last tag | Step | A consumer of the last release… |
 |---|---|---|
-| A skill's `name` changes, so `/<plugin>:<skill>` changes; a skill or command is removed; a skill directory is renamed | major | calls a name that no longer exists, or keeps a symlink or junction to a directory that is gone |
+| A skill's `name` changes, so `/<plugin>:<skill>` changes; a skill or command is removed; a skill directory is renamed or removed while a README tells users to link it | major | calls a name that no longer exists, or keeps a symlink or junction to a directory that is gone |
+| A script option, argument or exit code is removed or changes meaning; an option becomes required; a script's output format or a hook's decision changes incompatibly; a skill's `description` is narrowed so it no longer triggers where it did | major | gets a failing call or a result its caller misreads |
 | Content leaves a distribution channel, e.g. a skill becomes a command in `commands/`, which a Composer install (`extra.ai-agent-skill` names `SKILL.md` files) does not carry | major | loses it on `composer update`, although Claude Code still finds the command under the same name |
-| A new skill, command, reference, script option, or a channel that did not exist (a first `composer.json`) | minor | sees only additions |
-| A fix or a wording change in shipped files | patch | gets the same names and channels |
-| Only CI configuration, or only files no install receives (`README.md`, `tests/`, `evals/`, … — `FR_NOT_SHIPPED_RE`) | no release | gets nothing new; the survey classifies these `SKIP-CI-ONLY` and `SKIP-NOT-SHIPPED` (below) |
+| A new skill, command, reference, optional script option, or a channel that did not exist (a first `composer.json`) | minor | sees only additions |
+| A compatible fix or a wording change in shipped files | patch | gets the same names, channels and results |
+| Only CI configuration, or only files no install receives (`README.md`, `tests/`, `evals/`, … — `FR_NOT_SHIPPED_RE`) | no release | gets nothing new; the survey classifies these `SKIP-CI-ONLY` and `SKIP-NOT-SHIPPED` (below). A change to the release job that alters what the archives contain is not CI-only: release it at the step of the content it adds or removes |
 
 Below 1.0.0 a breaking change raises the minor version instead; lifting such a repo to 1.0.0 is the STABILIZE class further down.
 
-The 2026-11-06 GitLab sweep set four of these apart. `it-maintenance-skill`, `it-project-lifecycle-skill` and `it-claude-plugin-version-check-skill` renamed their skill to the plugin name and went to 2.0.0; the last one also told its users to re-create a skills-directory junction under the new folder name. `ecom-phpstorm-index-skill` moved its lookup from a skill to a command and went to 2.0.0, because its Composer package stopped carrying it. `it-account-lifecycle-skill` made the same move to `commands/` and went to 1.15.0: its `composer.json` was new in that release, so no Composer install existed that could lose anything. `typo3-browser-skill` changed one reference besides CI and went to 1.0.1.
+The 2026-11-06 GitLab sweep set four of these apart. `it-maintenance-skill`, `it-project-lifecycle-skill` and `it-claude-plugin-version-check-skill` renamed their skill to the plugin name and went to 2.0.0; the last one also told its users to re-create a skills-directory junction under the new folder name. `ecom-phpstorm-index-skill` moved its lookup from a skill to a command and went to 2.0.0, because its Composer package stopped carrying it. `it-account-lifecycle-skill` made the same move to `commands/` and went to 1.15.0: the commands keep their invocation in Claude Code, no README asked users to link the skill directories, and its `composer.json` was new in that release, so no Composer install existed that could lose anything. `typo3-browser-skill` changed one reference besides CI and went to 1.0.1.
 
 ## Pre-Release Version-Parity Check
 
