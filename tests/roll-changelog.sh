@@ -104,6 +104,28 @@ check "bare dash: shape reproduced" yes \
 check "bare dash: unbracketed Unreleased preserved" yes \
     "$(grep -qx '## Unreleased' "$f" && echo yes || echo no)"
 
+# An older bare-dash release below a bracketed one still counts as the base
+# for the backfill of a missing definition.
+f="$WORK/baredash-mixed.md"
+cat > "$f" <<'EOF'
+## [Unreleased]
+
+- next
+
+## [1.5.0] - 2026-11-08
+
+- newer
+
+## 1.4.0 - 2026-10-23
+
+- older
+
+[Unreleased]: https://example.org/r/compare/v1.4.0...HEAD
+EOF
+check "bare dash mixed: exits 0" 0 "$(roll "$f" 1.6.0 --date 2026-11-09)"
+check "bare dash mixed: missing [1.5.0] backfilled from the bare-dash base" yes \
+    "$(grep -qxF '[1.5.0]: https://example.org/r/compare/v1.4.0...v1.5.0' "$f" && echo yes || echo no)"
+
 # --- 3. bracketed em dash ----------------------------------------------------
 f="$WORK/emdash.md"
 cat > "$f" <<'EOF'

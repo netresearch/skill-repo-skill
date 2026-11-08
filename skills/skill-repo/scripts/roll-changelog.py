@@ -407,7 +407,7 @@ def released_labels(lines):
     for _, line, in_fence in scan(lines):
         if in_fence:
             continue
-        for rx in (LINKED_RE, BRACKETED_RE, BARE_PAREN_RE):
+        for rx in (LINKED_RE, BRACKETED_RE, BARE_PAREN_RE, BARE_DASH_RE):
             m = rx.match(line)
             if m:
                 labels.append(m.group("tag"))
