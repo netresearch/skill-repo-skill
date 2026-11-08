@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/roll-changelog.sh — exercises skills/skill-repo/scripts/roll-changelog.py.
 #
-# The five released-heading shapes documented in release-discipline.md each get
+# The six released-heading shapes documented in release-discipline.md each get
 # a round-trip, and every refusal guard is observed to actually fail on a
 # violating fixture — a guard that has never been seen red proves only that it
 # runs, not that it guards.
@@ -84,6 +84,47 @@ check "bare paren: shape reproduced" yes \
     "$(grep -qx '## 1.12.0 (2026-08-13)' "$f" && echo yes || echo no)"
 check "bare paren: unbracketed Unreleased preserved" yes \
     "$(grep -qx '## Unreleased' "$f" && echo yes || echo no)"
+
+# --- 2b. bare dash (tender-estimation shape) ---------------------------------
+f="$WORK/baredash.md"
+cat > "$f" <<'EOF'
+# Changelog
+
+## Unreleased
+
+- something
+
+## 1.4.0 - 2026-10-23
+
+- earlier
+EOF
+check "bare dash: exits 0" 0 "$(roll "$f" 1.5.0 --date 2026-11-08)"
+check "bare dash: shape reproduced" yes \
+    "$(grep -qx '## 1.5.0 - 2026-11-08' "$f" && echo yes || echo no)"
+check "bare dash: unbracketed Unreleased preserved" yes \
+    "$(grep -qx '## Unreleased' "$f" && echo yes || echo no)"
+
+# An older bare-dash release below a bracketed one still counts as the base
+# for the backfill of a missing definition.
+f="$WORK/baredash-mixed.md"
+cat > "$f" <<'EOF'
+## [Unreleased]
+
+- next
+
+## [1.5.0] - 2026-11-08
+
+- newer
+
+## 1.4.0 - 2026-10-23
+
+- older
+
+[Unreleased]: https://example.org/r/compare/v1.4.0...HEAD
+EOF
+check "bare dash mixed: exits 0" 0 "$(roll "$f" 1.6.0 --date 2026-11-09)"
+check "bare dash mixed: missing [1.5.0] backfilled from the bare-dash base" yes \
+    "$(grep -qxF '[1.5.0]: https://example.org/r/compare/v1.4.0...v1.5.0' "$f" && echo yes || echo no)"
 
 # --- 3. bracketed em dash ----------------------------------------------------
 f="$WORK/emdash.md"
