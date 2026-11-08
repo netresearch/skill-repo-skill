@@ -482,8 +482,9 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
 # hand, and the hand refresh was missed twice: the GitLab list was three repos
 # short on 2026-09-17, and formal-model-checking-skill was never surveyed
 # until #449. The survey reads the manifest it is a snapshot of and records
-# which manifest repos the list leaves out; the manifest phase prints that
-# record above the approval line. A repo the list leaves out on purpose is
+# which manifest repos the list leaves out; the manifest phase appends that
+# record to manifest.md, the file the operator approves, and prints it after
+# the approval steps. A repo the list leaves out on purpose is
 # named on a `# not-released: <repo>` line in the list file.
 host_list_drift() { # LISTFILE — one record on stdout:
     # "checked <manifest-count>" + one "missing <repo>" line per gap, or
@@ -496,7 +497,8 @@ host_list_drift() { # LISTFILE — one record on stdout:
     fi
     if ! repos=$(jq -r '.content' <<< "$raw" | base64 -d 2> /dev/null \
         | jq -r --arg org "$FR_ORG/" \
-            '.plugins[] | (.source.repo? // empty) | select(startswith($org)) | ltrimstr($org)' \
+            '.plugins[] | select(.source.source? == "github") | (.source.repo // empty)
+             | select(startswith($org)) | ltrimstr($org)' \
             2> /dev/null | sort -u) || [[ -z "$repos" ]]; then
         echo "unchecked $mp/.claude-plugin/marketplace.json names no $FR_ORG repo"
         return 0

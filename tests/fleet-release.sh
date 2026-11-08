@@ -1153,6 +1153,7 @@ jq -n '{plugins: [
     {name: "b", source: {source: "github", repo: "netresearch/beta-skill"}},
     {name: "c", source: {source: "github", repo: "netresearch/cli-toolset"}},
     {name: "x", source: {source: "github", repo: "elsewhere/foreign-skill"}},
+    {name: "u", source: {source: "url", url: "https://example.org/u.git", repo: "netresearch/url-skill"}},
     {name: "l", source: "./local-plugin"}]}' > "$WORK/marketplace.json"
 drift() { # LISTFILE [FAIL] — the drift record as one line
     local list="$1" fail="${2:-}"
