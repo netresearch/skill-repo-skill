@@ -4,7 +4,8 @@
 # Default repo list for fleet-release-github.sh survey (--repos/--repos-file
 # override it). One repo per line, org-relative; '#' and blank lines ignored.
 #
-# Snapshot of the public GitHub skill fleet as of the 2026-09-17 sweep.
+# Snapshot of the public GitHub skill fleet, last diffed against the
+# marketplace manifest on 2026-11-08.
 # Naming conventions do NOT enumerate this fleet (plugins and oddly-named
 # repos exist), and a name filter over the org returns repos that are not
 # skills at all — composer-agent-skill-plugin and composer-patches-plugin are
@@ -33,6 +34,7 @@ data-tools-skill
 docker-development-skill
 enterprise-readiness-skill
 file-search-skill
+formal-model-checking-skill
 german-technical-writing-skill
 git-workflow-skill
 github-project-skill
