@@ -263,12 +263,13 @@ an id from one call's output and pass it to the next, the agent has to hold that
 id across turns, copy it without error, and re-read it after a compaction. Each
 of those steps costs tokens, and each one can fail.
 
-Give the script the lookup instead. The agent names what it wants changed, and
-the script finds its own earlier output — its own entries, by sender and key —
-and acts on it. `matrix-react.py --replace OLD NEW` in `netresearch/matrix-skill`
-swaps a status reaction this way: it reads the event's annotations through the
-relations API, keeps the ones the configured user sent, and redacts those. The
-agent never sees a reaction id.
+Give the script the lookup instead. The agent names the change, and the script
+finds the entries it acts on — the configured account's entries, by sender and
+key, whichever client created them. `matrix-react.py --replace OLD NEW` in
+`netresearch/matrix-skill` swaps a status reaction this way: it reads the
+event's annotations through the relations API, keeps the ones the configured
+account sent, and redacts those. The agent does not need to carry a reaction id
+between calls.
 
 Keep the id in the output for a human or a log. Do not make a later step of the
 documented workflow depend on the agent carrying it.
