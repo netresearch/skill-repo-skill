@@ -239,6 +239,7 @@ jobs:
           # renovate: datasource=github-releases depName=koalaman/shellcheck
           SHELLCHECK_VERSION: '0.11.0'
           SHELLCHECK_SHA256: '8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198'
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Auto-discover shell scripts in skill directories and root scripts/
           SCRIPTS=$(find . -path './.skill-repo-tools' -prune -o -path './.git' -prune -o \
@@ -257,12 +258,27 @@ jobs:
           # the same file, which is the divergence this input exists to end.
           # It also removes the apt stall that #245 had to bound: a pinned
           # tarball with a checksum cannot hang for 37 minutes on a mirror.
-          # --proto/--proto-redir pin the scheme for the request AND for the
-          # redirect GitHub answers with, so -L cannot be walked onto http
-          # (githubactions:S6506).
-          curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
-            -fsSL --max-time 120 -o /tmp/shellcheck.tar.xz \
-            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          # The tarball comes through the authenticated REST API (`gh release
+          # download` with the job token), not an anonymous request to the
+          # github.com download URL: on 2026-11-08 the anonymous fetch hung
+          # for 120 s with 0 bytes in 3 of 4 runs, during a GitHub incident
+          # about timeouts for unauthenticated users. Each attempt is bounded, three
+          # attempts at most, and the checksum below still decides.
+          ASSET="shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.xz"
+          for attempt in 1 2 3; do
+            rm -f /tmp/shellcheck.tar.xz
+            if timeout 60 gh release download "v${SHELLCHECK_VERSION}" \
+                --repo koalaman/shellcheck --pattern "$ASSET" \
+                --output /tmp/shellcheck.tar.xz; then
+              break
+            fi
+            echo "::warning::shellcheck download attempt ${attempt} failed"
+            if [[ "$attempt" -eq 3 ]]; then
+              echo "::error::shellcheck ${SHELLCHECK_VERSION} could not be downloaded"
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
           echo "${SHELLCHECK_SHA256}  /tmp/shellcheck.tar.xz" | sha256sum -c
           tar -xJf /tmp/shellcheck.tar.xz -C /tmp "shellcheck-v${SHELLCHECK_VERSION}/shellcheck"
           sudo install -m 0755 "/tmp/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
