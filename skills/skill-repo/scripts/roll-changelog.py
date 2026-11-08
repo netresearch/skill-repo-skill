@@ -13,7 +13,7 @@ Usage:
     roll-changelog.py FILE VERSION [--date YYYY-MM-DD] [--dry-run] [--seed-entry TEXT]
 
 Why this exists (references/release-discipline.md, "Changelog Rollover"):
-five released-heading shapes coexist in the fleet, and a roll anchored on one
+six released-heading shapes coexist in the fleet, and a roll anchored on one
 shape matches nothing in the others and exits 0 — the release then ships with
 its content still under Unreleased and nobody sees an error. This script
 detects the shape from the newest *released* heading and reproduces it,
@@ -22,6 +22,7 @@ including the dash character and, for the linked form, the tag inside the URL.
 Shapes:
     bracketed dash      ## [1.2.3] - 2026-08-08
     bare paren          ## 1.2.3 (2026-08-08)
+    bare dash           ## 1.2.3 - 2026-08-08
     bracketed em dash   ## [0.3.23] — 2026-07-02
     linked              ## [v2.6.0](https://.../releases/tag/v2.6.0) — 2026-02-28
     none yet            first release: default to the keep-a-changelog
@@ -62,6 +63,9 @@ BRACKETED_RE = re.compile(
     r"^##\s+\[(?P<tag>[^\]]+)\]\s+(?P<dash>[-—–])\s+(?P<date>.+?)\s*$"
 )
 BARE_PAREN_RE = re.compile(r"^##\s+(?P<tag>\S+)\s+\((?P<date>[^)]+)\)\s*$")
+BARE_DASH_RE = re.compile(
+    r"^##\s+(?P<tag>v?\d[^\s\[\]]*)\s+(?P<dash>[-—–])\s+(?P<date>\S+)\s*$"
+)
 
 
 def fail(msg: str) -> None:
@@ -109,6 +113,11 @@ def released_heading(version: str, sample: str, date: str) -> str:
         old_tag = m.group("tag")
         new_tag = f"v{version}" if old_tag.startswith("v") else version
         return f"## {new_tag} ({date})"
+    m = BARE_DASH_RE.match(sample)
+    if m:
+        old_tag = m.group("tag")
+        new_tag = f"v{version}" if old_tag.startswith("v") else version
+        return f"## {new_tag} {m.group('dash')} {date}"
     fail(f"unrecognized released-heading shape: '{sample.rstrip()}'")
     raise AssertionError  # unreachable; fail() exits
 

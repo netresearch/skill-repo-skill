@@ -239,13 +239,15 @@ first:
 3. Merge it, then bump the repo in its own workdir (see "A batch that waits on a
    prerequisite PR" above).
 
-**Five heading shapes exist in the fleet**, not the two this page claimed until
-v1.29.0 — the 2026-08-08 sweep hit all of them across 63 repos:
+**Six heading shapes exist in the fleet**, not the two this page claimed until
+v1.29.0 — the 2026-08-08 sweep hit five of them across 63 repos, and the
+2026-11-08 sweep found the bare dash in tender-estimation:
 
 | Shape | Example | Seen in |
 |---|---|---|
 | bracketed dash | `## [1.2.3] - 2026-08-08` | most keep-a-changelog repos |
 | bare paren | `## 1.2.3 (2026-08-08)` | it-maintenance-skill, gitlab-skill |
+| bare dash | `## 1.2.3 - 2026-08-08` | tender-estimation |
 | bracketed em dash | `## [0.3.23] — 2026-07-02` | nr-monatliche-abrechnung |
 | linked | `## [v2.6.0](…/releases/tag/v2.6.0) — 2026-02-28` | typo3-docs-skill |
 | `[Unreleased]` only, no released heading yet | — | source-digest-skill |
@@ -254,7 +256,7 @@ A roll anchored on one shape matches nothing in the others and exits 0, so the
 release ships with its content still under `Unreleased` and nobody sees an error.
 Detect the shape from the newest *released* heading and reproduce it — including
 the dash character and, for the linked form, rewriting the tag inside the URL.
-The fifth shape has no released heading to copy from; that is the first release,
+The last shape has no released heading to copy from; that is the first release,
 not an error, so default to the keep-a-changelog form its `[Unreleased]` bracket
 already implies rather than aborting.
 

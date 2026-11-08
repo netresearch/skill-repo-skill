@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/roll-changelog.sh — exercises skills/skill-repo/scripts/roll-changelog.py.
 #
-# The five released-heading shapes documented in release-discipline.md each get
+# The six released-heading shapes documented in release-discipline.md each get
 # a round-trip, and every refusal guard is observed to actually fail on a
 # violating fixture — a guard that has never been seen red proves only that it
 # runs, not that it guards.
@@ -83,6 +83,25 @@ check "bare paren: exits 0" 0 "$(roll "$f" 1.12.0 --date 2026-08-13)"
 check "bare paren: shape reproduced" yes \
     "$(grep -qx '## 1.12.0 (2026-08-13)' "$f" && echo yes || echo no)"
 check "bare paren: unbracketed Unreleased preserved" yes \
+    "$(grep -qx '## Unreleased' "$f" && echo yes || echo no)"
+
+# --- 2b. bare dash (tender-estimation shape) ---------------------------------
+f="$WORK/baredash.md"
+cat > "$f" <<'EOF'
+# Changelog
+
+## Unreleased
+
+- something
+
+## 1.4.0 - 2026-10-23
+
+- earlier
+EOF
+check "bare dash: exits 0" 0 "$(roll "$f" 1.5.0 --date 2026-11-08)"
+check "bare dash: shape reproduced" yes \
+    "$(grep -qx '## 1.5.0 - 2026-11-08' "$f" && echo yes || echo no)"
+check "bare dash: unbracketed Unreleased preserved" yes \
     "$(grep -qx '## Unreleased' "$f" && echo yes || echo no)"
 
 # --- 3. bracketed em dash ----------------------------------------------------

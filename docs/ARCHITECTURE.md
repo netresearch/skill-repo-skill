@@ -87,7 +87,7 @@ jobs:
 ### Release Tooling
 
 - `skills/skill-repo/scripts/bump-version.sh` / `check-version-parity.sh` / `sync-plugin-manifest.sh` -- Single-repo version surfaces: bump, parity check, manifest projection.
-- `skills/skill-repo/scripts/roll-changelog.py` -- Shape-aware CHANGELOG rollover (all five fleet heading shapes, fence-aware, fails on a no-op roll).
+- `skills/skill-repo/scripts/roll-changelog.py` -- Shape-aware CHANGELOG rollover (all six fleet heading shapes, fence-aware, fails on a no-op roll).
 - `skills/skill-repo/scripts/fleet-release-github.sh` -- Fleet release driver for the public GitHub org; shared host-neutral engine in `fleet-release-common.sh` (private-host fleets vendor the engine and ship their own driver in their own infrastructure), default repo list in `fleet-repos-github.txt`. Flow and guarantees: `skills/skill-repo/references/release-discipline.md`.
 
 ### Templates
