@@ -476,6 +476,68 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
 }
 
 # ---------------------------------------------------------------------------
+# Fleet list drift
+# ---------------------------------------------------------------------------
+# The default list is a snapshot of the marketplace manifest, refreshed by
+# hand, and the hand refresh was missed twice: the GitLab list was three repos
+# short on 2026-09-17, and formal-model-checking-skill was never surveyed
+# until #449. The survey reads the manifest it is a snapshot of and records
+# which manifest repos the list leaves out; the manifest phase appends that
+# record to manifest.md, the file the operator approves, and prints it after
+# the approval steps. A repo the list leaves out on purpose is
+# named on a `# not-released: <repo>` line in the list file.
+host_list_drift() { # LISTFILE — one record on stdout:
+    # "checked <manifest-count>" + one "missing <repo>" line per gap, or
+    # "unchecked <reason>" when the manifest could not be read. "unchecked"
+    # is never "no drift": a failed read must not look like a clean list.
+    local list="$1" mp="${FR_MARKETPLACE_REPO:-$FR_ORG/claude-code-marketplace}" raw repos
+    if ! raw=$(gh_json "repos/$mp/contents/.claude-plugin/marketplace.json"); then
+        echo "unchecked cannot read $mp/.claude-plugin/marketplace.json"
+        return 0
+    fi
+    if ! repos=$(jq -r '.content' <<< "$raw" | base64 -d 2> /dev/null \
+        | jq -r --arg org "$FR_ORG/" \
+            '.plugins[] | select(.source.source? == "github") | (.source.repo // empty)
+             | select(startswith($org)) | ltrimstr($org)' \
+            2> /dev/null | sort -u) || [[ -z "$repos" ]]; then
+        echo "unchecked $mp/.claude-plugin/marketplace.json names no $FR_ORG repo"
+        return 0
+    fi
+    echo "checked $(wc -l <<< "$repos" | tr -d ' ')"
+    comm -23 <(printf '%s\n' "$repos") \
+        <( { grep -v '^[[:space:]]*\(#\|$\)' "$list"
+             sed -n 's/^#[[:space:]]*not-released:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$list"; } \
+           | sed 's/[[:space:]]*$//' | sort -u) \
+        | sed 's/^/missing /'
+}
+
+fr_manifest_drift_section() { # DRIFTFILE — the manifest section for its record
+    local f="$1"
+    [[ -s "$f" ]] || return 0
+    echo
+    echo "## Fleet list drift"
+    echo
+    case "$(head -n 1 "$f")" in
+        checked*)
+            if grep -q '^missing ' "$f"; then
+                echo "The marketplace ships repos the default list leaves out, so this"
+                echo "survey never read them. Add each to fleet-repos-github.txt, or name"
+                echo "it on a '# not-released:' line, then re-run survey:"
+                echo
+                sed -n 's/^missing \(.*\)/- \1/p' "$f"
+            else
+                echo "Every marketplace repo is on the default list or named on a"
+                echo "'# not-released:' line ($(head -n 1 "$f" | cut -d' ' -f2) manifest repos)."
+            fi
+            ;;
+        *)
+            echo "NOT CHECKED: $(head -n 1 "$f" | cut -d' ' -f2-). Whether the"
+            echo "default list covers the marketplace is unknown for this survey."
+            ;;
+    esac
+}
+
+# ---------------------------------------------------------------------------
 # Dispatch
 # ---------------------------------------------------------------------------
 # Sourced (tests/fleet-release.sh exercises the host callbacks against a stub
@@ -515,11 +577,21 @@ case "$CMD" in
         [[ -n "$REPOS" ]] || fr_die "no repos: pass --repos/--repos-file or ship fleet-repos-github.txt"
         # shellcheck disable=SC2086  # word splitting is the point
         fr_survey $REPOS
+        # Only the default list claims to be the fleet; --repos/--repos-file
+        # is a deliberate subset (a re-survey of one repo, for instance), and
+        # a re-survey keeps the record of the full one.
+        if [[ -z "$REPOS_INLINE" && -z "$REPOS_FILE" ]]; then
+            host_list_drift "$SCRIPT_DIR/fleet-repos-github.txt" > "$FR_WORKDIR/list-drift.txt"
+            fr_manifest_drift_section "$FR_WORKDIR/list-drift.txt"
+        fi
         ;;
     manifest)
         fr_resolve_self_login
         fr_preflight manifest gh
         fr_manifest
+        if [[ -s "$FR_WORKDIR/list-drift.txt" ]]; then
+            fr_manifest_drift_section "$FR_WORKDIR/list-drift.txt" | tee -a "$FR_WORKDIR/manifest.md"
+        fi
         ;;
     bump)
         fr_resolve_self_login
