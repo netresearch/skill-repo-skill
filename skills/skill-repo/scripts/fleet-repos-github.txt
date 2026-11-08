@@ -21,10 +21,15 @@
 # repos by it on 2026-09-17 (coding-ai/gitlab-skill!142).
 # The survey dedupes rename redirects by resolved full_name, so a stale name
 # here becomes a DUPLICATE row, never a second bump PR.
+# The survey runs that diff itself when it uses this default list and prints
+# the result as "Fleet list drift" in the manifest; a repo the manifest names
+# and this list leaves out is listed there.
 # One deliberate exception to "the manifest defines the fleet":
 # coding_agent_cli_toolset ships the cli-tools plugin but is versioned by
 # commit (no plugin.json version, no release tags), so a bump would be wrong.
-# It replaced cli-tools-skill, archived 2026-09.
+# It replaced cli-tools-skill, archived 2026-09. The line below tells the
+# drift check so; a repo named there is not surveyed and not reported.
+# not-released: coding_agent_cli_toolset
 agent-harness-skill
 agent-rules-skill
 automated-assessment-skill

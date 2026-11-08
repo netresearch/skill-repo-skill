@@ -1133,6 +1133,59 @@ check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3
 check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
     "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
 
+# --- fleet list drift: the default list against the marketplace manifest ------
+# The list missed formal-model-checking-skill until #449, and nothing said so:
+# the survey only reads the repos it is given. host_list_drift reads the
+# manifest the list is a snapshot of. A failed read must say "unchecked",
+# never look like a list with no gaps.
+echo
+echo "fleet-release-github.sh (fleet list drift, stub gh)"
+DRIFT_BIN="$WORK/drift-bin"
+mkdir -p "$DRIFT_BIN"
+cat > "$DRIFT_BIN/gh" << 'STUB'
+#!/usr/bin/env bash
+[ -n "$GH_STUB_FAIL" ] && { echo '{"message":"Bad credentials","status":"401"}'; exit 1; }
+jq -n --arg c "$(base64 -w0 < "$GH_STUB_MARKETPLACE")" '{content: $c}'
+STUB
+chmod +x "$DRIFT_BIN/gh"
+jq -n '{plugins: [
+    {name: "a", source: {source: "github", repo: "netresearch/alpha-skill"}},
+    {name: "b", source: {source: "github", repo: "netresearch/beta-skill"}},
+    {name: "c", source: {source: "github", repo: "netresearch/cli-toolset"}},
+    {name: "x", source: {source: "github", repo: "elsewhere/foreign-skill"}},
+    {name: "l", source: "./local-plugin"}]}' > "$WORK/marketplace.json"
+drift() { # LISTFILE [FAIL] — the drift record as one line
+    local list="$1" fail="${2:-}"
+    # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
+    PATH="$DRIFT_BIN:$PATH" GH_STUB_MARKETPLACE="$WORK/marketplace.json" GH_STUB_FAIL="$fail" \
+        timeout -k 5 20 bash -c 'source "$1" && host_list_drift "$2"' \
+        _ "$SCRIPTS/fleet-release-github.sh" "$list" 2> /dev/null < /dev/null | paste -sd ' ' -
+}
+printf '# head\nalpha-skill\n# not-released: cli-toolset\n' > "$WORK/list-gap.txt"
+printf 'alpha-skill\nbeta-skill\n\n# not-released: cli-toolset\n' > "$WORK/list-full.txt"
+printf 'alpha-skill\nbeta-skill\n' > "$WORK/list-noexc.txt"
+check "drift: a manifest repo missing from the list is reported" "checked 3 missing beta-skill" \
+    "$(drift "$WORK/list-gap.txt")"
+check "drift: a complete list reports no gap (control)" "checked 3" \
+    "$(drift "$WORK/list-full.txt")"
+check "drift: without its not-released line the exception is a gap" "checked 3 missing cli-toolset" \
+    "$(drift "$WORK/list-noexc.txt")"
+check "drift: an unreadable manifest is unchecked, never clean" "unchecked" \
+    "$(drift "$WORK/list-full.txt" fail | cut -d' ' -f1)"
+section() { # RECORD — the manifest section for a drift record
+    local record="$1"
+    printf '%s\n' "$record" | tr '|' '\n' > "$WORK/drift-rec.txt"
+    # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
+    bash -c 'source "$1" && fr_manifest_drift_section "$2"' \
+        _ "$SCRIPTS/fleet-release-github.sh" "$WORK/drift-rec.txt" 2> /dev/null < /dev/null
+}
+check "drift section: lists each missing repo" yes \
+    "$(section 'checked 3|missing beta-skill' | grep -qx -- '- beta-skill' && echo yes || echo no)"
+check "drift section: an unchecked record says NOT CHECKED" yes \
+    "$(section 'unchecked cannot read x' | grep -q '^NOT CHECKED: cannot read x' && echo yes || echo no)"
+check "drift section: a clean record names no repo (control)" no \
+    "$(section 'checked 3' | grep -q '^- ' && echo yes || echo no)"
+
 # --- preflight: survey and bump run roll-changelog.py through uv (retro-skill#201)
 # Without uv the survey classified every CHANGELOG as "unknown" without a word,
 # and the bump failed after bump-version.sh had already changed the worktree.
