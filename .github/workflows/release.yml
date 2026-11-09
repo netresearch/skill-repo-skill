@@ -181,13 +181,41 @@ jobs:
           # --- Helper: copy skill contents ---
           copy_skill() {
             local src="$1" dst="$2"
-            for item in SKILL.md references scripts assets templates examples; do
+            for item in SKILL.md references scripts checker assets templates examples; do
               if [[ -e "$src/$item" ]]; then
                 cp -r "$src/$item" "$dst/"
               fi
             done
             [[ -f "$src/checkpoints.yaml" ]] && cp "$src/checkpoints.yaml" "$dst/"
             cp LICENSE-MIT LICENSE-CC-BY-SA-4.0 "$dst/" 2>/dev/null || true
+          }
+
+          # --- Helper: fail on a SKILL.md path the archive does not carry ---
+          # The list above is an allow-list, so a directory it does not name
+          # is dropped without a word: typo3-site-conformance-skill's archives
+          # shipped no checker/ while its SKILL.md told the agent to run
+          # checker/check.py (skill-repo-skill#368). Every relative path in
+          # SKILL.md that exists in the skill directory must therefore exist
+          # in the staged copy too. evals/ and tests/ stay out of every
+          # archive on purpose - they are development material, and SKILL.md
+          # files link evals/ for maintainers - so references into them are
+          # not checked. A root-level skill (".") is skipped: its directory is
+          # the whole repository, where docs/ or tests/ are no skill content.
+          REFERENCE_ERRORS=0
+          check_references() {
+            local src="$1" dst="$2" ref dir
+            [[ "$src" == "." || ! -f "$src/SKILL.md" ]] && return 0
+            while IFS= read -r ref; do
+              ref="${ref#./}"
+              while [[ "$ref" == *. ]]; do ref="${ref%.}"; done
+              dir="${ref%%/*}"
+              case "$dir" in "" | . | .. | evals | tests) continue ;; esac
+              [[ -e "$src/$ref" ]] || continue
+              [[ -e "$dst/$ref" ]] && continue
+              echo "::error file=$src/SKILL.md::$src/SKILL.md references $ref, which exists in the repository but is missing from the release archive" \
+                "(add $dir to copy_skill() in netresearch/skill-repo-skill .github/workflows/release.yml)"
+              REFERENCE_ERRORS=1
+            done < <(grep -oE '(^|[^A-Za-z0-9_./-])[.A-Za-z0-9_-]+/[.A-Za-z0-9_/-]*' "$src/SKILL.md" | sed -E 's#^[^.A-Za-z0-9_-]##' | sort -u)
           }
 
           # --- Package each skill standalone ---
@@ -218,11 +246,17 @@ jobs:
             SKILL_DIST="$SKILL_STAGE/$SKILL_NAME"
             mkdir -p "$SKILL_DIST"
             copy_skill "$SKILL_SRC" "$SKILL_DIST"
+            check_references "$SKILL_SRC" "$SKILL_DIST"
 
             (cd "$SKILL_STAGE" && zip -qr "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.zip" "$SKILL_NAME")
             (cd "$SKILL_STAGE" && tar -czf "../releases/${SKILL_NAME}-skill-${TAG_VERSION}.tar.gz" "$SKILL_NAME")
             echo "Created ${SKILL_NAME}-skill-${TAG_VERSION}.zip/.tar.gz"
           done <<< "$SKILL_PATHS"
+
+          if [[ "$REFERENCE_ERRORS" -ne 0 ]]; then
+            echo "::error::A skill archive is missing content its SKILL.md references; see the errors above."
+            exit 1
+          fi
 
           # --- Package full plugin ---
           echo "=== Packaging plugin: $PLUGIN_NAME ==="

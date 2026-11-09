@@ -83,7 +83,8 @@ pass "extracted the packaging step from release.yml"
 # --- a fixture repository the step can package -----------------------------
 
 REPO="$WORK/repo"
-mkdir -p "$REPO/.claude-plugin" "$REPO/skills/demo-one/references" "$REPO/skills/demo-two"
+mkdir -p "$REPO/.claude-plugin" "$REPO/skills/demo-one/references" "$REPO/skills/demo-one/checker" \
+	"$REPO/skills/demo-one/evals" "$REPO/skills/demo-two"
 cat >"$REPO/.claude-plugin/plugin.json" <<'JSON'
 {
   "name": "demo-plugin",
@@ -91,11 +92,36 @@ cat >"$REPO/.claude-plugin/plugin.json" <<'JSON'
   "skills": ["./skills/demo-one", "./skills/demo-two"]
 }
 JSON
-printf -- '---\nname: demo-one\n---\n' >"$REPO/skills/demo-one/SKILL.md"
+# demo-one references a checker/ directory (typo3-site-conformance-skill's
+# layout, skill-repo-skill#368) and links evals/, which is deliberately left
+# out of every archive and must not fail the step.
+cat >"$REPO/skills/demo-one/SKILL.md" <<'MD'
+---
+name: demo-one
+---
+Run `python3 checker/check.py <repo>`. Rules: [one](references/one.md).
+The [eval rubric](evals/evals.json) is for maintainers.
+MD
 printf -- '---\nname: demo-two\n---\n' >"$REPO/skills/demo-two/SKILL.md"
 echo "reference" >"$REPO/skills/demo-one/references/one.md"
+echo "print('check')" >"$REPO/skills/demo-one/checker/check.py"
+echo "{}" >"$REPO/skills/demo-one/evals/evals.json"
 echo "MIT" >"$REPO/LICENSE-MIT"
 echo "CC" >"$REPO/LICENSE-CC-BY-SA-4.0"
+
+# A second copy whose SKILL.md references a directory the allow-list does not
+# ship: the step must refuse to build archives that drop it. Copied before the
+# first run, so it holds no dist/ of its own.
+BROKEN="$WORK/broken"
+cp -r "$REPO" "$BROKEN"
+mkdir -p "$BROKEN/skills/demo-two/config"
+echo "key: value" >"$BROKEN/skills/demo-two/config/settings.yaml"
+cat >"$BROKEN/skills/demo-two/SKILL.md" <<'MD'
+---
+name: demo-two
+---
+Read `config/settings.yaml` first.
+MD
 
 (cd "$REPO" && TAG_VERSION=v9.9.9 bash "$WORK/package.sh" >"$WORK/package.log" 2>&1) || {
 	fail "the packaging step exited non-zero; log:"
@@ -132,9 +158,14 @@ check() {
 	# carries BOTH its own manifest and the nested skills: asserting only the
 	# nested SKILL.md would stay green if the workflow stopped copying
 	# .claude-plugin, which is the half a plugin consumer actually needs.
+	# checker/ is asserted in both archive kinds that carry demo-one: the
+	# allow-list once dropped it from both (skill-repo-skill#368).
 	local wanted
 	if [ "$expected" = "demo-plugin" ]; then
 		wanted="$expected/.claude-plugin/plugin.json $expected/skills/demo-one/SKILL.md"
+		wanted="$wanted $expected/skills/demo-one/checker/check.py"
+	elif [ "$expected" = "demo-one" ]; then
+		wanted="$expected/SKILL.md $expected/checker/check.py"
 	else
 		wanted="$expected/SKILL.md"
 	fi
@@ -154,6 +185,17 @@ for name in demo-one demo-two; do
 done
 check "$REL/demo-plugin-plugin-v9.9.9.zip" "demo-plugin"
 check "$REL/demo-plugin-plugin-v9.9.9.tar.gz" "demo-plugin"
+
+# --- a referenced directory the archive would drop -------------------------
+
+if (cd "$BROKEN" && TAG_VERSION=v9.9.9 bash "$WORK/package.sh" >"$WORK/broken.log" 2>&1); then
+	fail "the packaging step succeeded although demo-two/SKILL.md references config/, which no archive carries"
+elif grep -q '^::error file=skills/demo-two/SKILL.md::.*references config/settings.yaml' "$WORK/broken.log"; then
+	pass "the packaging step fails on a SKILL.md reference the archive does not carry"
+else
+	fail "the packaging step failed, but not with the missing-reference error; log:"
+	sed 's/^/      /' "$WORK/broken.log"
+fi
 
 echo ""
 if [ "$FAILED" -eq 0 ]; then
