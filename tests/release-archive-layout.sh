@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: MIT
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
-# Every release archive must unpack into ONE top-level folder.
+# Every release archive must unpack into ONE top-level folder, carry the
+# directories its SKILL.md references (checker/, skill-repo-skill#368), and the
+# step must refuse to build when a referenced directory would be dropped.
 #
 # `zip -qr ... .` from a staging directory that WAS the content root put SKILL.md
 # at the archive root. Two things break on that, and neither shows up in the
