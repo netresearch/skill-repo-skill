@@ -278,7 +278,7 @@ Copy it into `.github/workflows/npm-pack-smoke.yml` in your skill repo. It catch
 
 Skill repos use the placeholder version `0.0.0-source` and **must** set `"private": true` to guard against accidental `npm publish` of the placeholder. Real publishes (when/if added later) flip `private` to `false` (or remove it) at release time and set a real semver.
 
-`validate-skill.sh` checks this: a `package.json` whose version is `0.0.0-source` without the boolean `"private": true` is reported (a warning for now, an error once every skill repository carries the key).
+`validate-skill.sh` checks this: a `package.json` whose version is `0.0.0-source` without the boolean `"private": true` is an error.
 
 ### Limitation: SKILL.md content only
 

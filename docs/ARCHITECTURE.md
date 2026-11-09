@@ -80,7 +80,7 @@ jobs:
 - No `composer.lock` committed
 - No Python bytecode committed (`*.pyc`, `*.pyo`, anything under a `__pycache__/` directory) — a **warning**, read from the git index, so an untracked cache on disk is no finding
 - `composer.json`: type, license SPDX, name matches repo, skill plugin dependency, skill path exists
-- `package.json` (when present): the placeholder version `0.0.0-source` comes with `"private": true` — a **warning** for now, an error once the fleet carries the key
+- `package.json` (when present): an error when the placeholder version `0.0.0-source` lacks the boolean `"private": true`; a `package.json` that does not parse is a **warning**
 - `plugin.json`: name matches SKILL.md, skills is array, paths exist, author URL correct
 - `README.md`: Netresearch reference; **warnings** (errors with `STRICT_README=1`, or `true`/`yes`) if required level-2 sections from `skills/skill-repo/references/readme-template.md` are missing (`What this skill solves`, `Why this is a skill (model delta)`, `Use when`, `Expected outputs`, `Context requirements`, `Example prompts`, `Related skills`, `Installation`, `Contributing`, `License`); a **warning** for a static `img.shields.io/badge/version-` badge, which no release step updates (the live form is `img.shields.io/github/v/release/netresearch/<repo>?sort=semver`)
 - `checkpoints.yaml` presence in the skill directory — **warning** only, never fails; suppress by adding a line `Checkpoints: none (justified — <reason>)` to `SKILL.md` or `README.md` for skills that are not suitable per the add-checkpoints skill's suitability criteria (e.g. purely conceptual skills)
