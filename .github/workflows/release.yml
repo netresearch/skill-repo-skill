@@ -209,13 +209,20 @@ jobs:
               ref="${ref#./}"
               while [[ "$ref" == *. ]]; do ref="${ref%.}"; done
               dir="${ref%%/*}"
-              case "$dir" in "" | . | .. | evals | tests) continue ;; esac
+              case "$dir" in
+                "" | . | .. | evals | tests) continue ;;
+                *) ;;
+              esac
               [[ -e "$src/$ref" ]] || continue
               [[ -e "$dst/$ref" ]] && continue
               echo "::error file=$src/SKILL.md::$src/SKILL.md references $ref, which exists in the repository but is missing from the release archive" \
                 "(add $dir to copy_skill() in netresearch/skill-repo-skill .github/workflows/release.yml)"
               REFERENCE_ERRORS=1
-            done < <(grep -oE '(^|[^A-Za-z0-9_./-])[.A-Za-z0-9_-]+/[.A-Za-z0-9_/-]*' "$src/SKILL.md" | sed -E 's#^[^.A-Za-z0-9_-]##' | sort -u)
+            # ${CLAUDE_SKILL_DIR}/scripts/x.sh is the same skill-relative path
+            # as scripts/x.sh; the prefix is replaced by a space first, or the
+            # path after it would not be extracted at all.
+            done < <(sed -E 's#\$\{?CLAUDE_SKILL_DIR\}?/# #g' "$src/SKILL.md" \
+              | grep -oE '(^|[^A-Za-z0-9_./-])[.A-Za-z0-9_-]+/[.A-Za-z0-9_/-]*' | sed -E 's#^[^.A-Za-z0-9_-]##' | sort -u)
           }
 
           # --- Package each skill standalone ---

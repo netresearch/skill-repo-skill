@@ -112,7 +112,8 @@ echo "MIT" >"$REPO/LICENSE-MIT"
 echo "CC" >"$REPO/LICENSE-CC-BY-SA-4.0"
 
 # A second copy whose SKILL.md references a directory the allow-list does not
-# ship: the step must refuse to build archives that drop it. Copied before the
+# ship, in the ${CLAUDE_SKILL_DIR}/ form most fleet skills use: the step must
+# refuse to build archives that drop it. Copied before the
 # first run, so it holds no dist/ of its own.
 BROKEN="$WORK/broken"
 cp -r "$REPO" "$BROKEN"
@@ -122,7 +123,7 @@ cat >"$BROKEN/skills/demo-two/SKILL.md" <<'MD'
 ---
 name: demo-two
 ---
-Read `config/settings.yaml` first.
+Read `${CLAUDE_SKILL_DIR}/config/settings.yaml` first.
 MD
 
 (cd "$REPO" && TAG_VERSION=v9.9.9 bash "$WORK/package.sh" >"$WORK/package.log" 2>&1) || {
