@@ -987,6 +987,33 @@ else
     error "composer.json not found"
 fi
 
+# --- package.json: the placeholder version is never published ---
+# A skill repo's package.json carries the placeholder version 0.0.0-source and
+# must set "private": true, so an accidental `npm publish` is refused instead of
+# shipping the placeholder (references/installation-methods.md). Measured
+# 2026-11-09: 17 of the netresearch/*-skill repositories on GitHub lacked the
+# key. A warning until those repositories carry it; it becomes an error then.
+if [[ -f "$REPO_DIR/package.json" ]]; then
+    PKG_PRIVATE=$(python3 - "$REPO_DIR/package.json" <<'PYEOF' 2>/dev/null || echo "UNREADABLE"
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as f:
+    data = json.load(f)
+if not isinstance(data, dict) or data.get('version') != '0.0.0-source':
+    print('NOT-PLACEHOLDER')
+elif data.get('private') is True:
+    print('PRIVATE')
+else:
+    print('PUBLIC')
+PYEOF
+)
+    case "$PKG_PRIVATE" in
+        PRIVATE) success "package.json version 0.0.0-source is marked \"private\": true" ;;
+        PUBLIC) warning "package.json has the placeholder version 0.0.0-source but no \"private\": true — an accidental npm publish would ship the placeholder; add \"private\": true (see skills/skill-repo/references/installation-methods.md)" ;;
+        NOT-PLACEHOLDER) ;;
+        *) warning "package.json could not be parsed as JSON" ;;
+    esac
+fi
+
 # --- plugin.json checks ---
 PLUGIN_FILE="$REPO_DIR/.claude-plugin/plugin.json"
 if [[ -f "$PLUGIN_FILE" ]]; then

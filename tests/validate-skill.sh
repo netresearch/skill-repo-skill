@@ -845,6 +845,41 @@ printf 'bytecode' > "$BC_DIR/evals/__pycache__/ü b.pyc"; git -C "$BC_DIR" add -
 expect_output expect-present "(2 file(s)): evals/__pycache__/a.cpython-315.pyc, evals/__pycache__/ü b.pyc —" \
     "the bytecode warning lists several files readably" "$(bash "$VALIDATOR" "$BC_DIR" 2>&1)"
 
+echo "== package.json: the 0.0.0-source placeholder is private =="
+# pkg_case <name> <package.json content|-> <warn|ok|quiet> <label>
+# Case one is the head of agent-rules-skill's package.json on 2026-11-09.
+pkg_case() {
+    local name="$1" json="$2" want="$3" label="$4" dir out got=quiet
+    dir="$(fixture "pkg_$name" "${hdr}description: Use when doing X\n---\n# T\n")"
+    [[ "$json" == - ]] || printf '%s\n' "$json" > "$dir/package.json"
+    out="$(bash "$VALIDATOR" "$dir" 2>&1)"
+    if grep -qE 'WARNING.*package\.json (has the placeholder version|could not be parsed)' <<<"$out"; then
+        got=warn
+    elif grep -qF 'package.json version 0.0.0-source is marked "private": true' <<<"$out"; then
+        got=ok
+    fi
+    if [[ "$got" == "$want" ]]; then ((PASS++)); else
+        echo "  FAIL $label: expected $want, got $got"; ((FAIL++)); fi
+    return 0
+}
+pkg_case real '{
+  "name": "@netresearch/agent-rules-skill",
+  "version": "0.0.0-source",
+  "description": "Netresearch AI skill for generating AGENTS.md, copilot-instructions.md, and other agent rule files.",
+  "license": "(MIT AND CC-BY-SA-4.0)"
+}' warn \
+    "a placeholder package without private warns"
+pkg_case private '{"name": "@netresearch/x", "version": "0.0.0-source", "private": true}' ok \
+    "a placeholder package with private: true passes"
+pkg_case private_false '{"name": "@netresearch/x", "version": "0.0.0-source", "private": false}' warn \
+    "private: false on the placeholder warns"
+pkg_case private_string '{"name": "@netresearch/x", "version": "0.0.0-source", "private": "true"}' warn \
+    "the string \"true\" is not the boolean the rule asks for"
+pkg_case real_version '{"name": "@netresearch/x", "version": "1.2.3"}' quiet \
+    "a real version is not this check's business"
+pkg_case broken '{"name": ' warn "an unparseable package.json warns"
+pkg_case absent - quiet "a repository without package.json is no finding"
+
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
 [[ $FAIL -eq 0 ]] || { echo "Smoke tests FAILED"; exit 1; }

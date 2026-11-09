@@ -278,6 +278,8 @@ Copy it into `.github/workflows/npm-pack-smoke.yml` in your skill repo. It catch
 
 Skill repos use the placeholder version `0.0.0-source` and **must** set `"private": true` to guard against accidental `npm publish` of the placeholder. Real publishes (when/if added later) flip `private` to `false` (or remove it) at release time and set a real semver.
 
+`validate-skill.sh` checks this: a `package.json` whose version is `0.0.0-source` without the boolean `"private": true` is reported (a warning for now, an error once every skill repository carries the key).
+
 ### Limitation: SKILL.md content only
 
 The npm path registers only `SKILL.md` content into `AGENTS.md`. **Slash commands** (defined under `commands/`) and **PreToolUse / PostToolUse hooks** (defined under `.claude-plugin/`) are loaded by Claude Code's plugin mechanism — not by the coordinator scanning `node_modules`. Repos that ship those features should document this explicitly in their README (a `> **Limitation:**` callout immediately after the npm install snippet) so consumers know they need the marketplace install for the full skill.
