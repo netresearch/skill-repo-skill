@@ -992,7 +992,8 @@ fi
 # must set "private": true, so an accidental `npm publish` is refused instead of
 # shipping the placeholder (references/installation-methods.md). Measured
 # 2026-11-09: 17 of the netresearch/*-skill repositories on GitHub lacked the
-# key. A warning until those repositories carry it; it becomes an error then.
+# key; it was a warning until each of them carried it, and is an error since.
+# An unparseable package.json stays a warning: npm itself refuses to publish it.
 if [[ -f "$REPO_DIR/package.json" ]]; then
     PKG_PRIVATE=$(python3 - "$REPO_DIR/package.json" <<'PYEOF' 2>/dev/null || echo "UNREADABLE"
 import json, sys
@@ -1008,7 +1009,7 @@ PYEOF
 )
     case "$PKG_PRIVATE" in
         PRIVATE) success "package.json version 0.0.0-source is marked \"private\": true" ;;
-        PUBLIC) warning "package.json has the placeholder version 0.0.0-source but no \"private\": true — an accidental npm publish would ship the placeholder; add \"private\": true (see skills/skill-repo/references/installation-methods.md)" ;;
+        PUBLIC) error "package.json has the placeholder version 0.0.0-source but no \"private\": true — an accidental npm publish would ship the placeholder; add \"private\": true (see skills/skill-repo/references/installation-methods.md)" ;;
         NOT-PLACEHOLDER) ;;
         *) warning "package.json could not be parsed as JSON" ;;
     esac
