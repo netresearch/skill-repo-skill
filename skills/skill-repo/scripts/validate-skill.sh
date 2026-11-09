@@ -997,8 +997,12 @@ fi
 if [[ -f "$REPO_DIR/package.json" ]]; then
     PKG_PRIVATE=$(python3 - "$REPO_DIR/package.json" <<'PYEOF' 2>/dev/null || echo "UNREADABLE"
 import json, sys
-with open(sys.argv[1], encoding='utf-8') as f:
-    data = json.load(f)
+try:
+    with open(sys.argv[1], encoding='utf-8') as f:
+        data = json.load(f)
+except ValueError:
+    print('INVALID')
+    sys.exit(0)
 if not isinstance(data, dict) or data.get('version') != '0.0.0-source':
     print('NOT-PLACEHOLDER')
 elif data.get('private') is True:
@@ -1011,7 +1015,8 @@ PYEOF
         PRIVATE) success "package.json version 0.0.0-source is marked \"private\": true" ;;
         PUBLIC) error "package.json has the placeholder version 0.0.0-source but no \"private\": true — an accidental npm publish would ship the placeholder; add \"private\": true (see skills/skill-repo/references/installation-methods.md)" ;;
         NOT-PLACEHOLDER) ;;
-        *) warning "package.json could not be parsed as JSON" ;;
+        INVALID) warning "package.json could not be parsed as JSON" ;;
+        *) error "package.json: the private-flag check could not run (python3 failed reading the file)" ;;
     esac
 fi
 

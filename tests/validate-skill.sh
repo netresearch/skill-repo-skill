@@ -881,6 +881,17 @@ pkg_case real_version '{"name": "@netresearch/x", "version": "1.2.3"}' quiet \
     "a real version is not this check's business"
 pkg_case broken '{"name": ' warn "an unparseable package.json warns"
 pkg_case absent - quiet "a repository without package.json is no finding"
+# A check that could not run is an error, not the invalid-JSON warning: an
+# unreadable file must not let a public placeholder pass.
+PK_DIR="$(fixture pkg_unreadable "${hdr}description: Use when doing X\n---\n# T\n")"
+printf '{"version": "0.0.0-source"}\n' > "$PK_DIR/package.json"; chmod 000 "$PK_DIR/package.json"
+if [[ -r "$PK_DIR/package.json" ]]; then
+    echo "  (skipped: running as a user who can read a mode-000 file)"
+else
+    if grep -qE 'ERROR.*the private-flag check could not run' <<<"$(bash "$VALIDATOR" "$PK_DIR" 2>&1)"; then
+        ((PASS++)); else echo "  FAIL an unreadable package.json is an error"; ((FAIL++)); fi
+fi
+chmod 644 "$PK_DIR/package.json"
 
 echo "----------------------------------------"
 echo "Passed: $PASS  Failed: $FAIL"
