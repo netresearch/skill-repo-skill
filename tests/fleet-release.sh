@@ -335,6 +335,11 @@ check "inert: root docs/, tests/, evals/" 0 \
     "$(shipped '["docs/ARCHITECTURE.md","tests/fleet-release.sh","evals/evals.json"]')"
 check "inert: a skill's evals/, tests/ and README.md" 0 \
     "$(shipped '["skills/foo/evals/evals.json","skills/foo/tests/t.sh","skills/foo/README.md"]')"
+# 2026-11-12: seven GitLab repos only removed their vendored root validator.
+check "inert: the root scripts/validate-skill.sh dev validator" 0 \
+    "$(shipped '["scripts/validate-skill.sh"]')"
+check "shipped: a skill's own validate-skill.sh and any other root script" 2 \
+    "$(shipped '["skills/skill-repo/scripts/validate-skill.sh","scripts/x.sh"]')"
 check "shipped: skill SKILL.md, references, scripts, checkpoints" 4 \
     "$(shipped '["skills/foo/SKILL.md","skills/foo/references/a.md","skills/foo/scripts/x.sh","skills/foo/checkpoints.yaml"]')"
 check "shipped: plugin surfaces and manifests at the root" 7 \

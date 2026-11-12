@@ -188,6 +188,7 @@ A skill repository's public surface is how its skills, commands, scripts and hoo
 | A new skill, command, reference, optional script option, or a channel that did not exist (a first `composer.json`) | minor | sees only additions |
 | A compatible fix or a wording change in shipped files | patch | gets the same names, channels and results |
 | Only CI configuration, or only files no install receives (`README.md`, `tests/`, `evals/`, … — `FR_NOT_SHIPPED_RE`) | no release | gets nothing new; the survey classifies these `SKIP-CI-ONLY` and `SKIP-NOT-SHIPPED` (below). A change to the release job that alters what the archives contain is not CI-only: release it at the step of the content it adds or removes |
+| Only the `private` key of the root `package.json`, e.g. `"private": true` added next to the `0.0.0-source` version | no release | gets nothing new: `private` only makes `npm publish` refuse, no release job runs `npm publish` ([installation-methods](installation-methods.md)), and an install of the tag reads the same files. The survey still classifies it `BUMP`, because `FR_NOT_SHIPPED_RE` matches paths and cannot see which key changed: take the row out of `plan.jsonl` (2026-11-12: seven repos) |
 
 Below 1.0.0 a breaking change raises the minor version instead; lifting such a repo to 1.0.0 is the STABILIZE class further down.
 
@@ -435,7 +436,8 @@ removed 13 of 32 repos that had commits since their tag.
 Commits that touch only inert files change nothing a consumer installs. The
 inert list is `FR_NOT_SHIPPED_RE` in `fleet-release-common.sh`: `README.md`,
 `AGENTS.md`, `CLAUDE.md`, `CHANGELOG.md`, `CONTRIBUTING.md`,
-`CODE_OF_CONDUCT.md`, `SECURITY*.md`, root `docs/`, `tests/` and `evals/`, and
+`CODE_OF_CONDUCT.md`, `SECURITY*.md`, root `docs/`, `tests/` and `evals/`, the
+root `scripts/validate-skill.sh` (a vendored dev validator nothing runs), and
 a skill's `evals/`, `tests/` and `README.md`. The code comment gives the reason
 for each entry. **Every other path counts as shipped**, so a path nobody listed
 releases instead of being skipped. An allow-list of shipped paths failed that

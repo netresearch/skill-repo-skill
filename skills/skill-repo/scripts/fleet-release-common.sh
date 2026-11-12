@@ -112,10 +112,15 @@ FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-conf
 #   skills/<name>/evals/ skills/<name>/tests/ skills/<name>/README.md
 #            outside the archive's per-skill allow-list; npm packs them with
 #            the skill dir, but nothing loads them.
+#   scripts/validate-skill.sh (root only)  a vendored copy of the repo-level
+#            dev validator; release.yml copies root scripts/ into the plugin
+#            archive, but no hook, command or SKILL.md runs it, and the GitLab
+#            pipeline ignores it for the canonical copy. A skill's own
+#            skills/<name>/scripts/validate-skill.sh is shipped content.
 # Everything else — .gitignore, Build/, package.json, styles/, config/ … —
 # counts as shipped: being wrong there costs one release, not a skipped one.
 # shellcheck disable=SC2034  # consumed by fr_add_shipped
-FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$'
+FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$|^scripts/validate-skill\.sh$'
 # STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
 # use it as the release body when the plan row leaves `body` empty: a first
 # stable release ships a promise, and the promise has to be written where a
