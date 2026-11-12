@@ -407,6 +407,20 @@ host_merge_commit() { # REPO NUMBER — the SHA the merged PR produced
         --jq '.mergeCommit.oid // empty'
 }
 
+gh_release_run() { # REPO TAG — the workflow run a push of TAG started, as one
+    # compact object: one not yet completed when there is one (any status but
+    # `completed` — queued, in_progress, waiting, requested, pending), else the
+    # newest. Nothing when no run belongs to the tag; exit 1 when the list
+    # cannot be read. `branch=` matches a tag push's head_branch (2026-11-12,
+    # data-tools-skill v1.9.10: the one Release run); the filter is repeated
+    # here so a server-side mismatch cannot hand over another ref's run.
+    local r="$1" tag="$2" out
+    out=$(gh_json "repos/$FR_ORG/$r/actions/runs?branch=$tag&per_page=20") || return 1
+    jq -c --arg t "$tag" \
+        '[.workflow_runs[]? | select(.head_branch == $t)]
+         | (map(select(.status != "completed")) | first) // first // empty' <<< "$out"
+}
+
 host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
     # Release object and its assets, then link it. 0 verified; 1 the last
     # read before the deadline answered and showed no Release with assets; 3
@@ -420,9 +434,20 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
     # a post-tag failure that halted the 2026-10-23 sweep, because the quota
     # stayed at 0 past FR_RELEASE_TIMEOUT. Unreadable polls back off like the
     # merge gate's, and the deadline reports them as such.
-    local r="$1" tag="$2" deadline now rel assets rc nap \
-        unread=0 unread_total=0 polls=0 answered_404=0
-    deadline=$(($(date +%s) + FR_RELEASE_TIMEOUT))
+    # A Release run that has not started is not a missing Release either: on
+    # 2026-11-12 data-tools-skill v1.9.10's run sat queued for 12 minutes behind
+    # a runner backlog, finish halted the sweep on "no verified Release", and
+    # the run then succeeded. When the last read answered and the deadline has
+    # passed, the workflow runs for the tag decide: a run not yet completed
+    # extends the wait to FR_RELEASE_QUEUE_TIMEOUT (rc 5 when that passes too),
+    # a completed run or none ends it after one more read of the Release, and
+    # a run list that cannot be read is rc 3, since nobody knows then whether a
+    # run is still queued.
+    local r="$1" tag="$2" deadline now rel assets rc nap run run_rc run_id run_status started cap \
+        unread=0 unread_total=0 polls=0 answered_404=0 extended=0 settled=0
+    started=$(date +%s)
+    deadline=$((started + FR_RELEASE_TIMEOUT))
+    cap=$((started + FR_RELEASE_QUEUE_TIMEOUT))
     while true; do
         # gh_json, not a bare capture: while the Release workflow is queued
         # this 404s, and gh prints the error body to STDOUT, so `|| echo ""`
@@ -447,6 +472,41 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
             echo "poll: cannot read the Release for $tag (unreadable for $unread consecutive poll(s)) — not a state, still waiting"
         fi
         now=$(date +%s)
+        if [[ "$unread" -eq 0 && "$settled" -eq 0 && ("$extended" -eq 1 || "$now" -ge "$deadline") ]]; then
+            run_rc=0
+            run=$(gh_release_run "$r" "$tag") || run_rc=$?
+            if [[ "$run_rc" -ne 0 ]]; then
+                # Before the cap an unreadable run list is not a state: keep
+                # waiting. At the deadline it leaves the outcome unknown.
+                if [[ "$now" -ge "$deadline" ]]; then
+                    echo "UNVERIFIED: no Release with assets for $tag at the deadline, and the workflow runs for $tag could not be read, so whether its Release run is still queued is unknown; that is not evidence the Release is missing"
+                    echo "last workflow runs:"
+                    gh run list --repo "$FR_ORG/$r" --limit 3 2>&1 || true
+                    return 3
+                fi
+            elif [[ -n "$run" && "$(jq -r '.status' <<< "$run")" != completed ]]; then
+                run_id=$(jq -r '.id' <<< "$run")
+                run_status=$(jq -r '.status' <<< "$run")
+                if [[ "$now" -ge "$cap" ]]; then
+                    FR_RELEASE_PENDING="run $run_id still $run_status after $((now - started))s"
+                    echo "PENDING: no Release with assets for $tag — workflow $FR_RELEASE_PENDING (FR_RELEASE_QUEUE_TIMEOUT=${FR_RELEASE_QUEUE_TIMEOUT}s) — last workflow runs:"
+                    gh run list --repo "$FR_ORG/$r" --limit 3 2>&1 || true
+                    return 5
+                fi
+                if [[ "$extended" -eq 0 ]]; then
+                    echo "workflow run $run_id for $tag is $run_status at the ${FR_RELEASE_TIMEOUT}s deadline — waiting up to FR_RELEASE_QUEUE_TIMEOUT=${FR_RELEASE_QUEUE_TIMEOUT}s"
+                    extended=1
+                    deadline="$cap"
+                fi
+            else
+                # Completed, whatever its conclusion, or no run for the tag:
+                # the wait is over. Read the Release once more, at once — a
+                # run that completed between the two reads has published it.
+                settled=1
+                deadline="$now"
+                continue
+            fi
+        fi
         if [[ "$now" -ge "$deadline" ]]; then
             if [[ "$unread" -gt 0 ]]; then
                 # rate_limit does not draw from the core quota, so it still

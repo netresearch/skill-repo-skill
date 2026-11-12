@@ -34,7 +34,11 @@
 #                                  deadline failed: quota, 5xx — the state
 #                                  at the deadline is unknown, even after
 #                                  earlier 404s; not evidence of a missing
-#                                  Release).
+#                                  Release), 5 pending (the host's Release
+#                                  workflow run for TAG had not completed when
+#                                  FR_RELEASE_QUEUE_TIMEOUT ran out; the driver
+#                                  puts 'run <id> still <status> after <n>s'
+#                                  into FR_RELEASE_PENDING for the FAIL line).
 #                                  A driver that only returns 0/1 still works;
 #                                  its 1 reads as "missing", as before.
 #   host_origin_suffix REPO        expected origin URL suffix, e.g. 'org/repo'
@@ -72,6 +76,15 @@ FR_BASE_DIR="${FR_BASE_DIR:-$HOME/projects}"
 FR_POLL_SECONDS="${FR_POLL_SECONDS:-20}"
 FR_MERGE_TIMEOUT="${FR_MERGE_TIMEOUT:-1800}"
 FR_RELEASE_TIMEOUT="${FR_RELEASE_TIMEOUT:-600}"
+# Total wait, counted from the start of the check like FR_RELEASE_TIMEOUT
+# (a re-run of finish starts a new one), while the host's Release workflow
+# run for the tag has not completed. Only a run seen
+# as not completed at FR_RELEASE_TIMEOUT extends the wait; a missing or failed
+# run still fails there. 2400 s: on 2026-11-12 data-tools-skill v1.9.10's run
+# sat queued 12m17s (job created 19:41:48Z, started 19:54:05Z) behind a
+# runner backlog, past the 600 s deadline; 40 minutes is three such waits.
+FR_RELEASE_QUEUE_TIMEOUT="${FR_RELEASE_QUEUE_TIMEOUT:-2400}"
+FR_RELEASE_PENDING=""                     # set by host_release_verify on rc 5
 FR_SELF_LOGIN="${FR_SELF_LOGIN:-}"        # resolved by the driver (gh/glab)
 FR_BRANCH_PREFIX="release/v"              # owned by github-release-skill
 FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
@@ -100,10 +113,18 @@ FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-conf
 #   skills/<name>/evals/ skills/<name>/tests/ skills/<name>/README.md
 #            outside the archive's per-skill allow-list; npm packs them with
 #            the skill dir, but nothing loads them.
+#   scripts/validate-skill.sh (root only)  a vendored copy of the repo-level
+#            dev validator; release.yml copies root scripts/ into the plugin
+#            archive, but no hooks.json, plugin.json or commands/ file on
+#            GitHub names it, and the one SKILL.md that does (skill-repo's)
+#            means its skill-relative copy (org code search, default
+#            branches, 2026-11-12); the GitLab pipeline template ignores a
+#            repo-local copy for the canonical validator. A skill's own
+#            skills/<name>/scripts/validate-skill.sh is shipped content.
 # Everything else — .gitignore, Build/, package.json, styles/, config/ … —
 # counts as shipped: being wrong there costs one release, not a skipped one.
 # shellcheck disable=SC2034  # consumed by fr_add_shipped
-FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$'
+FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$|^scripts/validate-skill\.sh$'
 # STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
 # use it as the release body when the plan row leaves `body` empty: a first
 # stable release ships a promise, and the promise has to be written where a
@@ -1233,13 +1254,16 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
 fr_release_verified() { # REPO TAG MISSING-TEXT — host_release_verify, with the
     # outcome on the FAIL line: the summary and the per-repo `tail -1` show
     # only that line, so "could not be read" has to be said there, not in the
-    # callback's own output further up the log. Both failures still halt: an
-    # unreadable API reaches the next repo too. The re-run is cheap — with the
-    # tag on the remote, finish only verifies.
+    # callback's own output further up the log. Every failure still halts: an
+    # unreadable API reaches the next repo too, and a runner backlog that kept
+    # one Release run queued past the cap holds the next one as well. The
+    # re-run is cheap — with the tag on the remote, finish only verifies.
     local repo="$1" tag="$2" missing="$3" rc=0
+    FR_RELEASE_PENDING=""
     host_release_verify "$repo" "$tag" < /dev/null || rc=$?
     case "$rc" in
         0) return 0 ;;
+        5) echo "FAIL $repo: Release for $tag PENDING — ${FR_RELEASE_PENDING:-its workflow run had not completed at the deadline}; re-run finish once it completes (post-tag — halting the sweep)" ;;
         3) echo "FAIL $repo: Release for $tag UNVERIFIED — the last API read before the deadline failed (quota or outage, see above), so its state at the deadline is unknown, which is not a missing Release; re-run finish once the API answers (post-tag — halting the sweep)" ;;
         *) echo "FAIL $repo: $missing (post-tag — halting the sweep)" ;;
     esac
