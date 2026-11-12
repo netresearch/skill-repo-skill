@@ -1133,7 +1133,10 @@ run_queue() { # CASE — fixtures from REL_FX and RUN_FX; sets q_out q_rc q_poll
     q_runs=$(cat "$dir/wcount" 2> /dev/null || echo 0)
     return 0
 }
-has() { grep -q -- "$1" <<< "$q_out" && echo yes || echo no; }
+has() { # PATTERN — yes/no: does the last run_queue output match it
+    local pattern="$1"
+    grep -q -- "$pattern" <<< "$q_out" && echo yes || echo no
+}
 
 # (a) queued at the deadline, then the Release appears: verified.
 REL_FX=(NOTFOUND NOTFOUND NOTFOUND "$REL_OK") RUN_FX=("$(wrun queued)")
