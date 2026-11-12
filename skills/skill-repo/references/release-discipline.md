@@ -141,6 +141,21 @@ on the remote it only verifies. (2026-10-23: agent-rules-skill v3.16.5 was
 complete with 6 assets while the quota stayed at 0, and the sweep halted on
 "no verified Release".)
 
+**A Release run that has not completed extends the wait; it is not a missing
+Release.** At `FR_RELEASE_TIMEOUT` the check reads the workflow runs of the
+tag. A run that is not `completed` (queued behind a runner backlog, or still
+running) keeps it waiting up to `FR_RELEASE_QUEUE_TIMEOUT` (default 2400 s,
+counted from the tag push), and the log says so. A run that completes during
+the wait ends it at once: the check reads the Release one more time and, if
+there is none, fails with `no verified Release` as before. So do a failed
+run and a tag without any run at the first deadline. A run still not
+completed at the cap fails with `Release for vX.Y.Z PENDING — run <id> still
+<status> after <n>s`, and a run list that cannot be read at a deadline fails
+as `UNVERIFIED`. Both halt the sweep; re-run `finish` once the run has
+completed. (2026-11-12: data-tools-skill v1.9.10's run sat queued for 12
+minutes, the sweep halted on "no verified Release", and the run then
+succeeded.)
+
 **A batch that waits on a prerequisite PR runs in its own `--workdir`.** The
 lock is per workdir and covers every phase, and a `finish` run holds it until
 each of its merge gates closes — up to `FR_MERGE_TIMEOUT` per repo. Repos held

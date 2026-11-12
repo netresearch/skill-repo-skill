@@ -967,6 +967,23 @@ case "$1 $2" in
             *) cat "$f" ;;
         esac
         ;;
+    "api repos/"*"/actions/runs"*)
+        # One fixture per run-list read (w<n>.json, the last one repeats); no
+        # fixture at all is a tag with no workflow run.
+        n=$(( $(cat "$d/wcount" 2> /dev/null || echo 0) + 1 ))
+        echo "$n" > "$d/wcount"
+        f="$d/w$n.json"
+        [ -f "$f" ] || f=$(ls "$d"/w*.json 2> /dev/null | sort -V | tail -1)
+        if [ -z "$f" ]; then
+            echo '{"total_count":0,"workflow_runs":[]}'
+        elif [ "$(cat "$f")" = FAIL ]; then
+            echo '{"message":"API rate limit exceeded","documentation_url":"https://docs.github.com/rest"}'
+            echo 'gh: API rate limit exceeded (HTTP 403)' >&2
+            exit 1
+        else
+            cat "$f"
+        fi
+        ;;
     "api rate_limit") echo '{"resources":{"core":{"remaining":0,"reset":1792000000}}}' ;;
     "run list") echo "stub run list" ;;
     *) echo "stub gh: unexpected $*" >&2; exit 2 ;;
@@ -1075,14 +1092,108 @@ backoff_naps() { # INTERVAL TIMEOUT — the sleeps of one always-unreadable veri
 check "release verify: back-off grows 1x-4x, caps at 4x, and stops at the deadline" \
     "10 20 30 40 40 40 20" "$(backoff_naps 10 200)"
 
+# --- release verify: a queued Release run is not a missing Release ----------
+# 2026-11-12: data-tools-skill v1.9.10's Release run sat `queued` for 12
+# minutes behind a runner backlog; finish halted the sweep on "no verified
+# Release" at the 600 s deadline, and the run then succeeded. Fake clock, 10 s
+# polls, FR_RELEASE_TIMEOUT 20 and FR_RELEASE_QUEUE_TIMEOUT 60: Release reads
+# happen at t=0,10,20,…, and the run list is read from t=20 on.
+wrun() { # STATUS [CONCLUSION] — a run-list body with the tag's one run
+    jq -nc --arg s "$1" --arg c "${2:-}" \
+        '{total_count:1,workflow_runs:[{id:43292791616,name:"Release",head_branch:"v3.16.5",
+          status:$s,conclusion:(if $c == "" then null else $c end)}]}'
+}
+run_queue() { # CASE — fixtures from REL_FX and RUN_FX; sets q_out q_rc q_polls q_runs q_pending
+    local dir="$WORK/queue-$1" i
+    mkdir -p "$dir"
+    for i in "${!REL_FX[@]}"; do printf '%s\n' "${REL_FX[$i]}" > "$dir/r$((i + 1)).json"; done
+    for i in "${!RUN_FX[@]}"; do printf '%s\n' "${RUN_FX[$i]}" > "$dir/w$((i + 1)).json"; done
+    # shellcheck disable=SC2016  # expands in the child bash, not here
+    PATH="$REL_BIN:$PATH" GH_STUB_DIR="$dir" FR_POLL_SECONDS=10 \
+        FR_RELEASE_TIMEOUT=20 FR_RELEASE_QUEUE_TIMEOUT=60 timeout -k 5 20 bash -c '
+            source "$1"
+            FAKE_NOW=1000
+            date() { echo "$FAKE_NOW"; }
+            sleep() { FAKE_NOW=$((FAKE_NOW + $1)); }
+            rc=0
+            host_release_verify some-skill v3.16.5 || rc=$?
+            echo "rc=$rc pending=[${FR_RELEASE_PENDING-}]"' _ "$SCRIPTS/fleet-release-github.sh" \
+        > "$dir/out" 2>&1 < /dev/null
+    q_out=$(< "$dir/out")
+    q_rc=$(sed -n 's/^rc=\([0-9]*\) .*/\1/p' <<< "$q_out")
+    q_pending=$(sed -n 's/^rc=[0-9]* pending=\[\(.*\)\]$/\1/p' <<< "$q_out")
+    q_polls=$(cat "$dir/count" 2> /dev/null || echo 0)
+    q_runs=$(cat "$dir/wcount" 2> /dev/null || echo 0)
+    return 0
+}
+has() { grep -q -- "$1" <<< "$q_out" && echo yes || echo no; }
+
+# (a) queued at the deadline, then the Release appears: verified.
+REL_FX=(NOTFOUND NOTFOUND NOTFOUND "$REL_OK") RUN_FX=("$(wrun queued)")
+run_queue queued-then-ok
+check "release verify: run queued at the deadline, then the Release -> verified (rc 0)" 0 "$q_rc"
+check "release verify: …the wait was extended past the deadline (4 reads)" 4 "$q_polls"
+check "release verify: …and the log says why it kept waiting" yes \
+    "$(has '^workflow run 43292791616 for v3.16.5 is queued at the 20s deadline — waiting up to FR_RELEASE_QUEUE_TIMEOUT=60s')"
+
+# (b) still not completed at the cap: rc 5 naming the run, not "missing".
+REL_FX=(NOTFOUND) RUN_FX=("$(wrun queued)" "$(wrun queued)" "$(wrun in_progress)")
+run_queue still-queued
+check "release verify: run still not completed at the cap -> rc 5 (pending)" 5 "$q_rc"
+check "release verify: …FR_RELEASE_PENDING names the run, its status and the wait" \
+    "run 43292791616 still in_progress after 60s" "$q_pending"
+check "release verify: …the log says PENDING, never 'no Release with assets'" "yes no" \
+    "$(has '^PENDING: no Release with assets for v3.16.5 — workflow run 43292791616 still in_progress after 60s') $(has '^no Release with assets')"
+check "release verify: …and waited until the cap (reads at t=0..60)" 7 "$q_polls"
+
+# (c) the run completed with failure: the existing missing-Release path, at the
+# deadline. The run list was read, and the Release once more after it.
+REL_FX=(NOTFOUND) RUN_FX=("$(wrun completed failure)")
+run_queue completed-failure
+check "release verify: run completed with failure -> rc 1 (missing)" 1 "$q_rc"
+check "release verify: …with 'no Release with assets', no extension" "yes no" \
+    "$(has '^no Release with assets for v3.16.5') $(has 'waiting up to')"
+check "release verify: …the run list decided it: one run read, one more Release read" "1 4" \
+    "$q_runs $q_polls"
+# A failure during the extension ends the wait then, not at the cap.
+REL_FX=(NOTFOUND) RUN_FX=("$(wrun queued)" "$(wrun queued)" "$(wrun completed failure)")
+run_queue queued-then-failure
+check "release verify: run fails during the extension -> rc 1 before the cap (6 reads, not 7+)" "1 6" \
+    "$q_rc $q_polls"
+# The run completed between the Release read and the run read: the extra read
+# finds the Release it published.
+REL_FX=(NOTFOUND NOTFOUND NOTFOUND "$REL_OK") RUN_FX=("$(wrun completed success)")
+run_queue completed-race
+check "release verify: run completed right after a 404 -> the extra read verifies it (rc 0)" 0 "$q_rc"
+# No run for the tag at all: nothing to wait for.
+REL_FX=(NOTFOUND) RUN_FX=()
+run_queue no-run
+check "release verify: no run for the tag -> rc 1 at the deadline" "1 no" "$q_rc $(has 'waiting up to')"
+
+# (d) the run list cannot be read at the deadline: unknown, rc 3 — never
+# treated as queued, and never as missing.
+REL_FX=(NOTFOUND) RUN_FX=(FAIL)
+run_queue runs-unreadable
+check "release verify: run list unreadable at the deadline -> rc 3 (unverified)" 3 "$q_rc"
+check "release verify: …says the runs could not be read, does not wait, does not say missing" "yes no no" \
+    "$(has '^UNVERIFIED: no Release with assets for v3.16.5 at the deadline, and the workflow runs for v3.16.5 could not be read') $(has 'waiting up to') $(has '^no Release with assets')"
+# Unreadable during the extension is not a state either: wait to the cap.
+REL_FX=(NOTFOUND) RUN_FX=("$(wrun queued)" FAIL)
+run_queue runs-unreadable-extended
+check "release verify: run list unreadable after the extension began -> waits to the cap, rc 3" "3 7" \
+    "$q_rc $q_polls"
+
 # The engine side: the outcome has to reach the FAIL line, because the summary
 # and the per-repo tail show nothing else.
 verify_line() { # RC — the FAIL line fr_release_verified prints for that outcome
-    # shellcheck disable=SC2329  # invoked indirectly by fr_release_verified
-    host_release_verify() { return "$VERIFY_RC"; }
+    # shellcheck disable=SC2329,SC2034  # invoked indirectly by fr_release_verified, which reads FR_RELEASE_PENDING
+    host_release_verify() { FR_RELEASE_PENDING="${VERIFY_PENDING:-}"; return "$VERIFY_RC"; }
     VERIFY_RC="$1" fr_release_verified demo v1.0.0 "no verified Release for v1.0.0"
     echo "rc=$?"
 }
+out=$(VERIFY_PENDING="run 42 still queued after 2400s" verify_line 5)
+check "finish: a pending Release run says PENDING with the run on the FAIL line" yes \
+    "$(grep -q '^FAIL demo: Release for v1.0.0 PENDING — run 42 still queued after 2400s; re-run finish once it completes (post-tag — halting the sweep)$' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
 out=$(verify_line 3)
 check "finish: an unverifiable Release says UNVERIFIED on the FAIL line" yes \
     "$(grep -q '^FAIL demo: Release for v1.0.0 UNVERIFIED — the last API read before the deadline failed' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"

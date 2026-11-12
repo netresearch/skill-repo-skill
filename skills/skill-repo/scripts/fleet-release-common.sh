@@ -34,7 +34,11 @@
 #                                  deadline failed: quota, 5xx — the state
 #                                  at the deadline is unknown, even after
 #                                  earlier 404s; not evidence of a missing
-#                                  Release).
+#                                  Release), 5 pending (the host's Release
+#                                  workflow run for TAG had not completed when
+#                                  FR_RELEASE_QUEUE_TIMEOUT ran out; the driver
+#                                  puts 'run <id> still <status> after <n>s'
+#                                  into FR_RELEASE_PENDING for the FAIL line).
 #                                  A driver that only returns 0/1 still works;
 #                                  its 1 reads as "missing", as before.
 #   host_origin_suffix REPO        expected origin URL suffix, e.g. 'org/repo'
@@ -72,6 +76,14 @@ FR_BASE_DIR="${FR_BASE_DIR:-$HOME/projects}"
 FR_POLL_SECONDS="${FR_POLL_SECONDS:-20}"
 FR_MERGE_TIMEOUT="${FR_MERGE_TIMEOUT:-1800}"
 FR_RELEASE_TIMEOUT="${FR_RELEASE_TIMEOUT:-600}"
+# Total wait, counted from the tag push like FR_RELEASE_TIMEOUT, while the
+# host's Release workflow run for the tag has not completed. Only a run seen
+# as not completed at FR_RELEASE_TIMEOUT extends the wait; a missing or failed
+# run still fails there. 2400 s: on 2026-11-12 data-tools-skill v1.9.10's run
+# sat queued 12m17s (job created 19:41:48Z, started 19:54:05Z) behind a
+# runner backlog, past the 600 s deadline; 40 minutes is three such waits.
+FR_RELEASE_QUEUE_TIMEOUT="${FR_RELEASE_QUEUE_TIMEOUT:-2400}"
+FR_RELEASE_PENDING=""                     # set by host_release_verify on rc 5
 FR_SELF_LOGIN="${FR_SELF_LOGIN:-}"        # resolved by the driver (gh/glab)
 FR_BRANCH_PREFIX="release/v"              # owned by github-release-skill
 FR_COMMIT_PREFIX="chore(release): v"      # owned by github-release-skill
@@ -1233,13 +1245,16 @@ fr_finish_one() { # ROW — exit 0 ok, 1 pre-tag failure (loop continues),
 fr_release_verified() { # REPO TAG MISSING-TEXT — host_release_verify, with the
     # outcome on the FAIL line: the summary and the per-repo `tail -1` show
     # only that line, so "could not be read" has to be said there, not in the
-    # callback's own output further up the log. Both failures still halt: an
-    # unreadable API reaches the next repo too. The re-run is cheap — with the
-    # tag on the remote, finish only verifies.
+    # callback's own output further up the log. Every failure still halts: an
+    # unreadable API reaches the next repo too, and a runner backlog that kept
+    # one Release run queued past the cap holds the next one as well. The
+    # re-run is cheap — with the tag on the remote, finish only verifies.
     local repo="$1" tag="$2" missing="$3" rc=0
+    FR_RELEASE_PENDING=""
     host_release_verify "$repo" "$tag" < /dev/null || rc=$?
     case "$rc" in
         0) return 0 ;;
+        5) echo "FAIL $repo: Release for $tag PENDING — ${FR_RELEASE_PENDING:-its workflow run had not completed at the deadline}; re-run finish once it completes (post-tag — halting the sweep)" ;;
         3) echo "FAIL $repo: Release for $tag UNVERIFIED — the last API read before the deadline failed (quota or outage, see above), so its state at the deadline is unknown, which is not a missing Release; re-run finish once the API answers (post-tag — halting the sweep)" ;;
         *) echo "FAIL $repo: $missing (post-tag — halting the sweep)" ;;
     esac
