@@ -1104,12 +1104,14 @@ check "release verify: back-off grows 1x-4x, caps at 4x, and stops at the deadli
 # polls, FR_RELEASE_TIMEOUT 20 and FR_RELEASE_QUEUE_TIMEOUT 60: Release reads
 # happen at t=0,10,20,…, and the run list is read from t=20 on.
 wrun() { # STATUS [CONCLUSION] — a run-list body with the tag's one run
-    jq -nc --arg s "$1" --arg c "${2:-}" \
+    local status="$1" conclusion="${2:-}"
+    jq -nc --arg s "$status" --arg c "$conclusion" \
         '{total_count:1,workflow_runs:[{id:43292791616,name:"Release",head_branch:"v3.16.5",
           status:$s,conclusion:(if $c == "" then null else $c end)}]}'
 }
 run_queue() { # CASE — fixtures from REL_FX and RUN_FX; sets q_out q_rc q_polls q_runs q_pending
-    local dir="$WORK/queue-$1" i
+    local case_name="$1" dir i
+    dir="$WORK/queue-$case_name"
     mkdir -p "$dir"
     for i in "${!REL_FX[@]}"; do printf '%s\n' "${REL_FX[$i]}" > "$dir/r$((i + 1)).json"; done
     for i in "${!RUN_FX[@]}"; do printf '%s\n' "${RUN_FX[$i]}" > "$dir/w$((i + 1)).json"; done

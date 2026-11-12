@@ -414,9 +414,9 @@ gh_release_run() { # REPO TAG — the workflow run a push of TAG started, as one
     # cannot be read. `branch=` matches a tag push's head_branch (2026-11-12,
     # data-tools-skill v1.9.10: the one Release run); the filter is repeated
     # here so a server-side mismatch cannot hand over another ref's run.
-    local out
-    out=$(gh_json "repos/$FR_ORG/$1/actions/runs?branch=$2&per_page=20") || return 1
-    jq -c --arg t "$2" \
+    local r="$1" tag="$2" out
+    out=$(gh_json "repos/$FR_ORG/$r/actions/runs?branch=$tag&per_page=20") || return 1
+    jq -c --arg t "$tag" \
         '[.workflow_runs[]? | select(.head_branch == $t)]
          | (map(select(.status != "completed")) | first) // first // empty' <<< "$out"
 }
