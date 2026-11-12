@@ -76,8 +76,9 @@ FR_BASE_DIR="${FR_BASE_DIR:-$HOME/projects}"
 FR_POLL_SECONDS="${FR_POLL_SECONDS:-20}"
 FR_MERGE_TIMEOUT="${FR_MERGE_TIMEOUT:-1800}"
 FR_RELEASE_TIMEOUT="${FR_RELEASE_TIMEOUT:-600}"
-# Total wait, counted from the tag push like FR_RELEASE_TIMEOUT, while the
-# host's Release workflow run for the tag has not completed. Only a run seen
+# Total wait, counted from the start of the check like FR_RELEASE_TIMEOUT
+# (a re-run of finish starts a new one), while the host's Release workflow
+# run for the tag has not completed. Only a run seen
 # as not completed at FR_RELEASE_TIMEOUT extends the wait; a missing or failed
 # run still fails there. 2400 s: on 2026-11-12 data-tools-skill v1.9.10's run
 # sat queued 12m17s (job created 19:41:48Z, started 19:54:05Z) behind a
@@ -114,8 +115,11 @@ FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-conf
 #            the skill dir, but nothing loads them.
 #   scripts/validate-skill.sh (root only)  a vendored copy of the repo-level
 #            dev validator; release.yml copies root scripts/ into the plugin
-#            archive, but no hook, command or SKILL.md runs it, and the GitLab
-#            pipeline ignores it for the canonical copy. A skill's own
+#            archive, but no hooks.json, plugin.json or commands/ file on
+#            GitHub names it, and the one SKILL.md that does (skill-repo's)
+#            means its skill-relative copy (org code search, default
+#            branches, 2026-11-12); the GitLab pipeline template ignores a
+#            repo-local copy for the canonical validator. A skill's own
 #            skills/<name>/scripts/validate-skill.sh is shipped content.
 # Everything else — .gitignore, Build/, package.json, styles/, config/ … —
 # counts as shipped: being wrong there costs one release, not a skipped one.

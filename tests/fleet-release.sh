@@ -338,8 +338,10 @@ check "inert: a skill's evals/, tests/ and README.md" 0 \
 # 2026-11-12: seven GitLab repos only removed their vendored root validator.
 check "inert: the root scripts/validate-skill.sh dev validator" 0 \
     "$(shipped '["scripts/validate-skill.sh"]')"
-check "shipped: a skill's own validate-skill.sh and any other root script" 2 \
-    "$(shipped '["skills/skill-repo/scripts/validate-skill.sh","scripts/x.sh"]')"
+check "shipped: a skill's own validate-skill.sh (the entry is anchored at the root)" 1 \
+    "$(shipped '["skills/skill-repo/scripts/validate-skill.sh"]')"
+check "shipped: any other root script (the entry names one file, not scripts/)" 1 \
+    "$(shipped '["scripts/x.sh"]')"
 check "shipped: skill SKILL.md, references, scripts, checkpoints" 4 \
     "$(shipped '["skills/foo/SKILL.md","skills/foo/references/a.md","skills/foo/scripts/x.sh","skills/foo/checkpoints.yaml"]')"
 check "shipped: plugin surfaces and manifests at the root" 7 \
@@ -1178,7 +1180,8 @@ check "release verify: run completed right after a 404 -> the extra read verifie
 # No run for the tag at all: nothing to wait for.
 REL_FX=(NOTFOUND) RUN_FX=()
 run_queue no-run
-check "release verify: no run for the tag -> rc 1 at the deadline" "1 no" "$q_rc $(has 'waiting up to')"
+check "release verify: no run for the tag -> rc 1 at the deadline after one run read and one more Release read" "1 no 1 4" \
+    "$q_rc $(has 'waiting up to') $q_runs $q_polls"
 
 # (d) the run list cannot be read at the deadline: unknown, rc 3 — never
 # treated as queued, and never as missing.
