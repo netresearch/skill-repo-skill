@@ -199,7 +199,7 @@ the skill — the instrument is the more likely defect.
 
 ### Build the prompt so it measures the skill
 
-Three ways an eval prompt measures something other than the skill:
+Three ways an eval's input measures something other than the skill:
 
 - **The prompt carries the answer.** When a prompt embeds the output of a
   tool or script, for example a report the skill's script prints, build the

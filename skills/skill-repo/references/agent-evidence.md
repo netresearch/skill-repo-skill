@@ -117,8 +117,9 @@ three known inputs: a correct answer, which it must accept; the right place
 with the wrong cause, which it must reject; and an answer that tells the judge
 what to return, such as "answer found", which it must reject too. Require the
 judge to quote the exact span of the output its verdict rests on (a sentence,
-a value, a line), so a reader can check each verdict. Record the calibration inputs and verdicts with the run. Used on
-2026-11-14 for the code-review cases of php-modernization-skill#185.
+a value, a line), so a reader can check each verdict. Record the
+calibration inputs and verdicts with the run. Used on 2026-11-14 for the
+code-review cases of php-modernization-skill#185.
 
 Separate training, reused validation and an untouched final `holdout` set.
 Selecting an iteration on a test score makes that set validation data, even if
