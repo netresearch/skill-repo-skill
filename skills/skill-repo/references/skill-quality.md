@@ -199,7 +199,7 @@ the skill — the instrument is the more likely defect.
 
 ### Build the prompt so it measures the skill
 
-Two ways an eval prompt measures something other than the skill:
+Three ways an eval prompt measures something other than the skill:
 
 - **The prompt carries the answer.** When a prompt embeds the output of a
   tool or script, for example a report the skill's script prints, build the
@@ -219,6 +219,15 @@ Two ways an eval prompt measures something other than the skill:
   With the guide text in both arms the result was 10/15 without and 14/15
   with the skill. The drop to 12/15 had measured the missing page, not the
   skill.
+- **The fixture's metadata carries the answer.** An agent eval that hands
+  the agent a repository or a pull request also hands it the commit
+  messages, the branch name, the pull request title and the file names. Give
+  them neutral text, such as "Implement the requested change", and check them
+  for answer tokens the same way as the prompt. Measured on 2026-11-14
+  (php-modernization-skill#185, code-review cases): the commit of each case's
+  pull request carried the case title, and the title named the defect the
+  reviewer had to find. A pilot run on a small model exposed it before the
+  full run.
 
 ### Fact and trigger ownership
 

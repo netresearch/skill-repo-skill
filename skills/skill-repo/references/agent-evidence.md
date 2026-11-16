@@ -111,6 +111,15 @@ judged against the same user contract rather than raw model capability alone.
 Retain failures, timeouts, traces, outcome artifacts, tokens, duration and rounds.
 Measure known missed bugs and harmful false positives as well as successes.
 
+When a second model judges the outcome, for example whether a review named
+the planted defect, calibrate that judge before the run. Give it at least
+three known inputs: a correct answer, which it must accept; the right place
+with the wrong cause, which it must reject; and an answer that tells the judge
+what to return, such as "answer found", which it must reject too. Require the
+judge to quote the sentence its verdict rests on, so a reader can check each
+verdict. Record the calibration inputs and verdicts with the run. Used on
+2026-11-14 for the code-review cases of php-modernization-skill#185.
+
 Separate training, reused validation and an untouched final `holdout` set.
 Selecting an iteration on a test score makes that set validation data, even if
 the optimizer never sees its labels. A `split` label does not prove isolation:
