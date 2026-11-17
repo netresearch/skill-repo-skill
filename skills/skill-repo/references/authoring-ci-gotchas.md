@@ -33,6 +33,15 @@ checks the same limit. The body also persists in context
 for the whole session, so every word is paid on each invocation — see
 [`skill-quality.md`](skill-quality.md) for the full cost model.
 
+Take the limit from the validator that will judge the branch, not from memory;
+older versions counted words over the whole file, not body lines. Two copies
+judge a consumer repo, and they can differ. The local `validate-skill` hook runs
+the script at the `rev:` the branch pins in `.pre-commit-config.yaml`; read it
+there (`git show <rev>:skills/skill-repo/scripts/validate-skill.sh` in this
+repo). The shared `validate.yml` checks out this repo at `main` and runs that
+copy. An old pin can therefore pass a commit locally that CI rejects, or the
+other way round.
+
 **Before editing an existing `SKILL.md`, `wc -w` it first.** If it is already near
 the ceiling, decide the **architecture before you type**:
 
