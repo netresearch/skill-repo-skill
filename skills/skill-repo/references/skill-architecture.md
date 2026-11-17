@@ -331,6 +331,8 @@ Not in it: API documentation, syntax references, long examples, mappings, lookup
 
 And anything deterministic — conversion, parsing, validation, AST manipulation, formatting, mechanical checks — belongs in `scripts/`. Scripts are **executed, never loaded**, so their body costs no context at all. A script named in `SKILL.md` costs one line and buys the only chance the agent has of knowing it exists.
 
+How the agent learns a script's flags depends on how fast the script starts. `--help` is enough for a script that answers in under a second. A script with a slow start (`uv run` installing inline dependencies on a cold cache, a container, a network call before the arguments are parsed) makes the agent pay that start for every question about a flag. Document each of its flags in the reference that `SKILL.md` names for it, and keep `--help` for people at a terminal.
+
 ## Long references need a Contents section
 
 Agents preview long files — `head`, an excerpt, a targeted search — rather than reading them whole. A contents list at the top makes the rest of the file visible anyway. Past about 100 lines, add one.
