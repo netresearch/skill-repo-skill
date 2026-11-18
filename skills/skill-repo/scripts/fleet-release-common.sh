@@ -57,6 +57,10 @@
 # renamed file under its old AND its new path. Without it a move from
 # skills/x/references/a.md to docs/a.md looks docs-only, so SKIP-NOT-SHIPPED
 # is granted only to rows that carry it; every other row stays BUMP.
+# Optional driver key: `inert`, an array of paths from `files` whose patch
+# the driver read and found to ship nothing (fleet-release-github.sh:
+# gh_inert_files). They do not count toward `shipped`, so a delta of only such
+# files is SKIP-NOT-SHIPPED. A driver that cannot read patches leaves it out.
 #
 # Every phase writes into $FR_WORKDIR:
 #   survey.jsonl   one row per repo (jq -nc: ROW COUNTS MUST EQUAL LINE COUNTS)
@@ -474,7 +478,10 @@ fr_add_shipped() { # ROW-JSON — the row plus `shipped`, computed here from its
     local row="$1" out
     if out=$(jq -c --arg re "$FR_NOT_SHIPPED_RE" \
         'if (.files | type) == "array"
-         then .shipped = ([.files[] | select(test($re) | not)] | length) else . end' <<< "$row" 2> /dev/null); then
+         then (.inert // []) as $inert
+              | .shipped = ([.files[] | select(test($re) | not)
+                             | select(. as $f | $inert | index($f) | not)] | length)
+         else . end' <<< "$row" 2> /dev/null); then
         printf '%s\n' "$out"
     else
         jq -c '.shipped = -1' <<< "$row" 2> /dev/null || printf '%s\n' "$row"
@@ -602,6 +609,9 @@ fr_manifest() {
                  (if (.last_tag // "") != "" and ((.last_tag | test("^v?[0-9]+\\.[0-9]+\\.[0-9]+")) | not)
                   then "nonstandard tag convention" else empty end),
                  (if .files_truncated == true then "compare file list truncated" else empty end),
+                 (if ((.inert // []) | length) > 0
+                  then "changes only the private key: " + ((.inert // []) | join(", "))
+                  else empty end),
                  (if $cls == "SKIP-NOT-SHIPPED"
                   then "delta touches only files no release ships: "
                        + ((.files // [])[:5] | join(", "))

@@ -1256,6 +1256,46 @@ check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3
     "$(survey_class '{"ahead_by":2,"commits":[{"commit":{"message":"docs: move"}}],"files":[{"filename":"docs/a.md","previous_filename":"skills/x/references/a.md","status":"renamed"},{"filename":"README.md"}]}')"
 check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
     "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
+# package.json whose only change is the "private" key ships nothing; seven
+# repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
+pj_cmp() { # PATCH — a compare with package.json modified by PATCH
+    jq -nc --arg p "$1" '{ahead_by:1,commits:[{commit:{message:"chore: x"}}],
+        files:[{filename:"package.json",status:"modified",patch:$p}]}'
+}
+PJ_CTX=$'@@ -1,4 +1,5 @@\n {\n   "name": "@n/demo",\n   "version": "0.0.0-source",\n'
+check "survey: package.json adding only \"private\": true is SKIP-NOT-SHIPPED" "SKIP-NOT-SHIPPED 1 0" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,\n   "license": "MIT"')")"
+check "survey: \"private\" as last key, comma moved onto the neighbour, is SKIP-NOT-SHIPPED" "SKIP-NOT-SHIPPED 1 0" \
+    "$(survey_class "$(pj_cmp $'@@ -1,3 +1,4 @@\n {\n-  "version": "0.0.0-source"\n+  "version": "0.0.0-source",\n+  "private": true\n }')")"
+check "survey: package.json with private AND a dependency change is BUMP" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,\n-  "x": "1.0.0"\n+  "x": "1.0.1"')")"
+check "survey: package.json without the private key is BUMP (control)" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'-  "license": "MIT"\n+  "license": "GPL"')")"
+check "survey: package.json without a patch is BUMP (unknown releases)" "BUMP 1 1" \
+    "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"chore: x"}}],"files":[{"filename":"package.json","status":"modified"}]}')"
+check "survey: private-only package.json beside a shipped file is BUMP" "BUMP 2 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,' | jq -c '.files += [{filename:"skills/x/SKILL.md",status:"modified"}]')")"
+check "survey: a nested package.json is not the root one (BUMP)" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,' | jq -c '.files[0].filename = "skills/x/package.json"')")"
+
+# --- CI on default: one verdict per check, from its newest run ---------------
+ci_status() { # CHECK-RUNS-JSON
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    timeout -k 5 20 bash -c 'source "$1" && gh_ci_status' _ "$SCRIPTS/fleet-release-github.sh" <<< "$1" 2> /dev/null
+}
+cr() { # NAME CONCLUSION STARTED — one completed check run
+    jq -nc --arg n "$1" --arg c "$2" --arg s "$3" '{name:$n,status:"completed",conclusion:$c,started_at:$s}'
+}
+runs() { jq -sc '{total_count: length, check_runs: .}'; }
+check "ci: a failed run replaced by a newer green run of the same check is success" success \
+    "$(ci_status "$( { cr wcag failure 2026-11-01T10:00:00Z; cr wcag success 2026-11-01T11:00:00Z; } | runs)")"
+check "ci: a green run replaced by a newer failed run fails" "failed: wcag" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; cr wcag failure 2026-11-01T11:00:00Z; } | runs)")"
+check "ci: a failure of another check still fails (control)" "failed: lint" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; cr lint failure 2026-11-01T09:00:00Z; } | runs)")"
+check "ci: a newer pending run reports pending" "pending(1)" \
+    "$(ci_status "$( { cr wcag failure 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"in_progress",conclusion:null,started_at:"2026-11-01T11:00:00Z"}'; } | runs)")"
+check "ci: no runs is none" none "$(ci_status '{"total_count":0,"check_runs":[]}')"
 
 # --- fleet list drift: the default list against the marketplace manifest ------
 # The list missed formal-model-checking-skill until #449, and nothing said so:
