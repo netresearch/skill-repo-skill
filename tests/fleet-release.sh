@@ -709,13 +709,20 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "pj-private" | .resolved = "o/pj-private" | .files = ["package.json"] | .inert = ["package.json"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
         row '.repo = "zero-docs" | .resolved = "o/zero-docs" | .claude_plugin = "0.4.0" | .root_plugin = "0.4.0" | .last_tag = "v0.4.0" | .last_release = "v0.4.0" | .files = ["README.md"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
     } > "$MWD/survey.jsonl"
-    mkdir -p "$WORK/mbase/bump-me"
+    mkdir -p "$WORK/mbase/bump-me" "$WORK/mbase/prepared"
     git init -q --bare "$WORK/mbase/bump-me/.bare"
+    git -C "$WORK/mbase/bump-me/.bare" remote add origin https://github.com/netresearch/bump-me.git
+    git init -q --bare "$WORK/mbase/prepared/.bare"
+    git -C "$WORK/mbase/prepared/.bare" remote add origin https://github.com/someone-else/prepared.git
     out=$(FR_BASE_DIR="$WORK/mbase" FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
     check "manifest: a BUMP row without a local checkout says so before approval" yes \
         "$(grep -q '| cl-empty | BUMP |.*no local checkout at' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: a BUMP row with a checkout carries no such note (control)" no \
-        "$(grep -q '| bump-me | BUMP |.*no local checkout' "$MWD/manifest.md" && echo yes || echo no)"
+        "$(grep -qE '\| bump-me \| BUMP \|.*(no local checkout|another origin)' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: a checkout with another origin is named before approval" yes \
+        "$(grep -q '| prepared | TAG-ONLY |.*has another origin' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: an OWN-PR-OPEN row without a checkout is named too" yes \
+        "$(grep -q '| own-pr | OWN-PR-OPEN |.*no local checkout' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: runs offline on a fixture survey" yes \
         "$([ -f "$MWD/manifest.md" ] && echo yes || echo no)"
     check "manifest: BUMP row classified" yes \
@@ -1233,6 +1240,9 @@ cat > "$SURV_BIN/gh" << 'STUB'
 #!/usr/bin/env bash
 [ "$1" = pr ] && { echo '[]'; exit 0; }
 for a in "$@"; do case "$a" in repos/*) path="$a" ;; esac; done
+if [ -n "$GH_STUB_FAIL" ]; then
+    case "$path" in *"$GH_STUB_FAIL"*) echo '{"message":"Server Error","status":"502"}'; exit 1 ;; esac
+fi
 case "$path" in
     */compare/*) cat "$GH_STUB_COMPARE" ;;
     */releases/latest) echo '{"tag_name":"v1.0.0"}' ;;
@@ -1270,6 +1280,10 @@ check "survey: a release workflow the API answered 404 for is NO-RELEASE-JOB" "N
     "$(GH_STUB_RELEASE=missing survey_class "$REL_CMP")"
 check "survey: a failed read of the release workflow is SURVEY-INCOMPLETE" "SURVEY-INCOMPLETE 1 1" \
     "$(GH_STUB_RELEASE=fail survey_class "$REL_CMP")"
+for f in .claude-plugin/plugin.json composer.json CHANGELOG.md; do
+    check "survey: a failed read of $f is SURVEY-INCOMPLETE, not an absent file" "SURVEY-INCOMPLETE 1 1" \
+        "$(GH_STUB_FAIL="contents/$f" survey_class "$REL_CMP")"
+done
 # package.json whose only change is the "private" key ships nothing; seven
 # repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
 pj_cmp() { # PATCH — a compare with package.json modified by PATCH

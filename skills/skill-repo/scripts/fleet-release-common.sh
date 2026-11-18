@@ -143,7 +143,7 @@ FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\
 # arbitrary old tag and misclassify the repo as diverged (seen live 2026-08-13).
 # Input with no trailing semver at all degrades to 0.0.0; the manifest flags
 # those rows as nonstandard instead of trusting the math.
-FR_JQ_VPARSE='def vparse: (capture("(?<v>[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?)$") // {v: "0.0.0"}) | .v | split("-")[0] | split("+")[0] | split(".") | map(tonumber? // 0);'
+FR_JQ_VPARSE='def reads_failed: ((.failed_reads // []) | length > 0) or (has("release_gate") and .release_gate == null); def vparse: (capture("(?<v>[0-9]+\\.[0-9]+\\.[0-9]+([-+][0-9A-Za-z.-]+)?)$") // {v: "0.0.0"}) | .v | split("-")[0] | split("+")[0] | split(".") | map(tonumber? // 0);'
 
 FR_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -272,6 +272,17 @@ fr_resolve_gitdir() { # DIR — three checkout layouts coexist (release-discipli
         return 0
     else
         return 1
+    fi
+}
+
+fr_checkout_state() { # REPO — "ok", "missing" or "foreign": what bump and
+    # finish will find under FR_BASE_DIR, asked before the approval
+    local gitdir
+    gitdir=$(fr_resolve_gitdir "$FR_BASE_DIR/$1" 2> /dev/null) || { echo missing; return 0; }
+    if fr_check_origin "$gitdir" "$(host_origin_suffix "$1")" > /dev/null 2>&1; then
+        echo ok
+    else
+        echo foreign
     fi
 }
 
@@ -539,9 +550,11 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
         elif .composer_has_version == true then "BLOCKED-COMPOSER-VERSION"
         elif ([.open_release_prs[]? | select(.author != $self)] | length) > 0 then "BLOCKED-FOREIGN-PR"
         elif ([.open_release_prs[]? | select(.author == $self)] | length) > 0 then "OWN-PR-OPEN"
-        # null = the driver could not read the release workflow: unknown, never
-        # "no release job", or one failed read drops a repo from the plan.
-        elif has("release_gate") and .release_gate == null then "SURVEY-INCOMPLETE"
+        # A failed read is unknown, never "absent": release_gate null or a
+        # failed plugin.json read would otherwise drop a repo from the plan.
+        # failed_reads lists contents reads that failed for another reason than
+        # 404 (plugin.json, composer.json, CHANGELOG.md, the release workflow).
+        elif reads_failed then "SURVEY-INCOMPLETE"
         elif .release_gate == false then "NO-RELEASE-JOB"
         # Before FIRST-RELEASE, deliberately: a failed tag query leaves
         # last_tag empty, which is indistinguishable from "never tagged" and
@@ -578,7 +591,7 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
 
 fr_manifest() {
     local survey="$FR_WORKDIR/survey.jsonl" manifest="$FR_WORKDIR/manifest.md"
-    local skeleton="$FR_WORKDIR/plan.skeleton.jsonl" row cls
+    local skeleton="$FR_WORKDIR/plan.skeleton.jsonl" row cls checkout
     local stabilize="$FR_WORKDIR/plan.stabilize.jsonl"
     [[ -s "$survey" ]] || fr_die "no survey at $survey — run: $FR_DRIVER survey first"
     [[ -n "$FR_SELF_LOGIN" ]] || fr_die "FR_SELF_LOGIN unresolved — cannot apply the foreign-PR author gate"
@@ -598,8 +611,7 @@ fr_manifest() {
         # bump and finish work in a local checkout and never clone; the survey
         # reads the host and now finds repos nobody has cloned yet. Say so
         # here, before the approval, not as a FAIL after it.
-        checkout=yes
-        fr_resolve_gitdir "$FR_BASE_DIR/$(jq -r '.repo' <<< "$row")" > /dev/null 2>&1 || checkout=no
+        checkout=$(fr_checkout_state "$(jq -r '.repo' <<< "$row")")
         jq -r --arg cls "$cls" --arg checkout "$checkout" --arg base "$FR_BASE_DIR" "$FR_JQ_VPARSE"'
             def ordash: if . == null or . == "" then "—" else . end;
             [ .repo,
@@ -640,15 +652,24 @@ fr_manifest() {
                  (if $cls == "BLOCKED-ARCHIVED"
                   then "unarchive is a human decision; afterwards re-run survey --repos \(.repo)"
                   else empty end),
-                 (if ($cls | IN("BUMP", "FIRST-RELEASE", "TAG-ONLY")) and $checkout == "no"
-                  then "no local checkout at \($base)/\(.repo) — clone it before bump; this driver does not clone"
+                 (if (($cls | IN("BUMP", "FIRST-RELEASE", "TAG-ONLY", "OWN-PR-OPEN"))
+                      or ((.claude_plugin // "") != "" and ((.claude_plugin | vparse)[0] == 0)
+                          and ($cls | IN("UP-TO-DATE", "SKIP-CI-ONLY", "SKIP-NOT-SHIPPED"))))
+                     and $checkout != "ok"
+                  then (if $checkout == "missing"
+                        then "no local checkout at \($base)/\(.repo) — clone it before bump; this driver does not clone"
+                        else "the checkout at \($base)/\(.repo) has another origin — bump and finish refuse it"
+                        end)
                   else empty end),
                  (if $cls == "BUMP" and (.changelog_unreleased // "") == "empty"
                   then "CHANGELOG [Unreleased] is empty — write the release entries before the bump phase, or its roll fails on exactly this"
                   else empty end),
                  (if $cls == "SURVEY-INCOMPLETE"
-                  then (if has("release_gate") and .release_gate == null
-                        then "the RELEASE-WORKFLOW READ failed (this is not a missing release job) — re-run survey --repos \(.repo)"
+                  then (if reads_failed
+                        then "these READS failed (not an absent file): "
+                             + (((.failed_reads // []) + (if .release_gate == null and ((.failed_reads // []) | index("release workflow") | not) then ["release workflow"] else [] end)
+                                 + (if (.tags_failed // false) == true then ["tag query"] else [] end)) | join(", "))
+                             + " — re-run survey --repos \(.repo)"
                         elif (.tags_failed // false) == true
                         then "the TAG QUERY failed (this is not an untagged repo) — re-run survey --repos \(.repo)"
                         else "the compare MEASUREMENT failed (this is not a no-delta result) — re-run survey --repos \(.repo)"
