@@ -132,23 +132,32 @@ gh_ci_status() { # check-runs JSON on stdin -> the "CI on default" value.
 
 gh_inert_files() { # compare JSON on stdin -> JSON array of the files whose
     # patch proves they ship nothing. Today one shape: the root package.json
-    # where every changed line is the "private" key, plus at most a trailing
-    # comma moved onto a neighbour line. "private" only makes npm publish
+    # where every changed line is the "private" key, plus trailing-comma edits
+    # that each touch one member in place (a removed line directly followed by
+    # its added twin). "private" only makes npm publish
     # refuse; no release job runs npm publish (release-discipline.md). A file
     # without a patch (too large, binary) is never inert: unknown releases.
     jq -c '
-        def changed($p): [.[] | select(startswith($p) and (startswith($p + $p + $p) | not)) | .[1:]];
         def private_key: test("^\\s*\"private\"\\s*:\\s*(true|false)\\s*,?\\s*$");
         def nocomma: sub(",\\s*$"; "");
         [.files[]
          | select(.filename == "package.json" and .status == "modified"
                   and ((.patch // "") != ""))
-         | (.patch | split("\n")) as $lines
-         | ($lines | changed("+")) as $add
-         | ($lines | changed("-")) as $del
-         | select(([$add[], $del[]] | map(select(private_key)) | length) > 0
-                  and (($add | map(select(private_key | not) | nocomma) | sort)
-                       == ($del | map(select(private_key | not) | nocomma) | sort)))
+         # Changed lines with their position in the patch. Positions matter: a
+         # line moved from dependencies to devDependencies is a removed and an
+         # added line with equal text, and only adjacency tells it from a comma
+         # edit on the same member.
+         | [.patch | split("\n") | to_entries[]
+            | select(.value | test("^[-+]") and (test("^(\\+\\+\\+|---)") | not))
+            | {at: .key, op: .value[0:1], text: .value[1:]}] as $changed
+         | ($changed | map(select(.text | private_key | not))) as $rest
+         | select(($changed | map(select(.text | private_key)) | length) > 0
+                  and ($rest | length) % 2 == 0
+                  and ([range(0; $rest | length; 2) as $i
+                        | $rest[$i] as $old | $rest[$i + 1] as $new
+                        | $old.op == "-" and $new.op == "+" and $new.at == $old.at + 1
+                          and ($old.text | nocomma) == ($new.text | nocomma)]
+                       | all))
          | .filename]'
 }
 

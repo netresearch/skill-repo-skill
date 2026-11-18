@@ -612,11 +612,13 @@ fr_manifest() {
                  (if ((.inert // []) | length) > 0
                   then "changes only the private key: " + ((.inert // []) | join(", "))
                   else empty end),
-                 (if $cls == "SKIP-NOT-SHIPPED"
-                  then "delta touches only files no release ships: "
-                       + ((.files // [])[:5] | join(", "))
-                       + (if ((.files // []) | length) > 5 then ", …" else "" end)
-                  else empty end),
+                 ((.inert // []) as $inert
+                  | [(.files // [])[] | select(. as $f | $inert | index($f) | not)] as $ns
+                  | if $cls == "SKIP-NOT-SHIPPED" and ($ns | length) > 0
+                    then "delta touches only files no release ships: "
+                         + ($ns[:5] | join(", "))
+                         + (if ($ns | length) > 5 then ", …" else "" end)
+                    else empty end),
                  (if ($cls | IN("BUMP", "UP-TO-DATE", "SKIP-CI-ONLY", "SKIP-NOT-SHIPPED"))
                      and (.claude_plugin // "") != "" and ((.claude_plugin | vparse)[0] == 0)
                   then "0.x: stabilization candidate — STABILIZE row in plan.stabilize.jsonl"
