@@ -41,8 +41,11 @@ these existed re-implemented this page as one-off scripts and re-earned the
 same bugs (#218 records the last one: brace-group exits, pretty-printed survey
 rows, `//` on empty strings — all now encoded as tests). Deliberately out of
 scope, by design: merging anyone else's PR, unarchiving, cloning missing
-checkouts, writing CI files (a NO-RELEASE-JOB manifest row means adopt the
-shared release CI first), and non-default-branch releases — the
+checkouts (the manifest names every actionable row without a checkout under
+`FR_BASE_DIR`, so the clone happens before the approval, not as a bump-time
+FAIL), writing CI files (a NO-RELEASE-JOB manifest row means adopt the
+shared release CI first; a release workflow that could not be read is
+SURVEY-INCOMPLETE, never NO-RELEASE-JOB), and non-default-branch releases — the
 `--latest=false` rule below stays a manual concern. When a sweep needs
 something the driver lacks, extend it in a PR; a session-local driver script
 is how the next incident starts.

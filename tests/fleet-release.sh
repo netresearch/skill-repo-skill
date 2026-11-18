@@ -280,6 +280,8 @@ check "classify: composer block outranks TAG-ONLY (blocks before actions)" BLOCK
     "$(fr_classify "$(row '.composer_has_version = true | .claude_plugin = "1.10.0"')")"
 check "classify: NO-RELEASE-JOB" NO-RELEASE-JOB \
     "$(fr_classify "$(row '.release_gate = false')")"
+check "classify: an unread release workflow (null) is SURVEY-INCOMPLETE, never NO-RELEASE-JOB" SURVEY-INCOMPLETE \
+    "$(fr_classify "$(row '.release_gate = null')")"
 check "classify: foreign release PR blocks (author gate)" BLOCKED-FOREIGN-PR \
     "$(fr_classify "$(row '.open_release_prs = [{"id":"1","url":"u","author":"colleague","branch":"release/v2.0.0","title":"chore(release): v2.0.0"}]')")"
 check "classify: own open PR is its own class, not a block" OWN-PR-OPEN \
@@ -707,7 +709,13 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "pj-private" | .resolved = "o/pj-private" | .files = ["package.json"] | .inert = ["package.json"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
         row '.repo = "zero-docs" | .resolved = "o/zero-docs" | .claude_plugin = "0.4.0" | .root_plugin = "0.4.0" | .last_tag = "v0.4.0" | .last_release = "v0.4.0" | .files = ["README.md"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
     } > "$MWD/survey.jsonl"
-    out=$(FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
+    mkdir -p "$WORK/mbase/bump-me"
+    git init -q --bare "$WORK/mbase/bump-me/.bare"
+    out=$(FR_BASE_DIR="$WORK/mbase" FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
+    check "manifest: a BUMP row without a local checkout says so before approval" yes \
+        "$(grep -q '| cl-empty | BUMP |.*no local checkout at' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: a BUMP row with a checkout carries no such note (control)" no \
+        "$(grep -q '| bump-me | BUMP |.*no local checkout' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: runs offline on a fixture survey" yes \
         "$([ -f "$MWD/manifest.md" ] && echo yes || echo no)"
     check "manifest: BUMP row classified" yes \
@@ -1231,7 +1239,12 @@ case "$path" in
     */tags\?*) echo '[{"name":"v1.0.0"}]' ;;
     */commits/main) echo '{"sha":"abc123"}' ;;
     */contents/.claude-plugin/plugin.json*) echo '{"name":"demo","version":"1.0.0"}' ;;
-    */contents/.github/workflows/release.yml*) echo '{"name":"release.yml"}' ;;
+    */contents/.github/workflows/release.yml*)
+        case "$GH_STUB_RELEASE" in
+            fail) echo '{"message":"Server Error","status":"502"}'; exit 1 ;;
+            missing) echo '{"message":"Not Found","status":"404"}'; exit 1 ;;
+            *) echo '{"name":"release.yml"}' ;;
+        esac ;;
     repos/*/*/*) echo '{"message":"Not Found"}'; echo 'gh: Not Found (HTTP 404)' >&2; exit 1 ;;
     repos/*/*) echo '{"full_name":"o/demo","archived":false,"default_branch":"main"}' ;;
 esac
@@ -1252,6 +1265,11 @@ check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3
     "$(survey_class '{"ahead_by":2,"commits":[{"commit":{"message":"docs: move"}}],"files":[{"filename":"docs/a.md","previous_filename":"skills/x/references/a.md","status":"renamed"},{"filename":"README.md"}]}')"
 check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
     "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
+REL_CMP='{"ahead_by":1,"commits":[{"commit":{"message":"fix: x"}}],"files":[{"filename":"skills/x/SKILL.md","status":"modified"}]}'
+check "survey: a release workflow the API answered 404 for is NO-RELEASE-JOB" "NO-RELEASE-JOB 1 1" \
+    "$(GH_STUB_RELEASE=missing survey_class "$REL_CMP")"
+check "survey: a failed read of the release workflow is SURVEY-INCOMPLETE" "SURVEY-INCOMPLETE 1 1" \
+    "$(GH_STUB_RELEASE=fail survey_class "$REL_CMP")"
 # package.json whose only change is the "private" key ships nothing; seven
 # repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
 pj_cmp() { # PATCH — a compare with package.json modified by PATCH

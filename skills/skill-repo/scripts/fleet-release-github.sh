@@ -212,12 +212,16 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     else
         composer_has_version=false
     fi
-    if gh_json "repos/$FR_ORG/$r/contents/.github/workflows/release.yml?ref=$def" \
-        > /dev/null; then
-        release_gate=true
-    else
-        release_gate=false
-    fi
+    # 404 = no release workflow; any other failure = unknown (null), which
+    # classifies as SURVEY-INCOMPLETE instead of NO-RELEASE-JOB.
+    local gate_rc=0
+    gh_json "repos/$FR_ORG/$r/contents/.github/workflows/release.yml?ref=$def" \
+        > /dev/null || gate_rc=$?
+    case "$gate_rc" in
+        0) release_gate=true ;;
+        4) release_gate=false ;;
+        *) release_gate=null ;;
+    esac
 
     # Unreleased-section state, by the same rule the bump-time roll enforces —
     # an empty section becomes a manifest warning instead of a mid-bump failure.

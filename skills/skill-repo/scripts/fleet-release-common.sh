@@ -539,6 +539,9 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
         elif .composer_has_version == true then "BLOCKED-COMPOSER-VERSION"
         elif ([.open_release_prs[]? | select(.author != $self)] | length) > 0 then "BLOCKED-FOREIGN-PR"
         elif ([.open_release_prs[]? | select(.author == $self)] | length) > 0 then "OWN-PR-OPEN"
+        # null = the driver could not read the release workflow: unknown, never
+        # "no release job", or one failed read drops a repo from the plan.
+        elif has("release_gate") and .release_gate == null then "SURVEY-INCOMPLETE"
         elif .release_gate == false then "NO-RELEASE-JOB"
         # Before FIRST-RELEASE, deliberately: a failed tag query leaves
         # last_tag empty, which is indistinguishable from "never tagged" and
@@ -592,7 +595,12 @@ fr_manifest() {
     } > "$manifest"
     while IFS= read -u 3 -r row; do
         cls=$(fr_classify "$row")
-        jq -r --arg cls "$cls" "$FR_JQ_VPARSE"'
+        # bump and finish work in a local checkout and never clone; the survey
+        # reads the host and now finds repos nobody has cloned yet. Say so
+        # here, before the approval, not as a FAIL after it.
+        checkout=yes
+        fr_resolve_gitdir "$FR_BASE_DIR/$(jq -r '.repo' <<< "$row")" > /dev/null 2>&1 || checkout=no
+        jq -r --arg cls "$cls" --arg checkout "$checkout" --arg base "$FR_BASE_DIR" "$FR_JQ_VPARSE"'
             def ordash: if . == null or . == "" then "—" else . end;
             [ .repo,
               $cls,
@@ -632,11 +640,16 @@ fr_manifest() {
                  (if $cls == "BLOCKED-ARCHIVED"
                   then "unarchive is a human decision; afterwards re-run survey --repos \(.repo)"
                   else empty end),
+                 (if ($cls | IN("BUMP", "FIRST-RELEASE", "TAG-ONLY")) and $checkout == "no"
+                  then "no local checkout at \($base)/\(.repo) — clone it before bump; this driver does not clone"
+                  else empty end),
                  (if $cls == "BUMP" and (.changelog_unreleased // "") == "empty"
                   then "CHANGELOG [Unreleased] is empty — write the release entries before the bump phase, or its roll fails on exactly this"
                   else empty end),
                  (if $cls == "SURVEY-INCOMPLETE"
-                  then (if (.tags_failed // false) == true
+                  then (if has("release_gate") and .release_gate == null
+                        then "the RELEASE-WORKFLOW READ failed (this is not a missing release job) — re-run survey --repos \(.repo)"
+                        elif (.tags_failed // false) == true
                         then "the TAG QUERY failed (this is not an untagged repo) — re-run survey --repos \(.repo)"
                         else "the compare MEASUREMENT failed (this is not a no-delta result) — re-run survey --repos \(.repo)"
                         end)
