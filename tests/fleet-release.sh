@@ -4,7 +4,7 @@
 # tests/fleet-release.sh — exercises the fleet-release driver set:
 #   skills/skill-repo/scripts/fleet-release-common.sh   (shared engine)
 #   skills/skill-repo/scripts/fleet-release-github.sh   (public GitHub driver)
-#   skills/skill-repo/scripts/fleet-repos-github.txt    (default fleet list)
+#   skills/skill-repo/scripts/fleet-exclude-github.txt  (repos discovery must skip)
 #
 # Everything here is offline: classification, version ordering, parity from a
 # ref, tag idempotency, checkout-layout resolution, plan validation, the log
@@ -486,8 +486,6 @@ printf '# comment\n\nrepo-one\nrepo-two\n' > "$WORK/repos.txt"
 check "repos: inline wins" "a b" "$(fr_repos_from "a b" "$WORK/repos.txt" /dev/null | tr '\n' ' ' | sed 's/ $//')"
 check "repos: file skips comments and blanks" "repo-one repo-two" \
     "$(fr_repos_from "" "$WORK/repos.txt" /dev/null | tr '\n' ' ' | sed 's/ $//')"
-check "repos: fallback file" "repo-one repo-two" \
-    "$(fr_repos_from "" "" "$WORK/repos.txt" | tr '\n' ' ' | sed 's/ $//')"
 
 # --- survey merge-mode: a partial re-survey must not truncate the rest ------
 # (the manifest's own BLOCKED/SURVEY-INCOMPLETE advice is "re-run survey
@@ -679,11 +677,6 @@ out=$(FR_COMMIT_TRAILERS='Assisted-by: some-agent:some-model' \
     fr_assert_trailers_landed demo "$WORK/commit-trailer-substring" 2>&1; echo "rc=$?")
 check "trailers: a longer line is not accepted for a shorter request" yes \
     "$(grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
-
-# --- the shipped fleet list is non-empty and comment-clean -------------------
-n=$(grep -cvE '^\s*(#|$)' "$SCRIPTS/fleet-repos-github.txt")
-check "fleet-repos-github.txt ships a non-empty list" yes \
-    "$([ "$n" -gt 10 ] && echo yes || echo no)"
 
 # --- driver surfaces ----------------------------------------------------------
 echo
@@ -1307,59 +1300,72 @@ check "ci: a queued run without a start time counts as newest" "pending(1)" \
     "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"queued",conclusion:null,started_at:null}'; } | runs)")"
 check "ci: no runs is none" none "$(ci_status '{"total_count":0,"check_runs":[]}')"
 
-# --- fleet list drift: the default list against the marketplace manifest ------
-# The list missed formal-model-checking-skill until #449, and nothing said so:
-# the survey only reads the repos it is given. host_list_drift reads the
-# manifest the list is a snapshot of. A failed read must say "unchecked",
-# never look like a list with no gaps.
+# --- fleet discovery: the repos themselves, not a hand-kept list -------------
+# A kept list drifted from the org four times (2026-08 to 2026-11); the survey
+# now reads the org. host_discover_repos runs against a stub `gh` that serves
+# an org listing and answers contents reads from a fixture directory.
 echo
-echo "fleet-release-github.sh (fleet list drift, stub gh)"
-DRIFT_BIN="$WORK/drift-bin"
-mkdir -p "$DRIFT_BIN"
-cat > "$DRIFT_BIN/gh" << 'STUB'
+echo "fleet-release-github.sh (fleet discovery, stub gh)"
+DISC_BIN="$WORK/disc-bin"
+mkdir -p "$DISC_BIN"
+cat > "$DISC_BIN/gh" << 'STUB'
 #!/usr/bin/env bash
-[ -n "$GH_STUB_FAIL" ] && { echo '{"message":"Bad credentials","status":"401"}'; exit 1; }
-jq -n --arg c "$(base64 -w0 < "$GH_STUB_MARKETPLACE")" '{content: $c}'
+for a in "$@"; do case "$a" in orgs/*|repos/*) path="$a" ;; esac; done
+case "$path" in
+    orgs/*/repos*) cat "$GH_STUB_DIR/listing.json" ;;
+    repos/*/contents/*)
+        repo=${path#repos/*/}; repo=${repo%%/contents/*}
+        file=${path#*/contents/}; file=${file%%\?*}
+        if [ -e "$GH_STUB_DIR/fail-$repo" ]; then
+            echo '{"message":"Server Error","status":"502"}'; exit 1
+        elif [ -e "$GH_STUB_DIR/$repo/$file" ]; then
+            echo '{"name":"plugin.json"}'
+        else
+            echo '{"message":"Not Found","status":"404"}'; exit 1
+        fi ;;
+    *) echo "stub gh: unexpected $*" >&2; exit 2 ;;
+esac
 STUB
-chmod +x "$DRIFT_BIN/gh"
-jq -n '{plugins: [
-    {name: "a", source: {source: "github", repo: "netresearch/alpha-skill"}},
-    {name: "b", source: {source: "github", repo: "netresearch/beta-skill"}},
-    {name: "c", source: {source: "github", repo: "netresearch/cli-toolset"}},
-    {name: "x", source: {source: "github", repo: "elsewhere/foreign-skill"}},
-    {name: "u", source: {source: "url", url: "https://example.org/u.git", repo: "netresearch/url-skill"}},
-    {name: "l", source: "./local-plugin"}]}' > "$WORK/marketplace.json"
-drift() { # LISTFILE [FAIL] — the drift record as one line
-    local list="$1" fail="${2:-}"
+chmod +x "$DISC_BIN/gh"
+DISC="$WORK/disc"
+mkdir -p "$DISC/root-skill" "$DISC/cp-skill/.claude-plugin" "$DISC/forked" "$DISC/old" \
+    "$DISC/coding-ai-mirror" "$DISC/coding-ai-nohome" "$DISC/excluded"
+for r in root-skill forked old coding-ai-mirror coding-ai-nohome excluded; do
+    : > "$DISC/$r/plugin.json"
+done
+: > "$DISC/cp-skill/.claude-plugin/plugin.json"
+jq -n '[
+    {name: "root-skill", fork: false, archived: false, default_branch: "main"},
+    {name: "cp-skill", fork: false, archived: false, default_branch: "main"},
+    {name: "plain-repo", fork: false, archived: false, default_branch: "main"},
+    {name: "forked", fork: true, archived: false, default_branch: "main"},
+    {name: "old", fork: false, archived: true, default_branch: "main"},
+    {name: "coding-ai-mirror", fork: false, archived: false, default_branch: "main",
+     homepage: "https://git.netresearch.de/coding-ai/mirror"},
+    {name: "coding-ai-nohome", fork: false, archived: false, default_branch: "main",
+     homepage: null, description: "Private distribution mirror of git.netresearch.de/coding-ai/nohome"},
+    {name: "excluded", fork: false, archived: false, default_branch: "main"}]' > "$DISC/listing.json"
+printf '# reasons\nexcluded  # versioned by commit\n' > "$WORK/exclude.txt"
+discover() { # [FAILREPO] — "rc=<n> <repos joined by space>"
+    local failrepo="${1:-}" out rc=0
+    rm -f "$DISC"/fail-*
+    [ -z "$failrepo" ] || : > "$DISC/fail-$failrepo"
     # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
-    PATH="$DRIFT_BIN:$PATH" GH_STUB_MARKETPLACE="$WORK/marketplace.json" GH_STUB_FAIL="$fail" \
-        timeout -k 5 20 bash -c 'source "$1" && host_list_drift "$2"' \
-        _ "$SCRIPTS/fleet-release-github.sh" "$list" 2> /dev/null < /dev/null | paste -sd ' ' -
+    out=$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" timeout -k 5 20 bash -c \
+        'source "$1" && host_discover_repos "$2"' _ "$SCRIPTS/fleet-release-github.sh" "$WORK/exclude.txt" \
+        2> /dev/null < /dev/null) || rc=$?
+    echo "rc=$rc $(paste -sd ' ' - <<< "$out")"
 }
-printf '# head\nalpha-skill\n# not-released: cli-toolset\n' > "$WORK/list-gap.txt"
-printf 'alpha-skill\nbeta-skill\n\n# not-released: cli-toolset\n' > "$WORK/list-full.txt"
-printf 'alpha-skill\nbeta-skill\n' > "$WORK/list-noexc.txt"
-check "drift: a manifest repo missing from the list is reported" "checked 3 missing beta-skill" \
-    "$(drift "$WORK/list-gap.txt")"
-check "drift: a complete list reports no gap (control)" "checked 3" \
-    "$(drift "$WORK/list-full.txt")"
-check "drift: without its not-released line the exception is a gap" "checked 3 missing cli-toolset" \
-    "$(drift "$WORK/list-noexc.txt")"
-check "drift: an unreadable manifest is unchecked, never clean" "unchecked" \
-    "$(drift "$WORK/list-full.txt" fail | cut -d' ' -f1)"
-section() { # RECORD — the manifest section for a drift record
-    local record="$1"
-    printf '%s\n' "$record" | tr '|' '\n' > "$WORK/drift-rec.txt"
-    # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
-    bash -c 'source "$1" && fr_manifest_drift_section "$2"' \
-        _ "$SCRIPTS/fleet-release-github.sh" "$WORK/drift-rec.txt" 2> /dev/null < /dev/null
-}
-check "drift section: lists each missing repo" yes \
-    "$(section 'checked 3|missing beta-skill' | grep -qx -- '- beta-skill' && echo yes || echo no)"
-check "drift section: an unchecked record says NOT CHECKED" yes \
-    "$(section 'unchecked cannot read x' | grep -q '^NOT CHECKED: cannot read x' && echo yes || echo no)"
-check "drift section: a clean record names no repo (control)" no \
-    "$(section 'checked 3' | grep -q '^- ' && echo yes || echo no)"
+check "discovery: plugin.json at the root or under .claude-plugin, minus forks, archived, mirrors and exclusions" \
+    "rc=0 cp-skill root-skill" "$(discover)"
+check "discovery: a failed read fails discovery, never a shorter fleet" "rc=1" \
+    "$(discover cp-skill | cut -d' ' -f1)"
+rm -f "$DISC"/fail-*
+check "repos: no inline repos and no file means discovery" "cp-skill root-skill" \
+    "$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" bash -c 'source "$1" && fr_repos_from "" "" "$2"' \
+        _ "$SCRIPTS/fleet-release-github.sh" "$WORK/exclude.txt" 2> /dev/null | paste -sd ' ' -)"
+check "fleet-exclude-github.txt names coding_agent_cli_toolset" yes \
+    "$(fr_list_names "$SCRIPTS/fleet-exclude-github.txt" | grep -qx coding_agent_cli_toolset && echo yes || echo no)"
 
 # --- preflight: survey and bump run roll-changelog.py through uv (retro-skill#201)
 # Without uv the survey classified every CHANGELOG as "unknown" without a word,

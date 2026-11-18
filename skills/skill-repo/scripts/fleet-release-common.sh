@@ -1327,14 +1327,22 @@ fr_finish() { # PLAN [--continue]
 # ---------------------------------------------------------------------------
 # Repo-list resolution
 # ---------------------------------------------------------------------------
-fr_repos_from() { # REPOS_INLINE REPOS_FILE DEFAULT_FILE — echoes the list;
-    # '#' comment lines and blanks in files are skipped
-    local inline="$1" file="$2" fallback="$3"
+fr_repos_from() { # REPOS_INLINE REPOS_FILE EXCLUDE_FILE — echoes the repos;
+    # '#' comment lines and blanks in files are skipped. Without inline repos
+    # or a file the fleet comes from the host (host_discover_repos), minus the
+    # repos EXCLUDE_FILE names; a failed discovery fails here too.
+    local inline="$1" file="$2" exclude="$3"
     if [[ -n "$inline" ]]; then
         printf '%s\n' "$inline" | tr ' ' '\n' | grep -v '^$' || true
     elif [[ -n "$file" ]]; then
-        grep -vE '^\s*(#|$)' "$file" || true
-    elif [[ -f "$fallback" ]]; then
-        grep -vE '^\s*(#|$)' "$fallback" || true
+        fr_list_names "$file"
+    else
+        host_discover_repos "$exclude"
     fi
+}
+
+fr_list_names() { # FILE — the names in a list file: '#' starts a comment,
+    # blank lines are skipped; a missing file names nothing
+    [[ -f "$1" ]] || return 0
+    sed 's/#.*//; s/[[:space:]]//g' "$1" | grep -v '^$' || true
 }

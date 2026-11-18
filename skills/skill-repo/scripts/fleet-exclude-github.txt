@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: Netresearch DTT GmbH
+
+# Repos fleet-release-github.sh finds (non-fork, non-archived, a plugin.json on
+# the default branch) but must not release. One repo per line; '#' starts a
+# comment, and every entry names its reason. The fleet itself is read from the
+# org at survey time; this file lists only exceptions.
+
+coding_agent_cli_toolset  # ships the cli-tools plugin but is versioned by commit: no plugin.json version, no release tags
