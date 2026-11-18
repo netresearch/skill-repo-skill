@@ -711,6 +711,7 @@ if command -v gh > /dev/null 2>&1; then
         row '.repo = "zero-quiet" | .resolved = "o/zero-quiet" | .claude_plugin = "0.3.4" | .root_plugin = "0.3.4" | .last_tag = "v0.3.4" | .last_release = "v0.3.4" | .ahead = 0 | .nonci = 0'
         row '.repo = "zero-busy" | .resolved = "o/zero-busy" | .claude_plugin = "0.9.3" | .root_plugin = "0.9.3" | .last_tag = "v0.9.3" | .last_release = "v0.9.3"'
         row '.repo = "docs-only" | .resolved = "o/docs-only" | .files = ["README.md","docs/a.md","tests/t.sh"] | .nonci = 3 | .shipped = 0 | .renames_counted = true'
+        row '.repo = "pj-private" | .resolved = "o/pj-private" | .files = ["package.json"] | .inert = ["package.json"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
         row '.repo = "zero-docs" | .resolved = "o/zero-docs" | .claude_plugin = "0.4.0" | .root_plugin = "0.4.0" | .last_tag = "v0.4.0" | .last_release = "v0.4.0" | .files = ["README.md"] | .nonci = 1 | .shipped = 0 | .renames_counted = true'
     } > "$MWD/survey.jsonl"
     out=$(FR_SELF_LOGIN=sweep-bot bash "$SCRIPTS/fleet-release-github.sh" manifest --workdir "$MWD" 2>&1)
@@ -724,6 +725,8 @@ if command -v gh > /dev/null 2>&1; then
         "$(grep -q '| ci-only | SKIP-CI-ONLY |' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: not-shipped delta skipped, naming the files" yes \
         "$(grep -q '| docs-only | SKIP-NOT-SHIPPED |.*only files no release ships: README.md, docs/a.md, tests/t.sh' "$MWD/manifest.md" && echo yes || echo no)"
+    check "manifest: a private-only package.json row names the key, not a file that does not ship" "yes no" \
+        "$(grep -q '| pj-private | SKIP-NOT-SHIPPED |.*changes only the private key: package.json' "$MWD/manifest.md" && echo yes || echo no) $(grep -q '| pj-private |.*no release ships' "$MWD/manifest.md" && echo yes || echo no)"
     check "manifest: a not-shipped delta gets no skeleton row" "" \
         "$(jq -r 'select(.repo == "docs-only") | .repo' "$MWD/plan.skeleton.jsonl")"
     check "manifest: a 0.x not-shipped repo is a stabilization candidate, like CI-only" STABILIZE \
@@ -1256,6 +1259,53 @@ check "survey: moving a reference into docs/ is a shipped change (BUMP)" "BUMP 3
     "$(survey_class '{"ahead_by":2,"commits":[{"commit":{"message":"docs: move"}}],"files":[{"filename":"docs/a.md","previous_filename":"skills/x/references/a.md","status":"renamed"},{"filename":"README.md"}]}')"
 check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1 1" \
     "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"ci: move"}}],"files":[{"filename":".github/x.md","previous_filename":"skills/x/SKILL.md","status":"renamed"}]}')"
+# package.json whose only change is the "private" key ships nothing; seven
+# repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
+pj_cmp() { # PATCH — a compare with package.json modified by PATCH
+    local patch="$1"
+    jq -nc --arg p "$patch" '{ahead_by:1,commits:[{commit:{message:"chore: x"}}],
+        files:[{filename:"package.json",status:"modified",patch:$p}]}'
+}
+PJ_CTX=$'@@ -1,4 +1,5 @@\n {\n   "name": "@n/demo",\n   "version": "0.0.0-source",\n'
+check "survey: package.json adding only \"private\": true is SKIP-NOT-SHIPPED" "SKIP-NOT-SHIPPED 1 0" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,\n   "license": "MIT"')")"
+check "survey: \"private\" as last key, comma moved onto the neighbour, is SKIP-NOT-SHIPPED" "SKIP-NOT-SHIPPED 1 0" \
+    "$(survey_class "$(pj_cmp $'@@ -1,3 +1,4 @@\n {\n-  "version": "0.0.0-source"\n+  "version": "0.0.0-source",\n+  "private": true\n }')")"
+check "survey: package.json with private AND a dependency change is BUMP" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,\n-  "x": "1.0.0"\n+  "x": "1.0.1"')")"
+check "survey: package.json without the private key is BUMP (control)" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'-  "license": "MIT"\n+  "license": "GPL"')")"
+check "survey: package.json without a patch is BUMP (unknown releases)" "BUMP 1 1" \
+    "$(survey_class '{"ahead_by":1,"commits":[{"commit":{"message":"chore: x"}}],"files":[{"filename":"package.json","status":"modified"}]}')"
+check "survey: private-only package.json beside a shipped file is BUMP" "BUMP 2 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,' | jq -c '.files += [{filename:"skills/x/SKILL.md",status:"modified"}]')")"
+check "survey: a dependency moved between objects beside a private edit is BUMP" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp $'@@ -1,8 +1,9 @@\n {\n   "version": "0.0.0-source",\n+  "private": true,\n   "dependencies": {\n-    "x": "1.0.0",\n     "y": "2.0.0"\n   },\n   "devDependencies": {\n+    "x": "1.0.0",\n     "z": "3.0.0"')")"
+check "survey: a nested package.json is not the root one (BUMP)" "BUMP 1 1" \
+    "$(survey_class "$(pj_cmp "$PJ_CTX"$'+  "private": true,' | jq -c '.files[0].filename = "skills/x/package.json"')")"
+
+# --- CI on default: one verdict per check, from its newest run ---------------
+ci_status() { # CHECK-RUNS-JSON
+    local runs_json="$1"
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    timeout -k 5 20 bash -c 'source "$1" && gh_ci_status' _ "$SCRIPTS/fleet-release-github.sh" <<< "$runs_json" 2> /dev/null
+}
+cr() { # NAME CONCLUSION STARTED — one completed check run
+    local name="$1" conclusion="$2" started="$3"
+    jq -nc --arg n "$name" --arg c "$conclusion" --arg s "$started" '{name:$n,status:"completed",conclusion:$c,started_at:$s}'
+}
+runs() { jq -sc '{total_count: length, check_runs: .}'; }
+check "ci: a failed run replaced by a newer green run of the same check is success" success \
+    "$(ci_status "$( { cr wcag failure 2026-11-01T10:00:00Z; cr wcag success 2026-11-01T11:00:00Z; } | runs)")"
+check "ci: a green run replaced by a newer failed run fails" "failed: wcag" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; cr wcag failure 2026-11-01T11:00:00Z; } | runs)")"
+check "ci: a failure of another check still fails (control)" "failed: lint" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; cr lint failure 2026-11-01T09:00:00Z; } | runs)")"
+check "ci: a newer pending run reports pending" "pending(1)" \
+    "$(ci_status "$( { cr wcag failure 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"in_progress",conclusion:null,started_at:"2026-11-01T11:00:00Z"}'; } | runs)")"
+check "ci: a queued run without a start time counts as newest" "pending(1)" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"queued",conclusion:null,started_at:null}'; } | runs)")"
+check "ci: no runs is none" none "$(ci_status '{"total_count":0,"check_runs":[]}')"
 
 # --- fleet list drift: the default list against the marketplace manifest ------
 # The list missed formal-model-checking-skill until #449, and nothing said so:

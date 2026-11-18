@@ -111,6 +111,56 @@ fr_resolve_self_login() { # set FR_SELF_LOGIN, or die — never leave it poisone
         || fr_die "cannot resolve the authenticated gh login — check 'gh auth status'"
 }
 
+gh_ci_status() { # check-runs JSON on stdin -> the "CI on default" value.
+    # One verdict per check NAME, from its newest run: the same check can run
+    # on one commit several times (a merge_group run before the merge, the push
+    # run after it, a re-run). Counting every run reported a failure that a
+    # later run of the same check had already replaced
+    # (netresearch-branding-skill, WCAG AA contrast, 2026-11-18). A run with
+    # no start time yet is queued, so it counts as the newest.
+    jq -r '[.check_runs[]] as $all
+        | [$all | group_by(.name)[] | max_by(.started_at // "9999")] as $r
+        | ([$r[] | select(.status != "completed")] | length) as $pending
+        | ([$r[] | select(.status == "completed"
+            and (.conclusion | IN("success","skipped","neutral") | not)) | .name]) as $failed
+        | if ($all | length) == 0 then "none"
+          elif .total_count > 100 then "truncated(\(.total_count) runs)"
+          elif ($failed | length) > 0 then "failed: " + ($failed | join(","))
+          elif $pending > 0 then "pending(\($pending))"
+          else "success" end'
+}
+
+gh_inert_files() { # compare JSON on stdin -> JSON array of the files whose
+    # patch proves they ship nothing. Today one shape: the root package.json
+    # where every changed line is the "private" key, plus trailing-comma edits
+    # that each touch one member in place (a removed line directly followed by
+    # its added twin). "private" only makes npm publish
+    # refuse; no release job runs npm publish (release-discipline.md). A file
+    # without a patch (too large, binary) is never inert: unknown releases.
+    jq -c '
+        def private_key: test("^\\s*\"private\"\\s*:\\s*(true|false)\\s*,?\\s*$");
+        def nocomma: sub(",\\s*$"; "");
+        [.files[]
+         | select(.filename == "package.json" and .status == "modified"
+                  and ((.patch // "") != ""))
+         # Changed lines with their position in the patch. Positions matter: a
+         # line moved from dependencies to devDependencies is a removed and an
+         # added line with equal text, and only adjacency tells it from a comma
+         # edit on the same member.
+         | [.patch | split("\n") | to_entries[]
+            | select(.value | test("^[-+]") and (test("^(\\+\\+\\+|---)") | not))
+            | {at: .key, op: .value[0:1], text: .value[1:]}] as $changed
+         | ($changed | map(select(.text | private_key | not))) as $rest
+         | select(($changed | map(select(.text | private_key)) | length) > 0
+                  and ($rest | length) % 2 == 0
+                  and ([range(0; $rest | length; 2) as $i
+                        | $rest[$i] as $old | $rest[$i + 1] as $new
+                        | $old.op == "-" and $new.op == "+" and $new.at == $old.at + 1
+                          and ($old.text | nocomma) == ($new.text | nocomma)]
+                       | all))
+         | .filename]'
+}
+
 host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     local r="$1" meta resolved archived def
     meta=$(gh_json "repos/$FR_ORG/$r") || return 1
@@ -179,15 +229,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     # column must show a value, never an assumed checkmark.
     local ci_status
     ci_status=$(gh_json "repos/$FR_ORG/$r/commits/$def/check-runs?per_page=100" \
-        | jq -r '[.check_runs[]] as $r
-            | ([$r[] | select(.status != "completed")] | length) as $pending
-            | ([$r[] | select(.status == "completed"
-                and (.conclusion | IN("success","skipped","neutral") | not)) | .name]) as $failed
-            | if ($r | length) == 0 then "none"
-              elif .total_count > 100 then "truncated(\(.total_count) runs)"
-              elif ($failed | length) > 0 then "failed: " + ($failed | join(","))
-              elif $pending > 0 then "pending(\($pending))"
-              else "success" end' 2> /dev/null || echo "unknown")
+        | gh_ci_status 2> /dev/null || echo "unknown")
 
     # --limit 100: the default of 30 would let a foreign release PR beyond the
     # first page slip past the BLOCKED-FOREIGN-PR gate.
@@ -200,7 +242,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
                | {id: (.number | tostring), url, author: .author.login,
                   branch: .headRefName, title}]' || echo '[]')
 
-    local base ahead=-1 nonci=-1 subjects='[]' files='[]' files_truncated=false cmp
+    local base ahead=-1 nonci=-1 subjects='[]' files='[]' files_truncated=false cmp inert='[]'
     base="$rel"
     [[ -n "$base" ]] || base="$last_tag"
     if [[ -z "$base" ]]; then
@@ -226,6 +268,8 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
             # the compare API caps .files at 300 — 0-vs-nonzero stays valid,
             # the file list itself may be partial
             [[ "$(jq '.files | length' <<< "$cmp")" -ge 300 ]] && files_truncated=true
+            inert=$(gh_inert_files <<< "$cmp" 2> /dev/null || echo '[]')
+            [[ -n "$inert" ]] || inert='[]'
         fi
     fi
 
@@ -239,6 +283,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         --argjson subjects "$subjects" --argjson files "$files" \
         --argjson trunc "$files_truncated" --argjson prs "$prs" \
         --arg clstate "$cl_state" --argjson tagsfailed "$tags_failed" \
+        --argjson inert "$inert" \
         '{host: $host, repo: $repo, resolved: $resolved, default: $def, head: $head,
           archived: $archived, empty: false, unreachable: false, duplicate_of: "",
           last_release: $rel, last_tag: $last_tag,
@@ -247,7 +292,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
           tags_failed: $tagsfailed, renames_counted: true,
           changelog_unreleased: $clstate,
-          subjects: $subjects, files: $files,
+          subjects: $subjects, files: $files, inert: $inert,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'
 }
 
