@@ -196,35 +196,35 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     # negative ahead/nonci sentinels already use for a failed compare.
     last_tag=$(jq -r "$FR_JQ_VPARSE"' map(.name) | max_by(vparse) // empty' <<< "$tags")
 
-    local rootv cpv composer_has_version release_gate
-    rootv=$(gh_json -H "Accept: application/vnd.github.raw" \
-        "repos/$FR_ORG/$r/contents/plugin.json?ref=$def" \
-        | jq -r '.version // empty' 2> /dev/null || echo "")
-    cpv=$(gh_json -H "Accept: application/vnd.github.raw" \
-        "repos/$FR_ORG/$r/contents/.claude-plugin/plugin.json?ref=$def" \
-        | jq -r '.version // empty' 2> /dev/null || echo "")
+    # Every contents read: 404 is "absent", any other failure is recorded in
+    # failed_reads and makes the row SURVEY-INCOMPLETE. Taken as absent, a
+    # failed read would turn into "no release job", "no version", "no
+    # composer version field" or "no changelog" and drop or misplan the repo.
+    local rootv="" cpv="" composer_has_version=false release_gate=false raw rc
+    local -a failed_reads=()
+    rc=0; raw=$(gh_json -H "Accept: application/vnd.github.raw" "repos/$FR_ORG/$r/contents/plugin.json?ref=$def") || rc=$?
+    case "$rc" in 0) rootv=$(jq -r '.version // empty' <<< "$raw" 2> /dev/null || echo "") ;; 4) ;; *) failed_reads+=("plugin.json") ;; esac
+    rc=0; raw=$(gh_json -H "Accept: application/vnd.github.raw" "repos/$FR_ORG/$r/contents/.claude-plugin/plugin.json?ref=$def") || rc=$?
+    case "$rc" in 0) cpv=$(jq -r '.version // empty' <<< "$raw" 2> /dev/null || echo "") ;; 4) ;; *) failed_reads+=(".claude-plugin/plugin.json") ;; esac
     # bump-version.sh refuses a composer version field mid-bump with a
     # half-written tree — surface it as a manifest row instead.
-    if gh_json -H "Accept: application/vnd.github.raw" \
-        "repos/$FR_ORG/$r/contents/composer.json?ref=$def" \
-        | jq -e 'has("version")' > /dev/null 2>&1; then
-        composer_has_version=true
-    else
-        composer_has_version=false
-    fi
-    if gh_json "repos/$FR_ORG/$r/contents/.github/workflows/release.yml?ref=$def" \
-        > /dev/null; then
-        release_gate=true
-    else
-        release_gate=false
-    fi
+    rc=0; raw=$(gh_json -H "Accept: application/vnd.github.raw" "repos/$FR_ORG/$r/contents/composer.json?ref=$def") || rc=$?
+    case "$rc" in
+        0) jq -e 'has("version")' <<< "$raw" > /dev/null 2>&1 && composer_has_version=true ;;
+        4) ;;
+        *) failed_reads+=("composer.json") ;;
+    esac
+    rc=0; gh_json "repos/$FR_ORG/$r/contents/.github/workflows/release.yml?ref=$def" > /dev/null || rc=$?
+    case "$rc" in 0) release_gate=true ;; 4) ;; *) release_gate=null; failed_reads+=("release workflow") ;; esac
 
     # Unreleased-section state, by the same rule the bump-time roll enforces —
     # an empty section becomes a manifest warning instead of a mid-bump failure.
-    local cl_raw cl_state
-    cl_raw=$(gh_json -H "Accept: application/vnd.github.raw" \
-        "repos/$FR_ORG/$r/contents/CHANGELOG.md?ref=$def" || echo "")
+    local cl_raw="" cl_state
+    rc=0; cl_raw=$(gh_json -H "Accept: application/vnd.github.raw" "repos/$FR_ORG/$r/contents/CHANGELOG.md?ref=$def") || rc=$?
+    case "$rc" in 0|4) ;; *) cl_raw=""; failed_reads+=("CHANGELOG.md") ;; esac
     cl_state=$(fr_changelog_state "$cl_raw")
+    local failed_json
+    failed_json=$(printf '%s\n' "${failed_reads[@]+"${failed_reads[@]}"}" | jq -Rsc 'split("\n") | map(select(. != ""))')
 
     # Measured CI state of the default branch — the manifest's precondition
     # column must show a value, never an assumed checkmark.
@@ -284,7 +284,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
         --argjson subjects "$subjects" --argjson files "$files" \
         --argjson trunc "$files_truncated" --argjson prs "$prs" \
         --arg clstate "$cl_state" --argjson tagsfailed "$tags_failed" \
-        --argjson inert "$inert" \
+        --argjson inert "$inert" --argjson failed "$failed_json" \
         '{host: $host, repo: $repo, resolved: $resolved, default: $def, head: $head,
           archived: $archived, empty: false, unreachable: false, duplicate_of: "",
           last_release: $rel, last_tag: $last_tag,
@@ -293,7 +293,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
           ahead: $ahead, nonci: $nonci, files_truncated: $trunc,
           tags_failed: $tagsfailed, renames_counted: true,
           changelog_unreleased: $clstate,
-          subjects: $subjects, files: $files, inert: $inert,
+          subjects: $subjects, files: $files, inert: $inert, failed_reads: $failed,
           open_release_prs: $prs, ci_tag_rules: "", notes: ""}'
 }
 

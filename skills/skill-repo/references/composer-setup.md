@@ -181,6 +181,8 @@ composer.json.skill-trust.lock
 - `composer.lock` - Locks are for applications, not libraries
 - `vendor/` - Dependencies installed by users
 
+A path can be kept out of the Composer dist with `export-ignore` in `.gitattributes`: Packagist serves a tag's GitHub zipball, which `git archive` builds. The same attribute applies to every other `git archive` of that tree, so search the repo before adding it, CI workflows included (`rg --hidden -g '!.git' 'git archive|"archive"'`). On 2026-11-18 `/benchmarks export-ignore` in php-ast-edit-skill would have emptied the snapshot its benchmark harness builds with `git archive HEAD benchmarks/…` (0 of 23 files), and the change was dropped.
+
 ## Validation
 
 Check composer.json validity:
