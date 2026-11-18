@@ -549,12 +549,13 @@ fr_classify() { # ROW-JSON — one shared implementation for both hosts; blocks
         elif .archived == true then "BLOCKED-ARCHIVED"
         elif .composer_has_version == true then "BLOCKED-COMPOSER-VERSION"
         elif ([.open_release_prs[]? | select(.author != $self)] | length) > 0 then "BLOCKED-FOREIGN-PR"
-        elif ([.open_release_prs[]? | select(.author == $self)] | length) > 0 then "OWN-PR-OPEN"
+        # Before OWN-PR-OPEN: finish acts on that row without re-reading.
         # A failed read is unknown, never "absent": release_gate null or a
         # failed plugin.json read would otherwise drop a repo from the plan.
         # failed_reads lists contents reads that failed for another reason than
         # 404 (plugin.json, composer.json, CHANGELOG.md, the release workflow).
         elif reads_failed then "SURVEY-INCOMPLETE"
+        elif ([.open_release_prs[]? | select(.author == $self)] | length) > 0 then "OWN-PR-OPEN"
         elif .release_gate == false then "NO-RELEASE-JOB"
         # Before FIRST-RELEASE, deliberately: a failed tag query leaves
         # last_tag empty, which is indistinguishable from "never tagged" and

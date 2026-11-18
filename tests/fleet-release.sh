@@ -282,6 +282,10 @@ check "classify: NO-RELEASE-JOB" NO-RELEASE-JOB \
     "$(fr_classify "$(row '.release_gate = false')")"
 check "classify: an unread release workflow (null) is SURVEY-INCOMPLETE, never NO-RELEASE-JOB" SURVEY-INCOMPLETE \
     "$(fr_classify "$(row '.release_gate = null')")"
+check "classify: an own release PR with a failed read is SURVEY-INCOMPLETE, not OWN-PR-OPEN" SURVEY-INCOMPLETE \
+    "$(fr_classify "$(row '.failed_reads = ["release workflow"] | .open_release_prs = [{"id":"8","url":"u","author":"sweep-bot","branch":"release/v2.5.0","title":"chore(release): v2.5.0"}]')")"
+check "classify: an own release PR with complete reads stays OWN-PR-OPEN (control)" OWN-PR-OPEN \
+    "$(fr_classify "$(row '.failed_reads = [] | .open_release_prs = [{"id":"8","url":"u","author":"sweep-bot","branch":"release/v2.5.0","title":"chore(release): v2.5.0"}]')")"
 check "classify: foreign release PR blocks (author gate)" BLOCKED-FOREIGN-PR \
     "$(fr_classify "$(row '.open_release_prs = [{"id":"1","url":"u","author":"colleague","branch":"release/v2.0.0","title":"chore(release): v2.0.0"}]')")"
 check "classify: own open PR is its own class, not a block" OWN-PR-OPEN \
