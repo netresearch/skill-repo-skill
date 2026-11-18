@@ -13,7 +13,7 @@ This document states what a user can expect from this repository in terms of sec
 | Templates | `skills/skill-repo/templates/*` | Copied into new skill repositories |
 | Check scripts | `validate-skill.sh`, `validate-evals.sh`, `check-version-parity.sh` in `skills/skill-repo/scripts/` | On the user's machine, in consumers' CI, and as pre-commit hooks declared in `.pre-commit-hooks.yaml` |
 | Release scripts | `bump-version.sh`, `sync-plugin-manifest.sh`, `roll-changelog.py`, `migrate-licensing.sh` | On the user's machine, in the repository they are pointed at |
-| Fleet release driver | `fleet-release-github.sh`, `fleet-release-common.sh`, `fleet-repos-github.txt` | On a maintainer's machine, against GitHub repositories, with the maintainer's `gh` login and git credentials |
+| Fleet release driver | `fleet-release-github.sh`, `fleet-release-common.sh`, `fleet-exclude-github.txt` | On a maintainer's machine, against GitHub repositories, with the maintainer's `gh` login and git credentials |
 | Reusable workflows | `.github/workflows/{validate,tests,eval-validate,harness-verify,validate-agents,dependency-audit,ci-python,npm-pack-smoke,pr-quality,release}.yml` | In the CI of each calling repository, with the permissions that caller grants |
 | Release artefacts | archives, `SHA256SUMS.txt` and its Sigstore bundle, built by `.github/workflows/release.yml` | Downloaded by users from GitHub releases |
 | Maintainer tooling | `scripts/`, `Build/`, `.github/workflows/ab-evals-*.yml`, `tests/` | In this repository's CI and on maintainers' machines |

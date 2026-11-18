@@ -14,6 +14,7 @@
 # defines the host_* callbacks documented in its header.
 #
 # Usage:
+#   fleet-release-github.sh repos    [--org ORG]          (print the discovered fleet)
 #   fleet-release-github.sh survey   --workdir DIR [--repos "r1 r2"|--repos-file F] [--org ORG]
 #   fleet-release-github.sh manifest --workdir DIR
 #   fleet-release-github.sh bump     --workdir DIR [--plan F]
@@ -53,7 +54,7 @@ FR_DRIVER="$0"
 FR_ORG="${FR_ORG:-netresearch}"
 
 usage() {
-    grep -v '^# SPDX-' "$0" | sed -n '2,32p' | sed 's/^# \{0,1\}//'
+    grep -v '^# SPDX-' "$0" | sed -n '2,33p' | sed 's/^# \{0,1\}//'
     exit "${1:-1}"
 }
 
@@ -581,65 +582,69 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
 }
 
 # ---------------------------------------------------------------------------
-# Fleet list drift
+# Fleet discovery
 # ---------------------------------------------------------------------------
-# The default list is a snapshot of the marketplace manifest, refreshed by
-# hand, and the hand refresh was missed twice: the GitLab list was three repos
-# short on 2026-09-17, and formal-model-checking-skill was never surveyed
-# until #449. The survey reads the manifest it is a snapshot of and records
-# which manifest repos the list leaves out; the manifest phase appends that
-# record to manifest.md, the file the operator approves, and prints it after
-# the approval steps. A repo the list leaves out on purpose is
-# named on a `# not-released: <repo>` line in the list file.
-host_list_drift() { # LISTFILE — one record on stdout:
-    # "checked <manifest-count>" + one "missing <repo>" line per gap, or
-    # "unchecked <reason>" when the manifest could not be read. "unchecked"
-    # is never "no drift": a failed read must not look like a clean list.
-    local list="$1" mp="${FR_MARKETPLACE_REPO:-$FR_ORG/claude-code-marketplace}" raw repos
-    if ! raw=$(gh_json "repos/$mp/contents/.claude-plugin/marketplace.json"); then
-        echo "unchecked cannot read $mp/.claude-plugin/marketplace.json"
-        return 0
-    fi
-    if ! repos=$(jq -r '.content' <<< "$raw" | base64 -d 2> /dev/null \
-        | jq -r --arg org "$FR_ORG/" \
-            '.plugins[] | select(.source.source? == "github") | (.source.repo // empty)
-             | select(startswith($org)) | ltrimstr($org)' \
-            2> /dev/null | sort -u) || [[ -z "$repos" ]]; then
-        echo "unchecked $mp/.claude-plugin/marketplace.json names no $FR_ORG repo"
-        return 0
-    fi
-    echo "checked $(wc -l <<< "$repos" | tr -d ' ')"
-    comm -23 <(printf '%s\n' "$repos") \
-        <( { grep -v '^[[:space:]]*\(#\|$\)' "$list"
-             sed -n 's/^#[[:space:]]*not-released:[[:space:]]*\([^[:space:]]*\).*/\1/p' "$list"; } \
-           | sed 's/[[:space:]]*$//' | sort -u) \
-        | sed 's/^/missing /'
+# The fleet is read from the repositories themselves, never from a list a
+# person keeps: every non-fork, non-archived repo of the org whose default
+# branch carries .claude-plugin/plugin.json, the file every later phase reads
+# the version from (classification, plan, parity). A repo with only a root
+# plugin.json is named on stderr and left out, so the gap is visible. A
+# hand-kept list drifted from the org four times between 2026-08 and 2026-11
+# and hid the repos it missed from every sweep. Left out as well:
+#   - GitHub copies of repos released elsewhere: a homepage or description
+#     matching FR_MIRROR_RE (default: a git.netresearch.de URL; the coding-ai
+#     skills are mirrored here as private coding-ai-* repos and released by
+#     the GitLab driver). Both fields, because the mirrors are not uniform:
+#     3 of 52 had no homepage on 2026-11-18, but every one names the source
+#     in its description;
+#   - repos named in fleet-exclude-github.txt, one per line, each with the
+#     reason in a comment (a repo versioned by commit, for instance);
+#   - archived repos. One whose deprecation notice is still unreleased is
+#     surveyed by name (--repos) and unarchived only on its own approval.
+FR_MIRROR_RE="${FR_MIRROR_RE:-git\.netresearch\.de/}"
+
+gh_file_state() { # REPO REF PATH — 0 PATH is a file on REF, 4 it is not
+    # (404, or a directory of that name), 1 the read failed (never a guess)
+    local r="$1" ref="$2" path="$3" out rc=0
+    out=$(gh_json -X GET "repos/$FR_ORG/$r/contents/$path" -f "ref=$ref") || rc=$?
+    [[ "$rc" -eq 0 ]] || return "$rc"
+    [[ "$(jq -r 'if type == "object" then .type else "dir" end' <<< "$out" 2> /dev/null)" == file ]] && return 0
+    return 4
 }
 
-fr_manifest_drift_section() { # DRIFTFILE — the manifest section for its record
-    local f="$1"
-    [[ -s "$f" ]] || return 0
-    echo
-    echo "## Fleet list drift"
-    echo
-    case "$(head -n 1 "$f")" in
-        checked*)
-            if grep -q '^missing ' "$f"; then
-                echo "The marketplace ships repos the default list leaves out, so this"
-                echo "survey never read them. Add each to fleet-repos-github.txt, or name"
-                echo "it on a '# not-released:' line, then re-run survey:"
-                echo
-                sed -n 's/^missing \(.*\)/- \1/p' "$f"
-            else
-                echo "Every marketplace repo is on the default list or named on a"
-                echo "'# not-released:' line ($(head -n 1 "$f" | cut -d' ' -f2) manifest repos)."
+host_discover_repos() { # EXCLUDEFILE — the fleet, one repo per line, sorted;
+    # exit 1 and print nothing when any read failed: a partial fleet must not
+    # look complete
+    local exclude="$1" listing rows excluded name ref rc
+    excluded=$(fr_list_names "$exclude") || { fr_err "discovery: cannot read $exclude"; return 1; }
+    listing=$(gh_json --paginate "orgs/$FR_ORG/repos?type=all&per_page=100") || return 1
+    rows=$(jq -r --arg mirror "$FR_MIRROR_RE" '.[]
+            | select((.fork | not) and (.archived | not))
+            | select(((.homepage // "") + " " + (.description // "")) | test($mirror) | not)
+            | [.name, .default_branch] | @tsv' <<< "$listing") \
+        || { fr_err "discovery: cannot parse the $FR_ORG repo listing"; return 1; }
+    local -a found=()
+    while IFS=$'\t' read -r name ref; do
+        [[ -n "$name" ]] || continue
+        grep -qxF -- "$name" <<< "$excluded" && continue
+        rc=0
+        gh_file_state "$name" "$ref" .claude-plugin/plugin.json || rc=$?
+        if [[ "$rc" -eq 4 ]]; then
+            rc=0
+            gh_file_state "$name" "$ref" plugin.json || rc=$?
+            if [[ "$rc" -eq 0 ]]; then
+                fr_err "discovery: $FR_ORG/$name has plugin.json but no .claude-plugin/plugin.json — not surveyed"
+                continue
             fi
-            ;;
-        *)
-            echo "NOT CHECKED: $(head -n 1 "$f" | cut -d' ' -f2-). Whether the"
-            echo "default list covers the marketplace is unknown for this survey."
-            ;;
-    esac
+            [[ "$rc" -eq 4 ]] && continue
+        fi
+        case "$rc" in
+            0) found+=("$name") ;;
+            *) fr_err "discovery: cannot read $FR_ORG/$name"; return 1 ;;
+        esac
+    done <<< "$rows"
+    [[ "${#found[@]}" -gt 0 ]] || { fr_err "discovery: no repo in $FR_ORG carries .claude-plugin/plugin.json"; return 1; }
+    printf '%s\n' "${found[@]}" | sort -u
 }
 
 # ---------------------------------------------------------------------------
@@ -671,6 +676,11 @@ while [[ $# -gt 0 ]]; do
         *)            fr_err "unknown option: $1"; usage ;;
     esac
 done
+if [[ "$CMD" == repos ]]; then
+    # The fleet a survey without --repos reads, one repo per line.
+    host_discover_repos "$SCRIPT_DIR/fleet-exclude-github.txt"
+    exit $?
+fi
 [[ -n "$FR_WORKDIR" ]] || { fr_err "--workdir is required"; usage; }
 mkdir -p "$FR_WORKDIR"
 PLAN="${PLAN:-$FR_WORKDIR/plan.jsonl}"
@@ -678,25 +688,22 @@ PLAN="${PLAN:-$FR_WORKDIR/plan.jsonl}"
 case "$CMD" in
     survey)
         fr_preflight survey gh
-        REPOS=$(fr_repos_from "$REPOS_INLINE" "$REPOS_FILE" "$SCRIPT_DIR/fleet-repos-github.txt")
-        [[ -n "$REPOS" ]] || fr_die "no repos: pass --repos/--repos-file or ship fleet-repos-github.txt"
+        REPOS=$(fr_repos_from "$REPOS_INLINE" "$REPOS_FILE" "$SCRIPT_DIR/fleet-exclude-github.txt") \
+            || fr_die "fleet discovery failed (see above); --repos/--repos-file survey a named subset"
+        [[ -n "$REPOS" ]] || fr_die "no repos to survey"
+        # A full discovery is the whole fleet: drop the rows of an earlier
+        # survey so a repo excluded since then cannot reach the plan. A survey
+        # of named repos (--repos/--repos-file) replaces only their rows.
+        if [[ -z "$REPOS_INLINE" && -z "$REPOS_FILE" ]]; then
+            rm -f "$FR_WORKDIR/survey.jsonl" "$FR_WORKDIR/.seen-resolved"
+        fi
         # shellcheck disable=SC2086  # word splitting is the point
         fr_survey $REPOS
-        # Only the default list claims to be the fleet; --repos/--repos-file
-        # is a deliberate subset (a re-survey of one repo, for instance), and
-        # a re-survey keeps the record of the full one.
-        if [[ -z "$REPOS_INLINE" && -z "$REPOS_FILE" ]]; then
-            host_list_drift "$SCRIPT_DIR/fleet-repos-github.txt" > "$FR_WORKDIR/list-drift.txt"
-            fr_manifest_drift_section "$FR_WORKDIR/list-drift.txt"
-        fi
         ;;
     manifest)
         fr_resolve_self_login
         fr_preflight manifest gh
         fr_manifest
-        if [[ -s "$FR_WORKDIR/list-drift.txt" ]]; then
-            fr_manifest_drift_section "$FR_WORKDIR/list-drift.txt" | tee -a "$FR_WORKDIR/manifest.md"
-        fi
         ;;
     bump)
         fr_resolve_self_login
