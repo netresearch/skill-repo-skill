@@ -1354,7 +1354,7 @@ printf '# reasons\nexcluded  # versioned by commit\n' > "$WORK/exclude.txt"
 discover() { # [EXCLUDEFILE [FAILREPO]] — "rc=<n> <repos joined by space>"; stderr to $WORK/disc.err
     local exclude="${1:-$WORK/exclude.txt}" failrepo="${2:-}" out rc=0
     rm -f "$DISC"/fail-*
-    [ -z "$failrepo" ] || : > "$DISC/fail-$failrepo"
+    [[ -z "$failrepo" ]] || : > "$DISC/fail-$failrepo"
     # FR_MIRROR_RE is pinned: an operator's own export must not change the fixture.
     # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
     out=$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" FR_MIRROR_RE='git\.netresearch\.de/' \
@@ -1374,7 +1374,7 @@ printf 'excluded\ncp-skill skill-a\n' > "$WORK/exclude-all.txt"
 check "discovery: a fleet the exclusions empty fails" "rc=1 " "$(discover "$WORK/exclude-all.txt")"
 cp "$WORK/exclude.txt" "$WORK/exclude-locked.txt"
 chmod 000 "$WORK/exclude-locked.txt"
-if [ "$(id -u)" -ne 0 ]; then
+if [[ "$(id -u)" -ne 0 ]]; then
     check "discovery: an unreadable exclusion file fails discovery" "rc=1 " "$(discover "$WORK/exclude-locked.txt")"
 fi
 check "repos: no inline repos and no file means discovery" "cp-skill skill-a" \
