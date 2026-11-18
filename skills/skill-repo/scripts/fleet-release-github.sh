@@ -116,9 +116,10 @@ gh_ci_status() { # check-runs JSON on stdin -> the "CI on default" value.
     # on one commit several times (a merge_group run before the merge, the push
     # run after it, a re-run). Counting every run reported a failure that a
     # later run of the same check had already replaced
-    # (netresearch-branding-skill, WCAG AA contrast, 2026-11-18).
+    # (netresearch-branding-skill, WCAG AA contrast, 2026-11-18). A run with
+    # no start time yet is queued, so it counts as the newest.
     jq -r '[.check_runs[]] as $all
-        | [$all | group_by(.name)[] | max_by(.started_at // "")] as $r
+        | [$all | group_by(.name)[] | max_by(.started_at // "9999")] as $r
         | ([$r[] | select(.status != "completed")] | length) as $pending
         | ([$r[] | select(.status == "completed"
             and (.conclusion | IN("success","skipped","neutral") | not)) | .name]) as $failed
@@ -259,6 +260,7 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
             # the file list itself may be partial
             [[ "$(jq '.files | length' <<< "$cmp")" -ge 300 ]] && files_truncated=true
             inert=$(gh_inert_files <<< "$cmp" 2> /dev/null || echo '[]')
+            [[ -n "$inert" ]] || inert='[]'
         fi
     fi
 

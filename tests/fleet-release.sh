@@ -1259,7 +1259,8 @@ check "survey: moving a skill file under .github/ is not CI-only (BUMP)" "BUMP 1
 # package.json whose only change is the "private" key ships nothing; seven
 # repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
 pj_cmp() { # PATCH — a compare with package.json modified by PATCH
-    jq -nc --arg p "$1" '{ahead_by:1,commits:[{commit:{message:"chore: x"}}],
+    local patch="$1"
+    jq -nc --arg p "$patch" '{ahead_by:1,commits:[{commit:{message:"chore: x"}}],
         files:[{filename:"package.json",status:"modified",patch:$p}]}'
 }
 PJ_CTX=$'@@ -1,4 +1,5 @@\n {\n   "name": "@n/demo",\n   "version": "0.0.0-source",\n'
@@ -1280,11 +1281,13 @@ check "survey: a nested package.json is not the root one (BUMP)" "BUMP 1 1" \
 
 # --- CI on default: one verdict per check, from its newest run ---------------
 ci_status() { # CHECK-RUNS-JSON
+    local runs_json="$1"
     # shellcheck disable=SC2016  # $1 expands in the child bash, not here
-    timeout -k 5 20 bash -c 'source "$1" && gh_ci_status' _ "$SCRIPTS/fleet-release-github.sh" <<< "$1" 2> /dev/null
+    timeout -k 5 20 bash -c 'source "$1" && gh_ci_status' _ "$SCRIPTS/fleet-release-github.sh" <<< "$runs_json" 2> /dev/null
 }
 cr() { # NAME CONCLUSION STARTED — one completed check run
-    jq -nc --arg n "$1" --arg c "$2" --arg s "$3" '{name:$n,status:"completed",conclusion:$c,started_at:$s}'
+    local name="$1" conclusion="$2" started="$3"
+    jq -nc --arg n "$name" --arg c "$conclusion" --arg s "$started" '{name:$n,status:"completed",conclusion:$c,started_at:$s}'
 }
 runs() { jq -sc '{total_count: length, check_runs: .}'; }
 check "ci: a failed run replaced by a newer green run of the same check is success" success \
@@ -1295,6 +1298,8 @@ check "ci: a failure of another check still fails (control)" "failed: lint" \
     "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; cr lint failure 2026-11-01T09:00:00Z; } | runs)")"
 check "ci: a newer pending run reports pending" "pending(1)" \
     "$(ci_status "$( { cr wcag failure 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"in_progress",conclusion:null,started_at:"2026-11-01T11:00:00Z"}'; } | runs)")"
+check "ci: a queued run without a start time counts as newest" "pending(1)" \
+    "$(ci_status "$( { cr wcag success 2026-11-01T10:00:00Z; jq -nc '{name:"wcag",status:"queued",conclusion:null,started_at:null}'; } | runs)")"
 check "ci: no runs is none" none "$(ci_status '{"total_count":0,"check_runs":[]}')"
 
 # --- fleet list drift: the default list against the marketplace manifest ------
