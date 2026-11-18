@@ -586,9 +586,11 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
 # ---------------------------------------------------------------------------
 # The fleet is read from the repositories themselves, never from a list a
 # person keeps: every non-fork, non-archived repo of the org whose default
-# branch carries plugin.json or .claude-plugin/plugin.json. A hand-kept
-# list drifted from the org four times between 2026-08 and 2026-11 and hid
-# the repos it missed from every sweep. Left out:
+# branch carries .claude-plugin/plugin.json, the file every later phase reads
+# the version from (classification, plan, parity). A repo with only a root
+# plugin.json is named on stderr and left out, so the gap is visible. A
+# hand-kept list drifted from the org four times between 2026-08 and 2026-11
+# and hid the repos it missed from every sweep. Left out as well:
 #   - GitHub copies of repos released elsewhere: a homepage or description
 #     matching FR_MIRROR_RE (default: a git.netresearch.de URL; the coding-ai
 #     skills are mirrored here as private coding-ai-* repos and released by
@@ -596,41 +598,53 @@ host_release_verify() { # REPO TAG — a pushed tag is not a release; assert the
 #     3 of 52 had no homepage on 2026-11-18, but every one names the source
 #     in its description;
 #   - repos named in fleet-exclude-github.txt, one per line, each with the
-#     reason in a comment (a repo versioned by commit, for instance).
+#     reason in a comment (a repo versioned by commit, for instance);
+#   - archived repos. One whose deprecation notice is still unreleased is
+#     surveyed by name (--repos) and unarchived only on its own approval.
 FR_MIRROR_RE="${FR_MIRROR_RE:-git\.netresearch\.de/}"
 
-gh_repo_has_manifest() { # REPO REF — 0 when REPO@REF carries a plugin.json,
-    # 4 when it carries none, 1 when a read failed (never a guess)
-    local r="$1" ref="$2" path rc
-    for path in plugin.json .claude-plugin/plugin.json; do
-        rc=0
-        gh_json "repos/$FR_ORG/$r/contents/$path?ref=$ref" > /dev/null || rc=$?
-        [[ "$rc" -eq 0 ]] && return 0
-        [[ "$rc" -eq 4 ]] || return 1
-    done
+gh_file_state() { # REPO REF PATH — 0 PATH is a file on REF, 4 it is not
+    # (404, or a directory of that name), 1 the read failed (never a guess)
+    local r="$1" ref="$2" path="$3" out rc=0
+    out=$(gh_json -X GET "repos/$FR_ORG/$r/contents/$path" -f "ref=$ref") || rc=$?
+    [[ "$rc" -eq 0 ]] || return "$rc"
+    [[ "$(jq -r 'if type == "object" then .type else "dir" end' <<< "$out" 2> /dev/null)" == file ]] && return 0
     return 4
 }
 
 host_discover_repos() { # EXCLUDEFILE — the fleet, one repo per line, sorted;
-    # exit 1 when any read failed: a partial fleet must not look complete
-    local exclude="$1" listing name ref rc
+    # exit 1 and print nothing when any read failed: a partial fleet must not
+    # look complete
+    local exclude="$1" listing rows excluded name ref rc
+    excluded=$(fr_list_names "$exclude") || { fr_err "discovery: cannot read $exclude"; return 1; }
     listing=$(gh_json --paginate "orgs/$FR_ORG/repos?type=all&per_page=100") || return 1
-    local -a found=()
-    while IFS=$'\t' read -r name ref; do
-        rc=0
-        gh_repo_has_manifest "$name" "$ref" || rc=$?
-        case "$rc" in
-            0) found+=("$name") ;;
-            4) ;;
-            *) fr_err "discovery: cannot read $FR_ORG/$name"; return 1 ;;
-        esac
-    done < <(jq -r --arg mirror "$FR_MIRROR_RE" '.[]
+    rows=$(jq -r --arg mirror "$FR_MIRROR_RE" '.[]
             | select((.fork | not) and (.archived | not))
             | select(((.homepage // "") + " " + (.description // "")) | test($mirror) | not)
-            | [.name, .default_branch] | @tsv' <<< "$listing")
-    [[ "${#found[@]}" -gt 0 ]] || { fr_err "discovery: no repo in $FR_ORG carries a plugin.json"; return 1; }
-    printf '%s\n' "${found[@]}" | sort -u \
-        | comm -23 - <(fr_list_names "$exclude" | sort -u)
+            | [.name, .default_branch] | @tsv' <<< "$listing") \
+        || { fr_err "discovery: cannot parse the $FR_ORG repo listing"; return 1; }
+    local -a found=()
+    while IFS=$'\t' read -r name ref; do
+        [[ -n "$name" ]] || continue
+        grep -qxF -- "$name" <<< "$excluded" && continue
+        rc=0
+        gh_file_state "$name" "$ref" .claude-plugin/plugin.json || rc=$?
+        if [[ "$rc" -eq 4 ]]; then
+            rc=0
+            gh_file_state "$name" "$ref" plugin.json || rc=$?
+            if [[ "$rc" -eq 0 ]]; then
+                fr_err "discovery: $FR_ORG/$name has plugin.json but no .claude-plugin/plugin.json — not surveyed"
+                continue
+            fi
+            [[ "$rc" -eq 4 ]] && continue
+        fi
+        case "$rc" in
+            0) found+=("$name") ;;
+            *) fr_err "discovery: cannot read $FR_ORG/$name"; return 1 ;;
+        esac
+    done <<< "$rows"
+    [[ "${#found[@]}" -gt 0 ]] || { fr_err "discovery: no repo in $FR_ORG carries .claude-plugin/plugin.json"; return 1; }
+    printf '%s\n' "${found[@]}" | sort -u
 }
 
 # ---------------------------------------------------------------------------
@@ -677,6 +691,12 @@ case "$CMD" in
         REPOS=$(fr_repos_from "$REPOS_INLINE" "$REPOS_FILE" "$SCRIPT_DIR/fleet-exclude-github.txt") \
             || fr_die "fleet discovery failed (see above); --repos/--repos-file survey a named subset"
         [[ -n "$REPOS" ]] || fr_die "no repos to survey"
+        # A full discovery is the whole fleet: drop the rows of an earlier
+        # survey so a repo excluded since then cannot reach the plan. A survey
+        # of named repos (--repos/--repos-file) replaces only their rows.
+        if [[ -z "$REPOS_INLINE" && -z "$REPOS_FILE" ]]; then
+            rm -f "$FR_WORKDIR/survey.jsonl" "$FR_WORKDIR/.seen-resolved"
+        fi
         # shellcheck disable=SC2086  # word splitting is the point
         fr_survey $REPOS
         ;;

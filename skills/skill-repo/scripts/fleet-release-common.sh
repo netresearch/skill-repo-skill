@@ -1335,14 +1335,17 @@ fr_repos_from() { # REPOS_INLINE REPOS_FILE EXCLUDE_FILE — echoes the repos;
     if [[ -n "$inline" ]]; then
         printf '%s\n' "$inline" | tr ' ' '\n' | grep -v '^$' || true
     elif [[ -n "$file" ]]; then
-        fr_list_names "$file"
+        fr_list_names "$file" || { fr_err "cannot read $file"; return 1; }
     else
         host_discover_repos "$exclude"
     fi
 }
 
-fr_list_names() { # FILE — the names in a list file: '#' starts a comment,
-    # blank lines are skipped; a missing file names nothing
-    [[ -f "$1" ]] || return 0
-    sed 's/#.*//; s/[[:space:]]//g' "$1" | grep -v '^$' || true
+fr_list_names() { # FILE — the names in a list file, split on whitespace:
+    # '#' starts a comment, blank lines are skipped; a missing file names
+    # nothing, an existing file that cannot be read fails
+    local file="$1" text
+    [[ -e "$file" ]] || return 0
+    text=$(sed 's/#.*//' "$file") || return 1
+    tr -s '[:space:]' '\n' <<< "$text" | grep -v '^$' || true
 }

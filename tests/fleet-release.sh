@@ -1315,11 +1315,13 @@ case "$path" in
     orgs/*/repos*) cat "$GH_STUB_DIR/listing.json" ;;
     repos/*/contents/*)
         repo=${path#repos/*/}; repo=${repo%%/contents/*}
-        file=${path#*/contents/}; file=${file%%\?*}
+        file=${path#*/contents/}
         if [ -e "$GH_STUB_DIR/fail-$repo" ]; then
             echo '{"message":"Server Error","status":"502"}'; exit 1
+        elif [ -d "$GH_STUB_DIR/$repo/$file" ]; then
+            echo '[{"name":"x","type":"file"}]'
         elif [ -e "$GH_STUB_DIR/$repo/$file" ]; then
-            echo '{"name":"plugin.json"}'
+            echo '{"name":"plugin.json","type":"file"}'
         else
             echo '{"message":"Not Found","status":"404"}'; exit 1
         fi ;;
@@ -1328,15 +1330,18 @@ esac
 STUB
 chmod +x "$DISC_BIN/gh"
 DISC="$WORK/disc"
-mkdir -p "$DISC/root-skill" "$DISC/cp-skill/.claude-plugin" "$DISC/forked" "$DISC/old" \
-    "$DISC/coding-ai-mirror" "$DISC/coding-ai-nohome" "$DISC/excluded"
-for r in root-skill forked old coding-ai-mirror coding-ai-nohome excluded; do
-    : > "$DISC/$r/plugin.json"
+for r in skill-a cp-skill forked old coding-ai-mirror coding-ai-nohome excluded; do
+    mkdir -p "$DISC/$r/.claude-plugin"
+    : > "$DISC/$r/.claude-plugin/plugin.json"
 done
-: > "$DISC/cp-skill/.claude-plugin/plugin.json"
+: > "$DISC/skill-a/plugin.json"
+mkdir -p "$DISC/root-only" "$DISC/dir-skill/.claude-plugin/plugin.json"
+: > "$DISC/root-only/plugin.json"
 jq -n '[
-    {name: "root-skill", fork: false, archived: false, default_branch: "main"},
+    {name: "skill-a", fork: false, archived: false, default_branch: "main"},
     {name: "cp-skill", fork: false, archived: false, default_branch: "main"},
+    {name: "root-only", fork: false, archived: false, default_branch: "main"},
+    {name: "dir-skill", fork: false, archived: false, default_branch: "main"},
     {name: "plain-repo", fork: false, archived: false, default_branch: "main"},
     {name: "forked", fork: true, archived: false, default_branch: "main"},
     {name: "old", fork: false, archived: true, default_branch: "main"},
@@ -1346,24 +1351,39 @@ jq -n '[
      homepage: null, description: "Private distribution mirror of git.netresearch.de/coding-ai/nohome"},
     {name: "excluded", fork: false, archived: false, default_branch: "main"}]' > "$DISC/listing.json"
 printf '# reasons\nexcluded  # versioned by commit\n' > "$WORK/exclude.txt"
-discover() { # [FAILREPO] — "rc=<n> <repos joined by space>"
-    local failrepo="${1:-}" out rc=0
+discover() { # [EXCLUDEFILE [FAILREPO]] — "rc=<n> <repos joined by space>"; stderr to $WORK/disc.err
+    local exclude="${1:-$WORK/exclude.txt}" failrepo="${2:-}" out rc=0
     rm -f "$DISC"/fail-*
     [ -z "$failrepo" ] || : > "$DISC/fail-$failrepo"
+    # FR_MIRROR_RE is pinned: an operator's own export must not change the fixture.
     # shellcheck disable=SC2016  # $1 and $2 expand in the child bash, not here
-    out=$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" timeout -k 5 20 bash -c \
-        'source "$1" && host_discover_repos "$2"' _ "$SCRIPTS/fleet-release-github.sh" "$WORK/exclude.txt" \
-        2> /dev/null < /dev/null) || rc=$?
+    out=$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" FR_MIRROR_RE='git\.netresearch\.de/' \
+        timeout -k 5 20 bash -c 'source "$1" && host_discover_repos "$2"' \
+        _ "$SCRIPTS/fleet-release-github.sh" "$exclude" 2> "$WORK/disc.err" < /dev/null) || rc=$?
     echo "rc=$rc $(paste -sd ' ' - <<< "$out")"
 }
-check "discovery: plugin.json at the root or under .claude-plugin, minus forks, archived, mirrors and exclusions" \
-    "rc=0 cp-skill root-skill" "$(discover)"
-check "discovery: a failed read fails discovery, never a shorter fleet" "rc=1" \
-    "$(discover cp-skill | cut -d' ' -f1)"
-rm -f "$DISC"/fail-*
-check "repos: no inline repos and no file means discovery" "cp-skill root-skill" \
-    "$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" bash -c 'source "$1" && fr_repos_from "" "" "$2"' \
+check "discovery: .claude-plugin/plugin.json, minus forks, archived, mirrors, directories and exclusions" \
+    "rc=0 cp-skill skill-a" "$(discover)"
+check "discovery: a root-only plugin.json is named on stderr, not surveyed" yes \
+    "$(grep -q 'root-only has plugin.json but no .claude-plugin/plugin.json' "$WORK/disc.err" && echo yes || echo no)"
+check "discovery: a failed read fails discovery and prints no repo" "rc=1 " \
+    "$(discover "$WORK/exclude.txt" cp-skill)"
+check "discovery: an excluded repo is never read, so its failure does not stop discovery" \
+    "rc=0 cp-skill skill-a" "$(discover "$WORK/exclude.txt" excluded)"
+printf 'excluded\ncp-skill skill-a\n' > "$WORK/exclude-all.txt"
+check "discovery: a fleet the exclusions empty fails" "rc=1 " "$(discover "$WORK/exclude-all.txt")"
+cp "$WORK/exclude.txt" "$WORK/exclude-locked.txt"
+chmod 000 "$WORK/exclude-locked.txt"
+if [ "$(id -u)" -ne 0 ]; then
+    check "discovery: an unreadable exclusion file fails discovery" "rc=1 " "$(discover "$WORK/exclude-locked.txt")"
+fi
+check "repos: no inline repos and no file means discovery" "cp-skill skill-a" \
+    "$(PATH="$DISC_BIN:$PATH" GH_STUB_DIR="$DISC" FR_MIRROR_RE='git\.netresearch\.de/' \
+        bash -c 'source "$1" && fr_repos_from "" "" "$2"' \
         _ "$SCRIPTS/fleet-release-github.sh" "$WORK/exclude.txt" 2> /dev/null | paste -sd ' ' -)"
+printf 'repo-one repo-two  # two on a line\nrepo-three\n' > "$WORK/repos-spaced.txt"
+check "repos: a repos file may hold several names on a line" "repo-one repo-two repo-three" \
+    "$(fr_repos_from "" "$WORK/repos-spaced.txt" /dev/null | paste -sd ' ' -)"
 check "fleet-exclude-github.txt names coding_agent_cli_toolset" yes \
     "$(fr_list_names "$SCRIPTS/fleet-exclude-github.txt" | grep -qx coding_agent_cli_toolset && echo yes || echo no)"
 
