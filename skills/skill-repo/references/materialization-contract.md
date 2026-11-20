@@ -302,9 +302,11 @@ meant to test.
 hook denies the generic path and its deny message names the skill's command,
 the model can follow the message straight to the command and never open
 `SKILL.md`. `skill_invoked` then reads 0 for an arm that used the tool in every
-run. Count three things per transcript: shell calls that name the skill's tool,
-calls that set the hook's escape variable, and `Skill(...)` calls. Many tool
-calls and few skill calls is an arm working without the instructions, and in
+run. Count three things per transcript: shell calls that run the skill's tool
+(not a `command -v` that only looks for it), calls that set the hook's escape
+variable, and loads of the skill, meaning `Skill(...)` calls and `Read` calls
+on its `SKILL.md`. Many tool calls and no load is an arm working without the
+instructions, and in
 the runs observed it cost turns: those that loaded the skill needed about half
 as many. An escape variable the deny message names is taught by it; in one
 unpublished set of four runs it was used in two, once on a command the hook
