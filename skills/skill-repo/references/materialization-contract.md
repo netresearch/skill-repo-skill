@@ -298,6 +298,19 @@ format [agentskills.io documents](https://agentskills.io/skill-creation/optimizi
 requests real users actually made rather than from the description they are
 meant to test.
 
+**Under an enforcing hook, count the tool calls as well.** Where a `PreToolUse`
+hook denies the generic path and its deny message names the skill's command,
+the model can follow the message straight to the command and never open
+`SKILL.md`. `skill_invoked` then reads 0 for an arm that used the tool in every
+run. Count three things per transcript: shell calls that name the skill's tool,
+calls that set the hook's escape variable, and `Skill(...)` calls. Many tool
+calls and few skill calls is an arm working without the instructions, and in
+the runs observed it cost turns: those that loaded the skill needed about half
+as many. An escape variable the deny message names is taught by it; in one
+unpublished set of four runs it was used in two, once on a command the hook
+never blocks. Tuning the `description` does nothing on this path, because the
+listing is not what leads the model to the tool.
+
 **Never copy them from a benchmark that measures the skill.** This advice, read
 literally, produced exactly that: the first trigger file written under it took
 its queries verbatim from `agent-system-evals`, named that repository's case
