@@ -7,6 +7,15 @@ Canonical responses to recurring reviewer comments on Netresearch skill PRs (Cop
 
 These were extracted from review patterns across 14+ skill PRs. Use them to keep responses consistent and to avoid re-litigating settled architectural decisions on every new PR.
 
+## Contents
+
+- "Set `private: true`"
+- "Pin `github:org/repo#vX.Y.Z` in install instructions"
+- "Drop `.claude-plugin/` … from `files`"
+- "Top-level `scripts/` shouldn't ship"
+- "`AGENTS.md` shouldn't ship"
+- Wording findings on eval patterns
+
 ## 1. "Set `private: true`"
 
 **Verdict:** Accept — already the template default.
