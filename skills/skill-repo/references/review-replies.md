@@ -74,6 +74,28 @@ Declining. Top-level `scripts/` is consumed at runtime — `skills/<name>/SKILL.
 Declining. `AGENTS.md` is the canonical agent rules entry point for the skill — npm consumers must receive the same rules file that marketplace consumers do, otherwise agents reading the installed package miss the harness contract documented there. This is part of the dual-distribution surface (see [skill-repo-skill PR #83](https://github.com/netresearch/skill-repo-skill/pull/83)).
 ```
 
+## 6. "The eval pattern rejects this correct wording" / "accepts this wrong answer"
+
+**Verdict:** Accept when the pattern accepts a wrong answer that a model could give. Accept a rejected correct wording in the first two review rounds. Decline a further correct wording after that.
+
+**Criteria:** A keyword pattern cannot list every correct wording, and each widened pattern gives the next round something to find. [git-workflow-skill#487](https://github.com/netresearch/git-workflow-skill/pull/487) and [typo3-testing-skill#268](https://github.com/netresearch/typo3-testing-skill/pull/268) drew 11 such findings over four rounds.
+
+- **Accepts a wrong answer:** fix it in any round. Add the answer to `samples.failing`, and use a `must_not` assertion when the answer gives forbidden advice. Where independent assertions cannot express the condition (two outcomes of one code state), decline and say so.
+- **Rejects a correct wording:** widen the pattern in rounds one and two, and check it with `grep -qiE`. From round three on, decline. Before declining, confirm that `samples.passing` is an answer a model gives, and that the rejected wording is no wording the skill itself teaches. A wording the skill teaches is accepted in any round.
+- **A claim about the eval format** ("there is no negative assertion type") is checked against `materialization-contract.md` before you act on it.
+
+```markdown
+Not changed: this is one more correct wording, and a keyword pattern cannot list all of them.
+```
+
+Add "The answers that were accepted although wrong are fixed and are failing samples." only when this PR fixed such answers.
+
+For a condition that independent assertions cannot express:
+
+```markdown
+Not changed: assertions are matched independently and cannot require that both outcomes belong to the same code state.
+```
+
 ## See Also
 
 - `installation-methods.md` — Method 4 (npm) for the full `files`-allowlist rationale.

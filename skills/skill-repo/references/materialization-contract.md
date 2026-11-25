@@ -236,6 +236,25 @@ ignored the type and credited whichever arm *contained* the pattern, so a negati
 expectation could not be stated as an assertion at all and had to live in
 `samples.failing`. Both directions are now pinned in `tests/run-ab-evals.sh`.
 
+**Four rules for a pattern.** Each one comes from review findings on
+[git-workflow-skill#487](https://github.com/netresearch/git-workflow-skill/pull/487) and
+[typo3-testing-skill#268](https://github.com/netresearch/typo3-testing-skill/pull/268),
+where 11 findings on two evals arrived over four review rounds:
+
+- **One fact per assertion.** An answer that must name two outcomes gets two assertions. A
+  single pattern that joins them fixes their order and wording. Assertions are matched
+  independently, so they cannot require that two outcomes belong to the same code state;
+  the reference text states that, and the eval does not test it.
+- **State a forbidden answer as `must_not`.** A positive pattern that tries to exclude a
+  negation ("do not remove …") grows into a long alternation. Match the wrong advice
+  itself, not a word that a correct answer also uses, and put a sentence with that word
+  into `samples.passing` so the validator checks it.
+- **Write one failing sample per wrong remedy**, such as a partial fix that names half of
+  the cause, besides the answer that misses the cause.
+- **Spread the passing sample over sentences.** `[^.]{0,60}` between two facts rejects a
+  correct answer that puts a full stop between them. A match that has to cross a sentence
+  is two assertions.
+
 **On a new or tightened eval, `samples` are required, not optional** (decided in
 [retro-skill#92](https://github.com/netresearch/retro-skill/issues/92)). `eval-validate.yml`
 writes the base branch's copy of the `evals.json` out on a pull request and hands it to the

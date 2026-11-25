@@ -847,5 +847,31 @@
         "The rule is good practice, so a clear description of the rule is enough evidence."
       ]
     }
+  },
+  {
+    "name": "eval_forbidden_advice_is_must_not",
+    "prompt": "A reviewer says our eval accepts the wrong answer 'Do not remove the GIT_* variables; skip the test', because the pattern remove.*GIT_ matches it. The reviewer adds that evals.json has no negative assertion type, so we should extend the regular expression. How should we fix the eval?",
+    "assertions": [
+      {
+        "type": "content",
+        "pattern": "must_not"
+      },
+      {
+        "type": "content",
+        "pattern": "fail(ing|ed)?[^.]{0,30}sample|samples\\.failing"
+      },
+      {
+        "type": "must_not",
+        "pattern": "no must_not (assertion )?type|must_not[^.]{0,20}(does not|doesn't) exist"
+      }
+    ],
+    "samples": {
+      "passing": "The claim is wrong: evals.json has the must_not type. Add a must_not assertion for the advice to skip the test. Add the reviewer's answer to samples.failing, then run validate-evals.sh.",
+      "failing": [
+        "There is no negative assertion type, so extend the regular expression to exclude 'do not'.",
+        "Add the answer to samples.failing and lengthen the pattern so that it excludes a negation.",
+        "No must_not type exists, so extend the regex. Add it as a failing sample."
+      ]
+    }
   }
 ]
