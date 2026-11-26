@@ -456,6 +456,232 @@ printf '# C\n\n## [0.3.0] - 2026-01-01\n\n- b\n' > "$f"
 check "seed: --dry-run writes nothing" 0 "$(roll "$f" 1.0.0 --dry-run --seed-entry "$SEED")"
 check "seed: --dry-run left the file alone" 0 "$(grep -c 'Unreleased' "$f")"
 
+# --- changelog.d fragments ----------------------------------------------------
+# Every case gets its own directory: the script reads changelog.d/ next to the
+# CHANGELOG it rolls, so a shared directory would leak fragments between cases.
+fragcase() { # NAME — fresh dir with an empty changelog.d/; sets d and f
+    d="$WORK/frag-$1"
+    rm -rf "$d"
+    mkdir -p "$d/changelog.d"
+    f="$d/CHANGELOG.md"
+}
+section() { # FILE HEADING-REGEX — the lines under one ## heading, up to the next
+    awk -v h="$2" '$0 ~ h { on = 1; next } on && /^## / { exit } on' "$1"
+}
+
+# The defect this exists for: rebasing sibling PRs that each added a
+# "### Changed" left the heading twice in [Unreleased] (MD024, and two lists
+# under one release). With a fragment in play, the collection folds them.
+fragcase dup
+cat > "$f" <<'EOF'
+# Changelog
+
+## [Unreleased]
+
+### Changed
+
+- first sibling
+
+### Changed
+
+- second sibling
+
+## [1.0.0] - 2026-01-01
+
+- old
+EOF
+printf -- '- from a fragment\n' > "$d/changelog.d/third-sibling.changed.md"
+check "fragments: duplicate ### Changed + fragment rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: duplicate ### Changed folded into one heading" 1 \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -cx '### Changed')"
+check "fragments: entries in order, existing first, fragment last" "- first sibling|- second sibling|- from a fragment" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep '^- ' | paste -sd'|')"
+check "fragments: folded and collected entries form one tight list" "- first sibling|- second sibling|- from a fragment" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A2 -x -- '- first sibling' | paste -sd'|')"
+check "fragments: collected fragment deleted" no \
+    "$([ -e "$d/changelog.d/third-sibling.changed.md" ] && echo yes || echo no)"
+
+# Into an empty [Unreleased]: headings in Keep a Changelog order, not file order.
+fragcase empty
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- a fix\n' > "$d/changelog.d/a-branch.fixed.md"
+printf -- '- a feature\n  continued\n- second feature\n' > "$d/changelog.d/b-branch.added.md"
+printf '# Changelog fragments\n' > "$d/changelog.d/README.md"
+check "fragments: empty Unreleased + fragments rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: the run reports what it collected" yes \
+    "$(grep -q '^collected 2 fragment(s): changelog.d/a-branch.fixed.md, changelog.d/b-branch.added.md$' "$WORK/out.txt" && echo yes || echo no)"
+check "fragments: headings in Keep a Changelog order" "### Added|### Fixed" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep '^### ' | paste -sd'|')"
+check "fragments: multi-line fragment kept verbatim" yes \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -qx '  continued' && echo yes || echo no)"
+check "fragments: a fresh empty Unreleased remains" empty \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+check "fragments: README.md is not collected (stays, and its text is not in the CHANGELOG)" "yes no" \
+    "$([ -e "$d/changelog.d/README.md" ] && echo yes || echo no) $(grep -q 'Changelog fragments' "$f" && echo yes || echo no)"
+check "fragments: the directory itself stays" yes "$([ -d "$d/changelog.d" ] && echo yes || echo no)"
+check "fragments: blank line after every collected heading (MD022)" 0 \
+    "$(awk 'p ~ /^#/ && $0 != "" { n++ } { p = $0 } END { print n + 0 }' "$f")"
+
+# A symlinked changelog.d/ is refused: the deletion after the roll would reach
+# files outside the repository.
+fragcase symlink
+rm -rf "$d/changelog.d"
+mkdir -p "$d/elsewhere"
+printf -- '- outside\n' > "$d/elsewhere/x.added.md"
+ln -s "$d/elsewhere" "$d/changelog.d"
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "fragments: symlinked changelog.d refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: symlinked changelog.d deletes nothing" yes \
+    "$([ -e "$d/elsewhere/x.added.md" ] && echo yes || echo no)"
+
+# A fragment with an open code fence is refused: once collected, the fence
+# would swallow every released heading below it.
+fragcase openfence
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- entry\n\n  ```text\n  not closed\n' > "$d/changelog.d/x.added.md"
+check "fragments: unclosed fence refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: unclosed fence keeps the fragment" yes \
+    "$([ -e "$d/changelog.d/x.added.md" ] && echo yes || echo no)"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```text\n  closed\n  ```\n' > "$d/changelog.d/x.added.md"
+check "fragments: a closed indented fence is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+
+# Into a filled [Unreleased], same category: one heading, existing entry first.
+fragcase same
+printf '## [Unreleased]\n\nIntro text.\n\n### Added\n\n- existing\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- new\n' > "$d/changelog.d/x.added.md"
+check "fragments: same category rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: same category keeps one heading, existing first" "Intro text.|### Added|- existing|- new" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -v '^$' | paste -sd'|')"
+# A blank line between two items makes the whole list loose (a paragraph gap
+# after every entry when rendered): the fragment joins the list it continues.
+check "fragments: appended bullet joins the existing list (no blank line)" "- existing|- new" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A1 -x -- '- existing' | paste -sd'|')"
+
+# After a paragraph, the list starts after a blank line (MD032).
+fragcase para
+printf '## [Unreleased]\n\n### Added\n\nA note, not a list.\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- new\n' > "$d/changelog.d/x.added.md"
+check "fragments: after a paragraph rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: blank line between a paragraph and the appended list" "A note, not a list.||- new" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A2 -x 'A note, not a list.' | paste -sd'|')"
+
+# Different category: the missing heading lands in Keep a Changelog order.
+fragcase other
+printf '## [Unreleased]\n\n### Fixed\n\n- a fix\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- a feature\n' > "$d/changelog.d/x.added.md"
+printf -- '- hardening\n' > "$d/changelog.d/x.security.md"
+check "fragments: different categories roll" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: Added inserted before Fixed, Security after it" "### Added|### Fixed|### Security" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep '^### ' | paste -sd'|')"
+
+# upgrading -> "### Upgrading from X.Y" of the newest release, before Added.
+fragcase upgrading
+printf '## [Unreleased]\n\n### Added\n\n- a\n\n## [v2.3.1] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- run the wizard\n' > "$d/changelog.d/x.upgrading.md"
+check "fragments: upgrading rolls" 0 "$(roll "$f" 2.4.0 --date 2026-08-13)"
+check "fragments: upgrading heading names the last minor, before Added" "### Upgrading from 2.3|### Added" \
+    "$(section "$f" '^## \\[v2\\.4\\.0\\]' | grep '^### ' | paste -sd'|')"
+
+# An indented fence inside a bullet is content, not a heading.
+fragcase fenced
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- documents the format:\n\n  ```markdown\n  ### Added\n  ```\n' > "$d/changelog.d/x.changed.md"
+check "fragments: indented fenced lookalike rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: the fenced line is kept verbatim" 1 "$(grep -cx '  ### Added' "$f")"
+check "fragments: …and creates no Added heading" 0 "$(grep -cx '### Added' "$f")"
+
+# First release: link-reference definitions end [Unreleased].
+fragcase firstrel
+printf '## [Unreleased]\n\n### Fixed\n\n- f\n\n[Unreleased]: https://example.invalid/commits/main\n' > "$f"
+printf -- '- a feature\n' > "$d/changelog.d/x.added.md"
+check "fragments: first release with link definitions rolls" 0 "$(roll "$f" 0.1.0 --date 2026-08-13)"
+check "fragments: collected above the link definitions, which stay last" "### Added|### Fixed|[Unreleased]: https://example.invalid/commits/main" \
+    "$(grep -E '^(### |\[Unreleased\]:)' "$f" | paste -sd'|')"
+
+# Refusals: each refuses the whole run, writes nothing, deletes nothing.
+for bad in heading prose name upper other-ext; do
+    fragcase "bad-$bad"
+    # A filled Unreleased, so a script that ignores changelog.d/ would roll.
+    printf '## [Unreleased]\n\n- pending\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+    printf -- '- fine\n' > "$d/changelog.d/a-ok.added.md"
+    case "$bad" in
+        heading) printf -- '- x\n\n### Fixed\n\n- y\n' > "$d/changelog.d/b.fixed.md" ;;
+        prose) printf 'Some prose first.\n\n- y\n' > "$d/changelog.d/b.fixed.md" ;;
+        name) printf -- '- y\n' > "$d/changelog.d/b.notes.md" ;;
+        upper) printf -- '- y\n' > "$d/changelog.d/B.fixed.md" ;;
+        other-ext) printf -- '- y\n' > "$d/changelog.d/b.fixed.txt" ;;
+    esac
+    before=$(sha256sum "$f")
+    check "fragments: invalid fragment ($bad) refused" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+    check "fragments: invalid fragment ($bad) named in the error" yes \
+        "$(grep -q 'changelog.d/ is not ready' "$WORK/err.txt" && grep -qE '  (b|B)\.' "$WORK/err.txt" && echo yes || echo no)"
+    check "fragments: invalid fragment ($bad) leaves CHANGELOG.md unchanged" "$before" "$(sha256sum "$f")"
+    check "fragments: invalid fragment ($bad) deletes no fragment" yes \
+        "$([ -e "$d/changelog.d/a-ok.added.md" ] && echo yes || echo no)"
+    check "fragments: invalid fragment ($bad) also fails --check-unreleased" 1 "$(roll "$f" --check-unreleased)"
+done
+
+# A fragment directory the roll cannot delete from is refused before the write.
+fragcase readonly
+printf '## [Unreleased]\n\n- pending\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- x\n' > "$d/changelog.d/x.added.md"
+before=$(sha256sum "$f")
+chmod a-w "$d/changelog.d"
+check "fragments: unwritable changelog.d refused" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+chmod u+w "$d/changelog.d"
+check "fragments: unwritable changelog.d leaves CHANGELOG.md unchanged" "$before" "$(sha256sum "$f")"
+
+# --dry-run lists the fragments and touches nothing.
+fragcase dry
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- x\n' > "$d/changelog.d/x.added.md"
+before=$(sha256sum "$f")
+check "fragments: dry run exits 0 on an Unreleased that only fragments fill" 0 "$(roll "$f" 1.1.0 --dry-run)"
+check "fragments: dry run lists the fragment it would collect" yes \
+    "$(grep -qx 'would collect: changelog.d/x.added.md' "$WORK/out.txt" && echo yes || echo no)"
+check "fragments: dry run deletes nothing" yes "$([ -e "$d/changelog.d/x.added.md" ] && echo yes || echo no)"
+check "fragments: dry run writes nothing" "$before" "$(sha256sum "$f")"
+
+# --check-unreleased: waiting fragments are content, and the roll agrees.
+fragcase chk
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- x\n' > "$d/changelog.d/x.added.md"
+check "fragments: check-unreleased with only fragments" has-content \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+check "fragments: …and the roll of the same tree succeeds" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+fragcase chk-missing
+printf '# C\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- x\n' > "$d/changelog.d/x.added.md"
+check "fragments: check-unreleased with fragments and no Unreleased heading" has-content \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+check "fragments: …and the roll creates the heading and succeeds" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: created Unreleased stays on top, the fragment under the release" "## [Unreleased]|## [1.1.0] - 2026-08-13|### Added|- x|## [1.0.0] - 2026-01-01" \
+    "$(grep -E '^(## |### |- x$)' "$f" | paste -sd'|')"
+
+# No fragments: README.md alone (the steady state of an adopting repo) and an
+# empty directory give the byte-identical output of a tree without changelog.d.
+SRC='# Changelog\n\n## [Unreleased]\n\n### Changed\n\n- a\n\n### Changed\n\n- b\n\n## [1.0.0] - 2026-01-01\n\n- old\n'
+src() { printf '%b' "$SRC"; }
+mkdir -p "$WORK/nofrag-plain"
+src > "$WORK/nofrag-plain/CHANGELOG.md"
+roll "$WORK/nofrag-plain/CHANGELOG.md" 1.1.0 --date 2026-08-13 > /dev/null
+plain_out=$(cat "$WORK/out.txt")
+fragcase readme-only
+src > "$f"
+printf '# Changelog fragments\n' > "$d/changelog.d/README.md"
+check "fragments: README.md only rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: README.md only is byte-identical to no changelog.d" yes \
+    "$(cmp -s "$f" "$WORK/nofrag-plain/CHANGELOG.md" && [ "$(cat "$WORK/out.txt")" = "$plain_out" ] && echo yes || echo no)"
+check "fragments: …which keeps a duplicate heading untouched (merge only with fragments)" 2 \
+    "$(grep -cx '### Changed' "$f")"
+fragcase emptydir
+src > "$f"
+check "fragments: empty changelog.d rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: empty changelog.d is byte-identical to no changelog.d" yes \
+    "$(cmp -s "$f" "$WORK/nofrag-plain/CHANGELOG.md" && echo yes || echo no)"
+
 echo
 if [ "$fail" -eq 0 ]; then
     echo "All roll-changelog tests passed"
