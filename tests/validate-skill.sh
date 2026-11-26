@@ -770,7 +770,7 @@ done
 
 echo "== Organisation reusables are called at @main =="
 # reusable_case <name> <want> <workflow line> <label>
-# Case one is the line that slipped into netresearch-branding-skill, copied.
+# Case one is the line that slipped into a skill repository, copied.
 reusable_case() {
     local name="$1" want="$2" line="$3" label="$4" dir out
     dir="$(fixture "reusable_$name" "${hdr}description: Use when doing X\n---\n# T\n")"
@@ -787,7 +787,7 @@ reusable_case() {
 }
 reusable_case real reject \
     '    uses: netresearch/.github/.github/workflows/script-check.yml@d9e0aa0325124dbee7a2ad206f76dcf37347d0ba # main' \
-    "the hash pin found in netresearch-branding-skill is rejected"
+    "the hash pin found in a skill repository is rejected"
 reusable_case quoted reject \
     "    uses: 'netresearch/skill-repo-skill/.github/workflows/validate.yml@0123456789abcdef0123456789abcdef01234567'" \
     "a quoted hash pin is rejected"

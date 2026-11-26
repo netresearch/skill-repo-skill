@@ -805,8 +805,8 @@ fi
 # referenced at @main, never at a commit hash: they are maintained together with
 # their callers, and a hash freezes a caller on an old copy while Renovate opens
 # digest PRs for it. A hash pin of netresearch/.github's script-check.yml slipped
-# into netresearch-branding-skill next to eighteen @main callers, and only a
-# Renovate PR exposed it (netresearch/netresearch-branding-skill#115). Third-party
+# into a skill repository next to eighteen @main callers, and only a
+# Renovate PR exposed it. Third-party
 # actions stay SHA-pinned; this check reads netresearch/* reusables only.
 if [[ -d "$REPO_DIR/.github/workflows" ]]; then
     PINNED_INTERNAL="$(grep -n -H -E '^[[:space:]]*(-[[:space:]]+)?uses[[:space:]]*:[[:space:]]*["'\'']?netresearch/[^/@[:space:]]+/\.github/workflows/[^@[:space:]]+@[0-9a-f]{40}' \
