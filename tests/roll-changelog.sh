@@ -496,6 +496,8 @@ check "fragments: duplicate ### Changed folded into one heading" 1 \
     "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -cx '### Changed')"
 check "fragments: entries in order, existing first, fragment last" "- first sibling|- second sibling|- from a fragment" \
     "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep '^- ' | paste -sd'|')"
+check "fragments: folded and collected entries form one tight list" "- first sibling|- second sibling|- from a fragment" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A2 -x -- '- first sibling' | paste -sd'|')"
 check "fragments: collected fragment deleted" no \
     "$([ -e "$d/changelog.d/third-sibling.changed.md" ] && echo yes || echo no)"
 
@@ -527,6 +529,18 @@ printf -- '- new\n' > "$d/changelog.d/x.added.md"
 check "fragments: same category rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 check "fragments: same category keeps one heading, existing first" "Intro text.|### Added|- existing|- new" \
     "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -v '^$' | paste -sd'|')"
+# A blank line between two items makes the whole list loose (a paragraph gap
+# after every entry when rendered): the fragment joins the list it continues.
+check "fragments: appended bullet joins the existing list (no blank line)" "- existing|- new" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A1 -x -- '- existing' | paste -sd'|')"
+
+# After a paragraph, the list starts after a blank line (MD032).
+fragcase para
+printf '## [Unreleased]\n\n### Added\n\nA note, not a list.\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- new\n' > "$d/changelog.d/x.added.md"
+check "fragments: after a paragraph rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: blank line between a paragraph and the appended list" "A note, not a list.||- new" \
+    "$(section "$f" '^## \\[1\\.1\\.0\\]' | grep -A2 -x 'A note, not a list.' | paste -sd'|')"
 
 # Different category: the missing heading lands in Keep a Changelog order.
 fragcase other

@@ -444,7 +444,8 @@ def collect_fragments(lines, fragments):
 
     The section is split into blocks at its '### ' headings (outside fences).
     A duplicated heading is folded into its first occurrence; a fragment goes
-    to the end of its heading's block, separated by a blank line; a missing
+    to the end of its heading's block, in the same list when the block ends
+    with a list item (see join_entries); a missing
     heading is inserted before the first heading that follows it in Keep a
     Changelog order, or at the end of the section. Text above the first
     '### ' stays on top. The section ends at the next '## ' heading or at a
@@ -474,7 +475,7 @@ def collect_fragments(lines, fragments):
         if same is None:
             blocks.append([head, body])
         elif body:
-            same[1] = same[1] + [""] + body if same[1] else body
+            same[1] = join_entries(same[1], body)
 
     upgrading = upgrading_heading(lines, [b[0] for b in blocks])
 
@@ -504,7 +505,7 @@ def collect_fragments(lines, fragments):
             )
             block = [heading, []]
             blocks.insert(at, block)
-        block[1] = block[1] + [""] + text_lines if block[1] else list(text_lines)
+        block[1] = join_entries(block[1], text_lines)
 
     out = lines[: idx + 1]
     preamble = strip_blank_edges(preamble)
@@ -518,6 +519,24 @@ def collect_fragments(lines, fragments):
     if tail:
         out += [""] + tail
     return out
+
+
+def join_entries(body, text_lines):
+    """Append a fragment's bullets to a heading's body.
+
+    Directly after a list item (or its indented continuation) the bullets join
+    the same list: a blank line between two items makes the whole list loose,
+    and it renders with a paragraph gap between every entry. After any other
+    text a blank line separates them (MD032).
+    """
+    if not body:
+        return list(text_lines)
+    last = body[-1]
+    first = text_lines[0] if text_lines else ""
+    in_list = last.startswith(("- ", "* ")) or (last.startswith("  ") and last.strip())
+    if in_list and first.startswith(("- ", "* ")):
+        return body + list(text_lines)
+    return body + [""] + list(text_lines)
 
 
 def strip_blank_edges(block):
