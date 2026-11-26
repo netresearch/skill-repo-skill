@@ -337,6 +337,9 @@ shipped() { # FILES-JSON -> count of paths the inert filter does NOT absorb
 check "inert: README, AGENTS, CLAUDE, CHANGELOG, CONTRIBUTING, CODE_OF_CONDUCT" 0 \
     "$(shipped '["README.md","AGENTS.md","CLAUDE.md","CHANGELOG.md","CONTRIBUTING.md","CODE_OF_CONDUCT.md"]')"
 check "inert: SECURITY*.md" 0 "$(shipped '["SECURITY.md","SECURITY-AUDIT.md"]')"
+check "inert: changelog.d/ fragments and their README" 0 \
+    "$(shipped '["changelog.d/fix-x.fixed.md","changelog.d/README.md"]')"
+check "shipped: a path that only starts like changelog.d" 1 "$(shipped '["changelog.dx/a.md"]')"
 check "inert: root docs/, tests/, evals/" 0 \
     "$(shipped '["docs/ARCHITECTURE.md","tests/fleet-release.sh","evals/evals.json"]')"
 check "inert: a skill's evals/, tests/ and README.md" 0 \
@@ -582,6 +585,41 @@ check "commit: a hook that always rejects fails after exactly two attempts" yes 
     "$([ "$(grep -c 'COMMIT EXIT' <<< "$out")" = 2 ] && echo yes || echo no)"
 check "commit: the permanent rejection is reported to the caller" yes \
     "$(grep -q 'FAIL demo: commit' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+
+# --- the roll deletes changelog.d/ fragments; the bump commit carries that ---
+mk_frag_repo() { # DIR FILE — a bump repo whose base commit holds FILE, now deleted
+    mk_commit_repo "$1" '#!/bin/sh
+exit 0'
+    mkdir -p "$(dirname "$1/$2")"
+    printf -- '- x\n' > "$1/$2"
+    git -C "$1" add -- "$2"
+    git -C "$1" -c commit.gpgsign=false commit -q --no-verify -m "add $2"
+    rm "$1/$2"
+}
+mk_frag_repo "$WORK/commit-fragment" changelog.d/fix-x.fixed.md
+out=$(fr_commit_allowlisted demo "$WORK/commit-fragment" 1.1.0 2>&1; echo "rc=$?")
+check "commit: a deleted changelog.d fragment is staged with the bump" "rc=0" "$(tail -1 <<< "$out")"
+check "commit: the bump commit records the fragment deletion" "D	changelog.d/fix-x.fixed.md" \
+    "$(git -C "$WORK/commit-fragment" show --name-status --format= HEAD | grep changelog.d)"
+check "commit: nothing left in the worktree after the fragment bump" "" \
+    "$(git -C "$WORK/commit-fragment" status --porcelain)"
+mk_frag_repo "$WORK/commit-deleted-foreign" NOTES.md
+out=$(fr_commit_allowlisted demo "$WORK/commit-deleted-foreign" 1.1.0 2>&1; echo "rc=$?")
+check "commit: a deleted file outside the allowlist still FAILs (control)" yes \
+    "$(grep -q 'unexpected change outside the version surfaces: NOTES.md' <<< "$out" && grep -q 'rc=1' <<< "$out" && echo yes || echo no)"
+
+# --- fr_changelog_state: fragments on the default branch are content ---------
+CL_EMPTY=$'# C\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old'
+check "changelog state: empty Unreleased, no fragments (control)" empty "$(fr_changelog_state "$CL_EMPTY")"
+check "changelog state: empty Unreleased, count 0 (control)" empty "$(fr_changelog_state "$CL_EMPTY" 0)"
+check "changelog state: empty Unreleased with fragments is has-content" has-content "$(fr_changelog_state "$CL_EMPTY" 2)"
+check "changelog state: no CHANGELOG.md stays absent (the bump would not roll)" absent "$(fr_changelog_state "" 2)"
+# The copy is classified in a private directory: a changelog.d/ that happens to
+# sit in TMPDIR must not be read as the repo's fragments.
+mkdir -p "$WORK/cltmp/changelog.d"
+printf -- '- stray\n' > "$WORK/cltmp/changelog.d/stray.added.md"
+check "changelog state: a changelog.d/ in TMPDIR is not the repo's" empty \
+    "$(TMPDIR="$WORK/cltmp" fr_changelog_state "$CL_EMPTY")"
 
 # --- FR_COMMIT_TRAILERS: disclosure the operator defines, not the driver -----
 # A bump commit must be able to carry provenance trailers (Assisted-by,
@@ -1253,6 +1291,12 @@ case "$path" in
     */tags\?*) echo '[{"name":"v1.0.0"}]' ;;
     */commits/main) echo '{"sha":"abc123"}' ;;
     */contents/.claude-plugin/plugin.json*) echo '{"name":"demo","version":"1.0.0"}' ;;
+    */contents/CHANGELOG.md*)
+        [ -n "$GH_STUB_CHANGELOG" ] && { printf '%s\n' "$GH_STUB_CHANGELOG"; exit 0; }
+        echo '{"message":"Not Found"}'; exit 1 ;;
+    */contents/changelog.d\?*)
+        [ -n "$GH_STUB_FRAGMENTS" ] && { printf '%s\n' "$GH_STUB_FRAGMENTS"; exit 0; }
+        echo '{"message":"Not Found"}'; exit 1 ;;
     */contents/.github/workflows/release.yml*)
         case "$GH_STUB_RELEASE" in
             fail) echo '{"message":"Server Error","status":"502"}'; exit 1 ;;
@@ -1288,6 +1332,26 @@ for f in .claude-plugin/plugin.json composer.json CHANGELOG.md; do
     check "survey: a failed read of $f is SURVEY-INCOMPLETE, not an absent file" "SURVEY-INCOMPLETE 1 1" \
         "$(GH_STUB_FAIL="contents/$f" survey_class "$REL_CMP")"
 done
+# changelog.d/ fragments on the default branch fill an empty [Unreleased].
+survey_clstate() { # — "<class> <changelog_unreleased> <failed_reads>" of the surveyed row
+    printf '%s\n' "$REL_CMP" > "$WORK/surv-compare.json"
+    # shellcheck disable=SC2016  # $1 expands in the child bash, not here
+    PATH="$SURV_BIN:$PATH" GH_STUB_COMPARE="$WORK/surv-compare.json" FR_SELF_LOGIN=sweep-bot \
+        timeout -k 5 60 bash -c 'source "$1" && row=$(fr_add_shipped "$(host_survey_repo demo)") \
+            && echo "$(fr_classify "$row") $(jq -r "[.changelog_unreleased, (.failed_reads | join(\",\"))] | join(\" \")" <<< "$row")"' \
+        _ "$SCRIPTS/fleet-release-github.sh" 2> /dev/null < /dev/null
+    return 0
+}
+SURV_CL=$'# C\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old'
+FRAG_LIST='[{"name":"README.md","type":"file"},{"name":"fix-x.fixed.md","type":"file"},{"name":"sub","type":"dir"}]'
+check "survey: empty Unreleased and no changelog.d (404) stays empty (control)" "BUMP empty " \
+    "$(GH_STUB_CHANGELOG="$SURV_CL" survey_clstate)"
+check "survey: a changelog.d holding only README.md stays empty" "BUMP empty " \
+    "$(GH_STUB_CHANGELOG="$SURV_CL" GH_STUB_FRAGMENTS='[{"name":"README.md","type":"file"}]' survey_clstate)"
+check "survey: a changelog.d fragment on the default branch is has-content" "BUMP has-content " \
+    "$(GH_STUB_CHANGELOG="$SURV_CL" GH_STUB_FRAGMENTS="$FRAG_LIST" survey_clstate)"
+check "survey: a failed read of changelog.d is SURVEY-INCOMPLETE, not 0 fragments" "SURVEY-INCOMPLETE empty changelog.d" \
+    "$(GH_STUB_CHANGELOG="$SURV_CL" GH_STUB_FAIL="contents/changelog.d" survey_clstate)"
 # package.json whose only change is the "private" key ships nothing; seven
 # repos surveyed as BUMP on 2026-11-12 and again on 2026-11-18 for it.
 pj_cmp() { # PATCH — a compare with package.json modified by PATCH

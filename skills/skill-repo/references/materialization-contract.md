@@ -367,6 +367,7 @@ For `new-skill` destination, use the templates in `skills/skill-repo/templates/`
 - `pr-quality.yml.template` (PR validation)
 - `auto-merge-deps.yml.template` (Dependabot/Renovate auto-merge)
 - `pre-commit.template`
+- `changelog.d-README.md.template` (copied to `changelog.d/README.md` when the repo takes changelog fragments; see release-discipline.md)
 
 Required files in the new repo:
 

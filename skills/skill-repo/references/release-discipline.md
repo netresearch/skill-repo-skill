@@ -10,6 +10,7 @@
 - Choosing the version step
 - Pre-Release Version-Parity Check
 - Changelog Rollover in the Bump Commit
+- Changelog fragments: `changelog.d/`, never `CHANGELOG.md`, in a feature PR
 - A reformatting hook aborts the first bump commit
 - Cache Safety: Never Edit the Installed Copy
 - Multi-Skill-Repo Release Dry-Run
@@ -300,6 +301,46 @@ the roll is generated text, and generated text is exactly what nobody proofreads
 Boundary regexes are also **fence-blind** — a scan anchored on `^##` matches a
 heading-looking line inside a fenced code block and splices the new section into
 the middle of an example. Track fences while scanning.
+
+## Changelog fragments: `changelog.d/`, never `CHANGELOG.md`, in a feature PR
+
+**In a repo that has a `changelog.d/` directory, a feature PR writes its entry
+to `changelog.d/<branch-slug>.<section>.md` and never edits `CHANGELOG.md`.**
+Sibling PRs that each add a line under `[Unreleased]` conflict as soon as one
+of them merges, and a rebase that resolves the conflict by keeping both sides
+leaves the same `### Changed` heading twice (MD024, two lists under one
+release). One file per PR cannot conflict.
+
+The format is the `changelog.d/` convention the org's TYPO3 extensions already
+use, so one convention holds across the org:
+
+- name `<branch-slug>.<section>.md`, lowercase; `<section>` is one of
+  `upgrading`, `added`, `changed`, `deprecated`, `removed`, `fixed`,
+  `security` and selects the heading — `upgrading` lands under
+  `### Upgrading from X.Y`, X.Y taken from the newest released heading;
+- content: one or more top-level bullets (`-` and a space), no line starting
+  with `#`. A change that belongs under two headings gets two files.
+
+**Collection happens at bump time, inside the roll.** `roll-changelog.py` reads
+`changelog.d/` next to the CHANGELOG it rolls and, before moving
+`[Unreleased]`, appends every fragment in file-name order at the end of its
+heading, inserts a missing heading in Keep a Changelog order (Upgrading, Added,
+Changed, Deprecated, Removed, Fixed, Security), folds a duplicated heading into
+its first occurrence, and creates a missing `[Unreleased]` heading. Only after
+`CHANGELOG.md` is written does it delete the fragments (never `README.md`,
+never the directory); the bump commit stages those deletions, which the
+driver's allowlist admits. Any other entry in the directory — a wrong name, a
+heading, prose before the first bullet — refuses the whole roll before
+anything is written: a guessed category ships a wrong release note.
+`--dry-run` lists the fragments it would collect; `--check-unreleased` and
+the fleet survey report `has-content` while fragments wait on the default
+branch, so a repo whose `[Unreleased]` is empty but whose fragments are not is
+a `BUMP`, not an `EMPTY` row. Without fragments the roll is byte-identical to
+the roll before this feature.
+
+To adopt it, copy `templates/changelog.d-README.md.template` to
+`changelog.d/README.md`. Entries already under `[Unreleased]` stay where they
+are; the collection appends after them.
 
 ## A reformatting hook aborts the first bump commit
 

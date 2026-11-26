@@ -222,7 +222,18 @@ host_survey_repo() { # REPO — one normalized row on stdout, or exit 1
     local cl_raw="" cl_state
     rc=0; cl_raw=$(gh_json -H "Accept: application/vnd.github.raw" "repos/$FR_ORG/$r/contents/CHANGELOG.md?ref=$def") || rc=$?
     case "$rc" in 0|4) ;; *) cl_raw=""; failed_reads+=("CHANGELOG.md") ;; esac
-    cl_state=$(fr_changelog_state "$cl_raw")
+    # changelog.d/ fragments the roll will collect count as Unreleased content.
+    # 404 is "no fragment directory"; any other failure is a failed read, not 0.
+    local cl_fragments=0
+    rc=0; raw=$(gh_json "repos/$FR_ORG/$r/contents/changelog.d?ref=$def") || rc=$?
+    case "$rc" in
+        0) cl_fragments=$(jq '[if type == "array" then .[] else empty end
+                | select(.type == "file" and .name != "README.md" and (.name | endswith(".md")))]
+                | length' <<< "$raw" 2> /dev/null) || { cl_fragments=0; failed_reads+=("changelog.d"); } ;;
+        4) ;;
+        *) failed_reads+=("changelog.d") ;;
+    esac
+    cl_state=$(fr_changelog_state "$cl_raw" "$cl_fragments")
     local failed_json
     failed_json=$(printf '%s\n' "${failed_reads[@]+"${failed_reads[@]}"}" | jq -Rsc 'split("\n") | map(select(. != ""))')
 

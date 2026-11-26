@@ -128,15 +128,17 @@ FR_CI_ONLY_RE='^\.github/|^\.gitlab-ci\.yml$|^renovate\.json$|^\.pre-commit-conf
 # Everything else — .gitignore, Build/, package.json, styles/, config/ … —
 # counts as shipped: being wrong there costs one release, not a skipped one.
 # shellcheck disable=SC2034  # consumed by fr_add_shipped
-FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$|^scripts/validate-skill\.sh$'
+FR_NOT_SHIPPED_RE='^(README|AGENTS|CLAUDE|CHANGELOG|CONTRIBUTING|CODE_OF_CONDUCT)\.md$|^SECURITY[^/]*\.md$|^(docs|tests|evals)/|^skills/[^/]+/(evals|tests)/|^skills/[^/]+/README\.md$|^scripts/validate-skill\.sh$|^changelog\.d/'
 # STABILIZE rows (0.x -> 1.0.0) seed this into [Unreleased] before the roll and
 # use it as the release body when the plan row leaves `body` empty: a first
 # stable release ships a promise, and the promise has to be written where a
 # consumer reads it (github-release-skill, "The 0.x -> 1.0 Release").
 # shellcheck disable=SC2034  # read by fr_bump_one and the tests
 FR_STABILIZE_ENTRY="${FR_STABILIZE_ENTRY:-First stable release. From 1.0.0 on, an incompatible change to what this plugin exposes — skill names, slash commands, trigger descriptions, hook behaviour, the arguments and output of its scripts — ships only in a new major version.}"
-# The only files a bump commit may touch.
-FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\.md|CHANGELOG\.md)$'
+# The only files a bump commit may touch. changelog.d/*.md: the roll collects
+# the changelog fragments into CHANGELOG.md and deletes them, and the bump
+# commit stages those deletions.
+FR_ALLOWLIST_RE='^(plugin\.json|\.claude-plugin/plugin\.json|skills/[^/]+/SKILL\.md|CHANGELOG\.md|changelog\.d/[^/]+\.md)$'
 # Version-aware compare/sort, shared by every jq call site. Extracts the
 # TRAILING semver so custom tag conventions (tender-estimation--v0.6.1) order
 # correctly too — a parse that degrades them all to [0] makes max_by pick an
@@ -166,20 +168,28 @@ fr_tool() { # NAME — locate a skill-repo tool (bump-version.sh, roll-changelog
 fr_note() { printf '%s\n' "$*"; }
 fr_err()  { printf 'ERROR: %s\n' "$*" >&2; }
 
-fr_changelog_state() { # RAW-CONTENT — "absent" | "empty" | "has-content" |
-    # "no-unreleased" | "unknown". An empty argument means the survey found no
-    # CHANGELOG.md. Classification is delegated to roll-changelog.py
-    # --check-unreleased so the survey warns by the SAME emptiness rule the
-    # bump-time roll enforces — five repos failed mid-bump on empty
-    # [Unreleased] sections in the 2026-08-27 sweep, each one visible to the
-    # survey that ran hours earlier.
-    local raw="$1" tool tmp state
+fr_changelog_state() { # RAW-CONTENT [FRAGMENT-COUNT] — "absent" | "empty" |
+    # "has-content" | "no-unreleased" | "unknown". An empty argument means the
+    # survey found no CHANGELOG.md. Classification is delegated to
+    # roll-changelog.py --check-unreleased so the survey warns by the SAME
+    # emptiness rule the bump-time roll enforces — five repos failed mid-bump
+    # on empty [Unreleased] sections in the 2026-08-27 sweep, each one visible
+    # to the survey that ran hours earlier.
+    # FRAGMENT-COUNT is the number of changelog.d/ fragments on the default
+    # branch: the roll collects them into [Unreleased] first, so any count
+    # above 0 is content. The survey has to pass it in, because the CHANGELOG
+    # it classifies is a temp copy with no changelog.d/ beside it. Without a
+    # CHANGELOG.md the state stays "absent": the bump rolls (and so collects)
+    # only when CHANGELOG.md exists.
+    local raw="$1" count="${2:-0}" tool tmp state
     [[ -n "$raw" ]] || { echo "absent"; return 0; }
+    [[ "$count" =~ ^[0-9]+$ && "$count" -gt 0 ]] && { echo "has-content"; return 0; }
     tool=$(fr_tool roll-changelog.py 2> /dev/null) || { echo "unknown"; return 0; }
-    tmp=$(mktemp "${TMPDIR:-/tmp}/fr-clstate.XXXXXX") || { echo "unknown"; return 0; }
-    printf '%s\n' "$raw" > "$tmp"
-    state=$(uv run "$tool" --check-unreleased "$tmp" 2> /dev/null) || state="unknown"
-    rm -f "$tmp"
+    # A private directory, so no changelog.d/ can sit beside the copy.
+    tmp=$(mktemp -d "${TMPDIR:-/tmp}/fr-clstate.XXXXXX") || { echo "unknown"; return 0; }
+    printf '%s\n' "$raw" > "$tmp/CHANGELOG.md"
+    state=$(uv run "$tool" --check-unreleased "$tmp/CHANGELOG.md" 2> /dev/null) || state="unknown"
+    rm -rf "$tmp"
     echo "${state:-unknown}"
 }
 fr_die()  { fr_err "$*"; exit 1; }

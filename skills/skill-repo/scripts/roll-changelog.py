@@ -11,6 +11,7 @@ new released heading, reproducing the repo's own heading shape.
 
 Usage:
     roll-changelog.py FILE VERSION [--date YYYY-MM-DD] [--dry-run] [--seed-entry TEXT]
+    roll-changelog.py FILE --check-unreleased
 
 Why this exists (references/release-discipline.md, "Changelog Rollover"):
 six released-heading shapes coexist in the fleet, and a roll anchored on one
@@ -36,6 +37,27 @@ Guards:
       anchored scan is fence-blind and splices sections into examples);
     * output keeps a blank line after each heading so the rolled file stays
       markdownlint-clean (MD022/MD032 red-lit 16 of 63 repos mid-sweep once).
+
+Changelog fragments (changelog.d/ next to FILE):
+    A pull request writes its entry into its own file instead of editing
+    [Unreleased], so sibling pull requests never conflict in CHANGELOG.md.
+    The convention is the one the org's TYPO3 extensions already use:
+    * name <branch-slug>.<section>.md, lowercase, where <section> is one of
+      upgrading, added, changed, deprecated, removed, fixed, security and
+      selects the heading ("upgrading" -> "### Upgrading from X.Y", X.Y taken
+      from the newest released heading, or an existing "### Upgrading…"
+      heading in [Unreleased]); README.md is skipped;
+    * content: one or more top-level bullets ("- "), no line starting with
+      "#" — the file name selects the heading.
+    Before the roll every fragment is appended, in file-name order, at the end
+    of its heading inside [Unreleased]; a missing heading is inserted in Keep
+    a Changelog order, a duplicated heading (a rebase of sibling entries) is
+    merged into its first occurrence, and a missing [Unreleased] heading is
+    created. Any other entry in changelog.d/ refuses the whole run, nothing
+    written. The fragments are deleted only after CHANGELOG.md is written;
+    --dry-run lists them and deletes nothing; --check-unreleased reports
+    has-content while fragments wait. Without fragments (no directory, or only
+    README.md) the output is byte-identical to a run without this feature.
 
 Exit codes: 0 = rolled (or clean --dry-run), 1 = refused; the file is never
 partially written (temp file + atomic replace).
@@ -66,6 +88,26 @@ BARE_PAREN_RE = re.compile(r"^##\s+(?P<tag>\S+)\s+\((?P<date>[^)]+)\)\s*$")
 BARE_DASH_RE = re.compile(
     r"^##\s+(?P<tag>v?\d[^\s\[\]]*)\s+(?P<dash>[-—–])\s+(?P<date>\S+)\s*$"
 )
+# Fragment type -> heading, in Keep a Changelog order; "upgrading" is resolved
+# per file (see upgrading_heading). Same table, name pattern and content rules
+# as the TYPO3 extensions' Build/Scripts/changelog-fragments.php, so one
+# changelog.d/ convention holds across the org.
+FRAGMENT_SECTIONS = {
+    "upgrading": None,
+    "added": "### Added",
+    "changed": "### Changed",
+    "deprecated": "### Deprecated",
+    "removed": "### Removed",
+    "fixed": "### Fixed",
+    "security": "### Security",
+}
+UPGRADING = "### Upgrading"
+FRAGMENT_NAME_RE = re.compile(
+    r"^[a-z0-9][a-z0-9._-]*\.(" + "|".join(FRAGMENT_SECTIONS) + r")\.md$"
+)
+# A keep-a-changelog link-reference definition ends [Unreleased] when no
+# released heading follows it (first release).
+LINK_DEF_RE = re.compile(r"^\[[^\]]+\]: \S")
 
 
 def fail(msg: str) -> None:
@@ -294,24 +336,7 @@ def seed_unreleased(lines, text):
         else [f"- {text}"]
     )
     wanted = " ".join(f"- {text}".split())
-    unreleased = None
-    first_heading = None
-    for i, line, in_fence in scan(lines):
-        if in_fence:
-            continue
-        if UNRELEASED_RE.match(line):
-            unreleased = i
-            break
-        if first_heading is None and line.startswith("## "):
-            first_heading = i
-    lines = list(lines)
-    if unreleased is None:
-        at = first_heading if first_heading is not None else len(lines)
-        block = ["## [Unreleased]", ""]
-        if at == len(lines) and lines and lines[-1].strip():
-            block = [""] + block
-        lines[at:at] = block
-        unreleased = at if block[0] else at + 1
+    lines, unreleased = ensure_unreleased(lines)
     # Only lines outside fences count: a fenced example holding "### Changed"
     # or the bullet itself must neither receive the promise nor suppress it.
     visible = [(i, line) for i, line, f in scan(lines) if not f and i > unreleased]
@@ -331,6 +356,193 @@ def seed_unreleased(lines, text):
     else:
         lines[unreleased + 1 : unreleased + 1] = ["", "### Changed", ""] + bullet_lines
     return lines
+
+
+def ensure_unreleased(lines):
+    """Return (lines, index of the Unreleased heading), creating the heading
+    above the first released heading (after the title block otherwise) when
+    the file has none. Fence-aware like every scan here."""
+    unreleased = None
+    first_heading = None
+    for i, line, in_fence in scan(lines):
+        if in_fence:
+            continue
+        if UNRELEASED_RE.match(line):
+            unreleased = i
+            break
+        if first_heading is None and line.startswith("## "):
+            first_heading = i
+    lines = list(lines)
+    if unreleased is None:
+        at = first_heading if first_heading is not None else len(lines)
+        block = ["## [Unreleased]", ""]
+        if at == len(lines) and lines and lines[-1].strip():
+            block = [""] + block
+        lines[at:at] = block
+        unreleased = at if block[0] else at + 1
+    return lines, unreleased
+
+
+def read_fragments(changelog_path):
+    """Return (directory, fragments) for changelog.d/ next to the CHANGELOG.
+
+    fragments is a list of (path, type, text_lines) in file-name order. No
+    directory, an empty one or one holding only README.md gives []. Every
+    other entry must be a regular file named <branch-slug>.<section>.md whose
+    content starts with a top-level bullet and has no line starting with "#";
+    any violation refuses the run with every problem listed, nothing written.
+    """
+    directory = os.path.join(
+        os.path.dirname(os.path.abspath(changelog_path)), "changelog.d"
+    )
+    if not os.path.isdir(directory):
+        return directory, []
+    try:
+        names = sorted(os.listdir(directory))
+    except OSError as exc:
+        fail(str(exc))
+    problems = []
+    fragments = []
+    for name in names:
+        if name == "README.md":
+            continue
+        path = os.path.join(directory, name)
+        m = FRAGMENT_NAME_RE.match(name)
+        if not m or os.path.islink(path) or not os.path.isfile(path):
+            problems.append(
+                f"  {name}  is not a file named <branch-slug>.<{'|'.join(FRAGMENT_SECTIONS)}>.md"
+            )
+            continue
+        try:
+            with open(path, encoding="utf-8", newline="") as fh:
+                text = fh.read().replace("\r\n", "\n").strip()
+        except (OSError, UnicodeDecodeError) as exc:
+            problems.append(f"  {name}  cannot be read: {exc}")
+            continue
+        if not text.startswith("- "):
+            problems.append(f'  {name}  must start with a top-level bullet ("- ")')
+            continue
+        text_lines = text.split("\n")
+        if any(line.startswith("#") for line in text_lines):
+            problems.append(
+                f"  {name}  must not contain a heading; the file name selects the heading"
+            )
+            continue
+        fragments.append((path, m.group(1), text_lines))
+    if problems:
+        fail(
+            "changelog.d/ is not ready:\n"
+            + "\n".join(problems)
+            + "\nSee changelog.d/README.md for the format."
+        )
+    return directory, fragments
+
+
+def collect_fragments(lines, fragments):
+    """Return lines with every fragment appended at the end of its heading in
+    [Unreleased].
+
+    The section is split into blocks at its '### ' headings (outside fences).
+    A duplicated heading is folded into its first occurrence; a fragment goes
+    to the end of its heading's block, separated by a blank line; a missing
+    heading is inserted before the first heading that follows it in Keep a
+    Changelog order, or at the end of the section. Text above the first
+    '### ' stays on top. The section ends at the next '## ' heading or at a
+    link-reference definition.
+    """
+    lines, idx = ensure_unreleased(lines)
+    visible = [(i, line) for i, line, f in scan(lines) if not f]
+    if sum(1 for _, line in visible if UNRELEASED_RE.match(line)) != 1:
+        fail("more than one Unreleased heading outside code fences (need exactly 1)")
+    end = next(
+        (
+            i
+            for i, line in visible
+            if i > idx and (line.startswith("## ") or LINK_DEF_RE.match(line))
+        ),
+        len(lines),
+    )
+    starts = [i for i, line in visible if idx < i < end and line.startswith("### ")]
+    preamble = lines[idx + 1 : starts[0] if starts else end]
+    blocks = []  # [head, [body lines]]
+    for n, s in enumerate(starts):
+        head = lines[s].rstrip()
+        body = strip_blank_edges(
+            lines[s + 1 : starts[n + 1] if n + 1 < len(starts) else end]
+        )
+        same = next((b for b in blocks if b[0] == head), None)
+        if same is None:
+            blocks.append([head, body])
+        elif body:
+            same[1] = same[1] + [""] + body if same[1] else body
+
+    upgrading = upgrading_heading(lines, [b[0] for b in blocks])
+
+    def heading_of(kind):
+        return FRAGMENT_SECTIONS[kind] or upgrading
+
+    def rank(head):
+        for n, kind in enumerate(FRAGMENT_SECTIONS):
+            if head == heading_of(kind) or (
+                kind == "upgrading" and head.startswith(UPGRADING)
+            ):
+                return n
+        return None
+
+    for _path, kind, text_lines in fragments:
+        heading = heading_of(kind)
+        block = next((b for b in blocks if b[0] == heading), None)
+        if block is None:
+            want = rank(heading)
+            at = next(
+                (
+                    n
+                    for n, b in enumerate(blocks)
+                    if rank(b[0]) is not None and rank(b[0]) > want
+                ),
+                len(blocks),
+            )
+            block = [heading, []]
+            blocks.insert(at, block)
+        block[1] = block[1] + [""] + text_lines if block[1] else list(text_lines)
+
+    out = lines[: idx + 1]
+    preamble = strip_blank_edges(preamble)
+    if preamble:
+        out += [""] + preamble
+    for head, body in blocks:
+        out += ["", head]
+        if body:
+            out += [""] + body
+    tail = lines[end:]
+    if tail:
+        out += [""] + tail
+    return out
+
+
+def strip_blank_edges(block):
+    block = list(block)
+    while block and not block[0].strip():
+        block.pop(0)
+    while block and not block[-1].strip():
+        block.pop()
+    return block
+
+
+def upgrading_heading(lines, heads):
+    """The heading an 'upgrading' fragment lands under: an existing
+    '### Upgrading…' heading in [Unreleased] (the last one), else
+    '### Upgrading from X.Y' with X.Y from the newest released heading of any
+    of the six shapes, else '### Upgrading'."""
+    found = [h for h in heads if h.startswith(UPGRADING)]
+    if found:
+        return found[-1]
+    labels = released_labels(lines)
+    if labels:
+        m = re.match(r"^(\d+\.\d+)", labels[0].removeprefix("v"))
+        if m:
+            return f"{UPGRADING} from {m.group(1)}"
+    return UPGRADING
 
 
 def wrap_width(lines):
@@ -355,12 +567,25 @@ def main() -> None:
     args = parse_args()
     if args.check_unreleased:
         lines, _eol, _tn = read_changelog(args.file)
-        print(unreleased_state(lines))
+        state = unreleased_state(lines)
+        # Waiting fragments are content: the roll collects them first, and
+        # creates a missing Unreleased heading to hold them.
+        _dir, fragments = read_fragments(args.file)
+        print("has-content" if fragments else state)
         return
     version = args.version
     lines, eol, trailing_newline = read_changelog(args.file)
     if args.seed_entry:
         lines = seed_unreleased(lines, args.seed_entry.strip())
+    fragment_dir, fragments = read_fragments(args.file)
+    if fragments:
+        # Checked before the write: a fragment that survives a written roll
+        # would be collected a second time by the next one.
+        if not args.dry_run and not os.access(fragment_dir, os.W_OK | os.X_OK):
+            fail(
+                f"{fragment_dir} is not writable — the fragments could not be removed after the roll"
+            )
+        lines = collect_fragments(lines, fragments)
     idx, first_released = locate_headings(lines)
 
     if first_released is None:
@@ -394,6 +619,25 @@ def main() -> None:
         print(f"rolled Unreleased -> {new_heading}")
     if defs_note:
         print(defs_note)
+    if fragments:
+        names = [f"changelog.d/{os.path.basename(path)}" for path, _k, _t in fragments]
+        if args.dry_run:
+            for name in names:
+                print(f"would collect: {name}")
+            return
+        kept = []
+        for path, _kind, _text in fragments:
+            try:
+                os.remove(path)
+            except OSError:
+                kept.append(path)
+        if kept:
+            fail(
+                f"{args.file} now holds the fragments, but {len(kept)} could not be "
+                "deleted. Delete them before the next run, or it adds their entries "
+                "again:\n  " + "\n  ".join(kept)
+            )
+        print(f"collected {len(names)} fragment(s): {', '.join(names)}")
 
 
 def released_labels(lines):
