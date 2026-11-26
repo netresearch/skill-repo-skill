@@ -401,25 +401,6 @@
       "evals_path": "skills/matrix-communication/evals/evals.json"
     },
     {
-      "name": "netresearch-branding",
-      "repo": "netresearch/netresearch-branding-skill",
-      "version": "2.6.0",
-      "eval_count": 21,
-      "results": {
-        "opus": {
-          "without_skill_pass_rate": 0.0,
-          "with_skill_pass_rate": 1.0,
-          "delta": 1.0,
-          "token_reduction_pct": 0.7,
-          "tool_call_reduction_pct": 0.75
-        }
-      },
-      "category": "meta",
-      "top_finding": "CSS variables, WCAG contrast, TYPO3 docs branding, breakpoints all unknown",
-      "skill_path": "skills/netresearch-branding/SKILL.md",
-      "evals_path": "skills/netresearch-branding/evals/evals.json"
-    },
-    {
       "name": "typo3-core-contributions",
       "repo": "netresearch/typo3-core-contributions-skill",
       "version": "1.9.0",

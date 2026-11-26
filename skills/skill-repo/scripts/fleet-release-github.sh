@@ -117,7 +117,7 @@ gh_ci_status() { # check-runs JSON on stdin -> the "CI on default" value.
     # on one commit several times (a merge_group run before the merge, the push
     # run after it, a re-run). Counting every run reported a failure that a
     # later run of the same check had already replaced
-    # (netresearch-branding-skill, WCAG AA contrast, 2026-11-18). A run with
+    # (a skill repository, WCAG AA contrast, 2026-11-18). A run with
     # no start time yet is queued, so it counts as the newest.
     jq -r '[.check_runs[]] as $all
         | [$all | group_by(.name)[] | max_by(.started_at // "9999")] as $r
