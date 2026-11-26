@@ -614,6 +614,8 @@ check "changelog state: empty Unreleased, no fragments (control)" empty "$(fr_ch
 check "changelog state: empty Unreleased, count 0 (control)" empty "$(fr_changelog_state "$CL_EMPTY" 0)"
 check "changelog state: empty Unreleased with fragments is has-content" has-content "$(fr_changelog_state "$CL_EMPTY" 2)"
 check "changelog state: no CHANGELOG.md stays absent (the bump would not roll)" absent "$(fr_changelog_state "" 2)"
+CL_TWO=$'# C\n\n## [Unreleased]\n\n- a\n\n## [Unreleased]\n\n- b\n'
+check "changelog state: an invalid CHANGELOG stays unknown despite fragments" unknown "$(fr_changelog_state "$CL_TWO" 2)"
 # The copy is classified in a private directory: a changelog.d/ that happens to
 # sit in TMPDIR must not be read as the repo's fragments.
 mkdir -p "$WORK/cltmp/changelog.d"

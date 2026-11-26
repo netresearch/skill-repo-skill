@@ -177,20 +177,26 @@ fr_changelog_state() { # RAW-CONTENT [FRAGMENT-COUNT] — "absent" | "empty" |
     # to the survey that ran hours earlier.
     # FRAGMENT-COUNT is the number of changelog.d/ fragments on the default
     # branch: the roll collects them into [Unreleased] first, so any count
-    # above 0 is content. The survey has to pass it in, because the CHANGELOG
+    # above 0 is content, unless the CHANGELOG itself fails validation
+    # ("unknown" stays). The survey has to pass it in, because the CHANGELOG
     # it classifies is a temp copy with no changelog.d/ beside it. Without a
     # CHANGELOG.md the state stays "absent": the bump rolls (and so collects)
     # only when CHANGELOG.md exists.
     local raw="$1" count="${2:-0}" tool tmp state
     [[ -n "$raw" ]] || { echo "absent"; return 0; }
-    [[ "$count" =~ ^[0-9]+$ && "$count" -gt 0 ]] && { echo "has-content"; return 0; }
     tool=$(fr_tool roll-changelog.py 2> /dev/null) || { echo "unknown"; return 0; }
     # A private directory, so no changelog.d/ can sit beside the copy.
     tmp=$(mktemp -d "${TMPDIR:-/tmp}/fr-clstate.XXXXXX") || { echo "unknown"; return 0; }
     printf '%s\n' "$raw" > "$tmp/CHANGELOG.md"
     state=$(uv run "$tool" --check-unreleased "$tmp/CHANGELOG.md" 2> /dev/null) || state="unknown"
     rm -rf "$tmp"
-    echo "${state:-unknown}"
+    state="${state:-unknown}"
+    # The CHANGELOG is validated first: fragments do not hide a file the roll
+    # refuses anyway (two Unreleased headings classify as "unknown").
+    if [[ "$state" != "unknown" && "$count" =~ ^[0-9]+$ && "$count" -gt 0 ]]; then
+        state="has-content"
+    fi
+    echo "$state"
 }
 fr_die()  { fr_err "$*"; exit 1; }
 

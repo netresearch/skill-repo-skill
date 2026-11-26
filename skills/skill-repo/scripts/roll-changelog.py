@@ -395,6 +395,10 @@ def read_fragments(changelog_path):
     directory = os.path.join(
         os.path.dirname(os.path.abspath(changelog_path)), "changelog.d"
     )
+    if os.path.islink(directory):
+        # A symlink would let the deletion after the roll reach files outside
+        # the repository the script was pointed at.
+        fail(f"{directory} is a symlink — refusing to collect or delete through it")
     if not os.path.isdir(directory):
         return directory, []
     try:
@@ -428,6 +432,12 @@ def read_fragments(changelog_path):
                 f"  {name}  must not contain a heading; the file name selects the heading"
             )
             continue
+        if fence_open(text_lines):
+            # An open fence would swallow every heading below the fragment
+            # once it sits in the CHANGELOG, and the roll would misplace the
+            # release history.
+            problems.append(f"  {name}  has a code fence that is not closed")
+            continue
         fragments.append((path, m.group(1), text_lines))
     if problems:
         fail(
@@ -436,6 +446,20 @@ def read_fragments(changelog_path):
             + "\nSee changelog.d/README.md for the format."
         )
     return directory, fragments
+
+
+def fence_open(lines):
+    """True when a fenced code block opened in lines is still open at the end."""
+    fence = None
+    for line in lines:
+        m = FENCE_RE.match(line)
+        if not m:
+            continue
+        if fence is None:
+            fence = m.group(1)
+        elif fence == m.group(1):
+            fence = None
+    return fence is not None
 
 
 def collect_fragments(lines, fragments):

@@ -522,6 +522,30 @@ check "fragments: the directory itself stays" yes "$([ -d "$d/changelog.d" ] && 
 check "fragments: blank line after every collected heading (MD022)" 0 \
     "$(awk 'p ~ /^#/ && $0 != "" { n++ } { p = $0 } END { print n + 0 }' "$f")"
 
+# A symlinked changelog.d/ is refused: the deletion after the roll would reach
+# files outside the repository.
+fragcase symlink
+rm -rf "$d/changelog.d"
+mkdir -p "$d/elsewhere"
+printf -- '- outside\n' > "$d/elsewhere/x.added.md"
+ln -s "$d/elsewhere" "$d/changelog.d"
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "fragments: symlinked changelog.d refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: symlinked changelog.d deletes nothing" yes \
+    "$([ -e "$d/elsewhere/x.added.md" ] && echo yes || echo no)"
+
+# A fragment with an open code fence is refused: once collected, the fence
+# would swallow every released heading below it.
+fragcase openfence
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- entry\n\n  ```text\n  not closed\n' > "$d/changelog.d/x.added.md"
+check "fragments: unclosed fence refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: unclosed fence keeps the fragment" yes \
+    "$([ -e "$d/changelog.d/x.added.md" ] && echo yes || echo no)"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```text\n  closed\n  ```\n' > "$d/changelog.d/x.added.md"
+check "fragments: a closed indented fence is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+
 # Into a filled [Unreleased], same category: one heading, existing entry first.
 fragcase same
 printf '## [Unreleased]\n\nIntro text.\n\n### Added\n\n- existing\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
