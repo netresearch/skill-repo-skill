@@ -121,6 +121,12 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
+def closes(fence, marker):
+    """True when marker closes the fence opened with fence: the same character,
+    at least as long (CommonMark). A shorter run is content."""
+    return marker[0] == fence[0] and len(marker) >= len(fence)
+
+
 def scan(lines):
     """Yield (index, line, in_fence) tracking fenced code blocks."""
     fence = None
@@ -130,7 +136,7 @@ def scan(lines):
             marker = m.group(1)
             if fence is None:
                 fence = marker
-            elif fence == marker:
+            elif closes(fence, marker):
                 fence = None
             yield i, line, True
             continue
@@ -474,22 +480,28 @@ def fence_open(lines):
             continue
         if fence is None:
             fence = m.group(1)
-        elif fence == m.group(1):
+        elif closes(fence, m.group(1)):
             fence = None
     return fence is not None
 
 
 def stray_text(lines):
-    """True when a line starts in column 0 without "- " after a blank line, or
-    opens a fence there: Markdown ends the list at that line, and it would land
-    in the CHANGELOG outside the entry. Right after text, it is the bullet's
-    lazy continuation."""
-    return any(
-        line[:1] not in ("", " ", "\t")
-        and not line.startswith("- ")
-        and (not prev.strip() or FENCE_RE.match(line))
-        for prev, line in itertools.pairwise([""] + lines)
-    )
+    """True when a line starts in column 0 without "- " where Markdown ends the
+    list: it opens a fence, sits inside one, or follows anything but paragraph
+    text (a blank line, a fence). It would land in the CHANGELOG outside the
+    entry. Right after paragraph text it is the bullet's lazy continuation."""
+    fence, para = None, False
+    for line in lines:
+        m = FENCE_RE.match(line)
+        col0 = line[:1] not in ("", " ", "\t") and not line.startswith("- ")
+        if col0 and (m or fence is not None or not para):
+            return True
+        if m and fence is None:
+            fence = m.group(1)
+        elif m and closes(fence, m.group(1)):
+            fence = None
+        para = not m and fence is None and bool(line.strip())
+    return False
 
 
 def collect_fragments(lines, fragments):

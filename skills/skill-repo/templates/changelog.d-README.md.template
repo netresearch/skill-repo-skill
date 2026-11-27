@@ -25,8 +25,8 @@ that section conflict as soon as one of them merges; two fragment files do not.
 - Content: one or more top-level bullets (`-` and a space), written as they
   will appear in `CHANGELOG.md`. Indent every further line under its bullet,
   code fences included: text or a fence that starts in the first column after
-  a blank line ends the list. A fence closes with the same run of backticks
-  or tildes it opened with. No line starts with `#`, inside a fence or
+  a blank line ends the list. A fence closes with the character it opened
+  with, at least as many of them. No line starts with `#`, inside a fence or
   not; the file name selects the heading. A change that belongs under two
   headings gets two files.
 

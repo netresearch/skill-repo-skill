@@ -592,9 +592,26 @@ check "fragments: …and names the open fence" yes \
 printf -- '- entry\n\n  ````markdown\n  ```\n  ````\n' > "$d/changelog.d/x.added.md"
 check "fragments: four-backtick fence closed by four is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 
+# CodeRabbit on #487: a longer closing run closes the fence too. Read as still
+# open, the fence hid the release heading below it, the old release moved
+# under the new one and the fragment landed under the old release.
+fragcase shortfence
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '## [Unreleased]\n\n- a\n\n```\nx\n````\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- frag\n' > "$d/changelog.d/x.fixed.md"
+check "three-backtick fence closed by four: rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "three-backtick fence closed by four: fragment under the new release" "- frag" \
+    "$(awk '/^## \[1\.1\.0\]/ { on = 1; next } on && /^## / { exit } on && /^- frag$/' "$f")"
+check "three-backtick fence closed by four: old release keeps only its entry" "- old" \
+    "$(awk '/^## \[1\.0\.0\]/ { on = 1; next } on && /^- /' "$f")"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```text\n  x\n  ````\n' > "$d/changelog.d/x.added.md"
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "fragments: three-backtick fence closed by four is accepted" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+
 # The prose reproducer from #486: unindented text after a blank line ends the
 # list and lands under the heading as a paragraph of its own.
-for spec in prose-after:1 col0-fence:1 tight-fence:1 indented:0 lazy:0 second-bullet:0; do
+for spec in prose-after:1 col0-fence:1 tight-fence:1 after-fence:1 indented:0 lazy:0 second-bullet:0; do
     fragcase "stray-${spec%%:*}"
     printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
     # shellcheck disable=SC2016  # the backticks are a literal markdown fence
@@ -602,6 +619,7 @@ for spec in prose-after:1 col0-fence:1 tight-fence:1 indented:0 lazy:0 second-bu
         prose-after) printf -- '- x\n\nplain prose\n' ;;
         col0-fence) printf -- '- x\n\n```sh\nmake\n```\n' ;;
         tight-fence) printf -- '- x\n```sh\nmake\n```\n' ;;
+        after-fence) printf -- '- x\n\n  ```sh\n  echo x\n  ```\nplain prose\n' ;;
         indented) printf -- '- x\n\n  more about x\n' ;;
         lazy) printf -- '- x continues\non this line\n' ;;
         second-bullet) printf -- '- x\n\n- y\n' ;;
