@@ -605,6 +605,7 @@ for spec in prose-after:1 col0-fence:1 tight-fence:1 indented:0 lazy:0 second-bu
         indented) printf -- '- x\n\n  more about x\n' ;;
         lazy) printf -- '- x continues\non this line\n' ;;
         second-bullet) printf -- '- x\n\n- y\n' ;;
+        *) echo "unknown case $spec" >&2 ;;
     esac > "$d/changelog.d/x.added.md"
     check "fragments: ${spec%%:*} exits ${spec##*:}" "${spec##*:}" "$(roll "$f" 1.1.0 --date 2026-08-13)"
 done

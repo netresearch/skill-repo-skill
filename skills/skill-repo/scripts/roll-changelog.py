@@ -80,7 +80,7 @@ import textwrap
 UNRELEASED_RE = re.compile(r"^##\s+\\?\[?unreleased\\?\]?\s*$", re.IGNORECASE)
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 # A "## " heading without a version ("## Prior history") is no release.
-VERSION_RE = re.compile(r"\d+\.\d+")
+VERSION_RE = re.compile(r"\d\.\d")
 # Newest released heading, one regex per shape. Order matters: the linked form
 # also starts with "## [" and must win over plain bracketed.
 LINKED_RE = re.compile(
@@ -243,31 +243,31 @@ def locate_headings(lines):
     end is the next "## " heading (or EOF); first_released is the first one
     below it that carries a version, the shape the new heading copies."""
     unreleased_at = []
-    first_released = None  # (index, line)
-    end = None
+    headings = []  # (index, line) of every other "## " heading
     for i, line, in_fence in scan(lines):
         if in_fence:
             continue
         if UNRELEASED_RE.match(line):
             unreleased_at.append(i)
         elif line.startswith("## "):
-            if end is None:
-                end = i
-            if not first_released and (not unreleased_at or VERSION_RE.search(line)):
-                first_released = (i, line)
+            headings.append((i, line))
     if len(unreleased_at) != 1:
         fail(
             f"{len(unreleased_at)} Unreleased headings outside code fences "
             f"(need exactly 1)"
         )
     idx = unreleased_at[0]
+    end = next((i for i, _ in headings if i > idx), len(lines))
+    first_released = next(
+        (h for h in headings if h[0] < idx or VERSION_RE.search(h[1])), None
+    )
     if first_released is not None and first_released[0] < idx:
         fail(
             f"a released heading (line {first_released[0] + 1}) precedes the "
             f"Unreleased heading (line {idx + 1}) — refusing to roll a "
             f"non-standard layout"
         )
-    return idx, end if end is not None else len(lines), first_released
+    return idx, end, first_released
 
 
 def splice_roll(lines, idx, end, new_heading):
