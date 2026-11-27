@@ -264,15 +264,17 @@ first:
 3. Merge it, then bump the repo in its own workdir (see "A batch that waits on a
    prerequisite PR" above).
 
-**Six heading shapes exist in the fleet**, not the two this page claimed until
-v1.29.0 — the 2026-08-08 sweep hit five of them across 63 repos, and the
-2026-11-08 sweep found the bare dash in tender-estimation:
+**Seven heading shapes exist in the fleet**, not the two this page claimed until
+v1.29.0 — the 2026-08-08 sweep hit five of them across 63 repos, the
+2026-11-08 sweep found the bare dash in tender-estimation, and four coding-ai
+repositories head a release with the version alone:
 
 | Shape | Example | Seen in |
 |---|---|---|
 | bracketed dash | `## [1.2.3] - 2026-08-08` | most keep-a-changelog repos |
 | bare paren | `## 1.2.3 (2026-08-08)` | it-maintenance-skill, gitlab-skill |
 | bare dash | `## 1.2.3 - 2026-08-08` | tender-estimation |
+| bare version, no date | `## 1.2.3` | some coding-ai repositories |
 | bracketed em dash | `## [0.3.23] — 2026-07-02` | nr-monatliche-abrechnung |
 | linked | `## [v2.6.0](…/releases/tag/v2.6.0) — 2026-02-28` | typo3-docs-skill |
 | `[Unreleased]` only, no released heading yet | — | source-digest-skill |
