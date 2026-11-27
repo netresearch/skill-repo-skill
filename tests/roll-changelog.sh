@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: Netresearch DTT GmbH
 # tests/roll-changelog.sh — exercises skills/skill-repo/scripts/roll-changelog.py.
 #
-# The six released-heading shapes documented in release-discipline.md each get
+# The seven released-heading shapes documented in release-discipline.md each get
 # a round-trip, and every refusal guard is observed to actually fail on a
 # violating fixture — a guard that has never been seen red proves only that it
 # runs, not that it guards.
@@ -791,6 +791,80 @@ src > "$f"
 check "fragments: empty changelog.d rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 check "fragments: empty changelog.d is byte-identical to no changelog.d" yes \
     "$(cmp -s "$f" "$WORK/nofrag-plain/CHANGELOG.md" && echo yes || echo no)"
+
+# --- bare version, no date ---------------------------------------------------
+# Some coding-ai skill repositories head a release with the version alone. The
+# first case is a synthetic changelog of their shape: title, intro paragraph,
+# "## Unreleased" above the newest release, and one fragment waiting.
+fragcase bareversion
+cat > "$f" <<'EOF'
+# Changelog
+
+All notable changes of this example skill, one section per release. The version in a heading is the version of the release tag.
+
+## Unreleased
+
+## 1.2.1
+
+### Fixed
+
+- The parser keeps a trailing comment out of the value it reads.
+- A missing input file is reported by name instead of a stack trace.
+
+## 1.2.0
+
+### Added
+
+- A dry-run flag that prints the planned changes without writing them.
+- A check that the configuration file exists before the first step.
+
+## 1.1.0
+
+### Fixed
+
+- The report lists each table once, even when two sources name it.
+- An empty section no longer counts as content.
+EOF
+printf -- '- the fix from a fragment\n' > "$d/changelog.d/fix-x.fixed.md"
+before_intro=$(sed -n '1,4p' "$f")
+check "bare version: bare-version changelog rolls" 0 "$(roll "$f" 1.2.2 --date 2026-11-27)"
+check "bare version: shape reproduced, no date added" yes \
+    "$(grep -qx '## 1.2.2' "$f" && echo yes || echo no)"
+check "bare version: heading order" "## Unreleased|## 1.2.2|## 1.2.1|## 1.2.0" \
+    "$(grep -E '^## ' "$f" | head -4 | paste -sd'|')"
+check "bare version: fragment under the new release" "### Fixed|- the fix from a fragment" \
+    "$(section "$f" '^## 1\\.2\\.2$' | grep -E '^(###|-) ' | paste -sd'|')"
+check "bare version: fragment deleted" no \
+    "$([[ -e "$d/changelog.d/fix-x.fixed.md" ]] && echo yes || echo no)"
+check "bare version: intro untouched" "$before_intro" "$(sed -n '1,4p' "$f")"
+check "bare version: blank line after new heading" blank \
+    "$(awk 'found { print ($0 == "" ? "blank" : "nonblank"); exit } /^## 1\.2\.2$/ { found = 1 }' "$f")"
+check "bare version: fresh empty Unreleased remains" empty \
+    "$(roll "$f" --check-unreleased > /dev/null; cat "$WORK/out.txt")"
+
+f="$WORK/bareversion-v.md"
+printf '# Changelog\n\n## Unreleased\n\n- next\n\n## v2.0.0\n\n- earlier\n' > "$f"
+check "bare version: v prefix exits 0" 0 "$(roll "$f" 2.1.0 --date 2026-11-27)"
+check "bare version: v prefix kept" yes \
+    "$(grep -qx '## v2.1.0' "$f" && echo yes || echo no)"
+
+f="$WORK/bareversion-dry.md"
+printf '## Unreleased\n\n- next\n\n## 1.0.0\n\n- earlier\n' > "$f"
+check "bare version: dry run names the heading" "0 ## 1.1.0" \
+    "$(rc=$(roll "$f" 1.1.0 --dry-run); echo "$rc $(sed -n 's/^would insert: //p' "$WORK/out.txt")")"
+
+# An "upgrading" fragment takes X.Y from the newest release, bare version too.
+fragcase bareversion-upgrading
+printf '## Unreleased\n\n## 1.14.1\n\n- old\n' > "$f"
+printf -- '- run the migration\n' > "$d/changelog.d/mig.upgrading.md"
+check "bare version: upgrading fragment rolls" 0 "$(roll "$f" 2.0.0 --date 2026-11-27)"
+check "bare version: upgrading heading names the previous release" yes \
+    "$(grep -qx '### Upgrading from 1.14' "$f" && echo yes || echo no)"
+
+# Only the version itself: trailing words are still an unknown shape.
+f="$WORK/bareversion-words.md"
+printf '## Unreleased\n\n- a\n\n## 1.0.0 beta notes\n\n- b\n' > "$f"
+check "bare version: trailing words refused" 1 "$(roll "$f" 1.1.0)"
 
 # --- changelog.d README template (#486) --------------------------------------
 TEMPLATE="$(cd "$HERE/.." && pwd)/skills/skill-repo/templates/changelog.d-README.md.template"

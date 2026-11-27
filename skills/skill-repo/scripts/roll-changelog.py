@@ -14,7 +14,7 @@ Usage:
     roll-changelog.py FILE --check-unreleased
 
 Why this exists (references/release-discipline.md, "Changelog Rollover"):
-six released-heading shapes coexist in the fleet, and a roll anchored on one
+seven released-heading shapes coexist in the fleet, and a roll anchored on one
 shape matches nothing in the others and exits 0 — the release then ships with
 its content still under Unreleased and nobody sees an error. This script
 detects the shape from the newest *released* heading and reproduces it,
@@ -24,6 +24,7 @@ Shapes:
     bracketed dash      ## [1.2.3] - 2026-08-08
     bare paren          ## 1.2.3 (2026-08-08)
     bare dash           ## 1.2.3 - 2026-08-08
+    bare version        ## 1.2.3  (no date; the --date value is not used)
     bracketed em dash   ## [0.3.23] — 2026-07-02
     linked              ## [v2.6.0](https://.../releases/tag/v2.6.0) — 2026-02-28
     none yet            first release: default to the keep-a-changelog
@@ -99,6 +100,9 @@ BARE_PAREN_RE = re.compile(r"^##\s+(?P<tag>\S+)\s+\((?P<date>[^)]+)\)\s*$")
 BARE_DASH_RE = re.compile(
     r"^##\s+(?P<tag>v?\d[^\s\[\]]*)\s+(?P<dash>[-—–])\s+(?P<date>\S+)\s*$"
 )
+# The version alone, no date: "## 1.14.1" or "## v2.0.0". Last, so every form
+# with a date or brackets wins; trailing words stay an unknown shape.
+BARE_VERSION_RE = re.compile(r"^##\s+(?P<tag>v?\d+\.\d[^\s\[\]()]*)\s*$")
 # Fragment type -> heading, in Keep a Changelog order; "upgrading" is resolved
 # per file (see upgrading_heading). Same table and name pattern as the TYPO3
 # extensions' collector (bin/changelog-fragments in netresearch/typo3-ci-
@@ -153,12 +157,17 @@ def scan(lines):
         yield i, line, fence is not None
 
 
+def retag(old_tag: str, version: str) -> str:
+    """`version` in the tag style of `old_tag`: with a leading v or without."""
+    return f"v{version}" if old_tag.startswith("v") else version
+
+
 def released_heading(version: str, sample: str, date: str) -> str:
     """Reproduce the shape of `sample` (a released heading) for `version`."""
     m = LINKED_RE.match(sample)
     if m:
         old_tag = m.group("tag")
-        new_tag = f"v{version}" if old_tag.startswith("v") else version
+        new_tag = retag(old_tag, version)
         url = m.group("url")
         if old_tag not in url:
             fail(
@@ -170,18 +179,23 @@ def released_heading(version: str, sample: str, date: str) -> str:
     m = BRACKETED_RE.match(sample)
     if m:
         old_tag = m.group("tag")
-        new_tag = f"v{version}" if old_tag.startswith("v") else version
+        new_tag = retag(old_tag, version)
         return f"## [{new_tag}] {m.group('dash')} {date}"
     m = BARE_PAREN_RE.match(sample)
     if m:
         old_tag = m.group("tag")
-        new_tag = f"v{version}" if old_tag.startswith("v") else version
+        new_tag = retag(old_tag, version)
         return f"## {new_tag} ({date})"
     m = BARE_DASH_RE.match(sample)
     if m:
         old_tag = m.group("tag")
-        new_tag = f"v{version}" if old_tag.startswith("v") else version
+        new_tag = retag(old_tag, version)
         return f"## {new_tag} {m.group('dash')} {date}"
+    m = BARE_VERSION_RE.match(sample)
+    if m:
+        old_tag = m.group("tag")
+        new_tag = retag(old_tag, version)
+        return f"## {new_tag}"
     fail(f"unrecognized released-heading shape: '{sample.rstrip()}'")
     raise AssertionError  # unreachable; fail() exits
 
@@ -630,7 +644,7 @@ def upgrading_heading(lines, heads):
     """The heading an 'upgrading' fragment lands under: an existing
     '### Upgrading…' heading in [Unreleased] (the last one), else
     '### Upgrading from X.Y' with X.Y from the newest released heading of any
-    of the six shapes, else '### Upgrading'."""
+    of the seven shapes, else '### Upgrading'."""
     found = [h for h in heads if h.startswith(UPGRADING)]
     if found:
         return found[-1]
@@ -747,7 +761,13 @@ def released_labels(lines):
     for _, line, in_fence in scan(lines):
         if in_fence:
             continue
-        for rx in (LINKED_RE, BRACKETED_RE, BARE_PAREN_RE, BARE_DASH_RE):
+        for rx in (
+            LINKED_RE,
+            BRACKETED_RE,
+            BARE_PAREN_RE,
+            BARE_DASH_RE,
+            BARE_VERSION_RE,
+        ):
             m = rx.match(line)
             if m:
                 labels.append(m.group("tag"))
