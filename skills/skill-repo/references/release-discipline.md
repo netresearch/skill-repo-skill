@@ -321,7 +321,8 @@ use, so one convention holds across the org:
   `### Upgrading from X.Y`, X.Y taken from the newest released heading;
 - content: one or more top-level bullets (`-` and a space), every further
   line indented under its bullet (code fences too), no line starting with
-  `#`, every fence closed by the character it opened with, at least as many.
+  `#`, only `-` bullets and indented continuation, every fence closed by
+  the character it opened with, at least as many and nothing after them.
   A change that belongs under two headings gets two files.
 
 **Collection happens at bump time, inside the roll.** `roll-changelog.py` reads

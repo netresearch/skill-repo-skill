@@ -23,11 +23,14 @@ that section conflict as soon as one of them merges; two fragment files do not.
   | `security`   | `### Security`                                    |
 
 - Content: one or more top-level bullets (`-` and a space), written as they
-  will appear in `CHANGELOG.md`. Indent every further line under its bullet,
-  code fences included: text or a fence that starts in the first column after
-  a blank line ends the list. A fence closes with the character it opened
-  with, at least as many of them. No line starts with `#`, inside a fence or
-  not; the file name selects the heading. A change that belongs under two
+  will appear in `CHANGELOG.md`. A fragment uses only `-` bullets and
+  indented continuation: indent every further line under its bullet, code
+  fences included. A first-column line other than a `-` bullet (after a
+  blank line, a fence, or a line such as `***`, `>`, `*`, `1.` or `<`) ends
+  the list. A fence closes with the character it opened with, at least as
+  many of them, and nothing after them: `` ```python `` never closes. No
+  line starts with `#`, inside a fence or not; the file name selects the
+  heading. A change that belongs under two
   headings gets two files.
 
 Every file in this directory apart from this `README.md` must be a fragment

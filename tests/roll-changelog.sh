@@ -591,6 +591,17 @@ check "fragments: …and names the open fence" yes \
 # shellcheck disable=SC2016  # the backticks are a literal markdown fence
 printf -- '- entry\n\n  ````markdown\n  ```\n  ````\n' > "$d/changelog.d/x.added.md"
 check "fragments: four-backtick fence closed by four is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+# CodeRabbit on #487: a fence line with an info string never closes a fence.
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```sh\n  echo\n  ```python\n' > "$d/changelog.d/x.added.md"
+check "fragments: a fence 'closed' by a line with an info string refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```sh\n  echo\n  ```  \n' > "$d/changelog.d/x.added.md"
+check "fragments: a closing fence with trailing spaces closes (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+f="$WORK/infofence.md"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '## [Unreleased]\n\n- a\n\n```\n```text\n## [Unreleased]\n```\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "a fence line with an info string does not close a CHANGELOG fence" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 
 # CodeRabbit on #487: a longer closing run closes the fence too. Read as still
 # open, the fence hid the release heading below it, the old release moved
@@ -611,7 +622,7 @@ check "fragments: three-backtick fence closed by four is accepted" 0 "$(roll "$f
 
 # The prose reproducer from #486: unindented text after a blank line ends the
 # list and lands under the heading as a paragraph of its own.
-for spec in prose-after:1 col0-fence:1 tight-fence:1 after-fence:1 indented:0 lazy:0 second-bullet:0; do
+for spec in prose-after:1 col0-fence:1 tight-fence:1 after-fence:1 indented:0 lazy:0 second-bullet:0 i-thematic-star:1 i-thematic-dash:1 i-thematic-under:1 i-setext-eq:1 i-setext-dash:1 i-quote:1 i-star:1 i-plus:1 i-ordered-dot:1 i-ordered-paren:1 i-html:1 tight-bullet:0 lazy-two:0; do
     fragcase "stray-${spec%%:*}"
     printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
     # shellcheck disable=SC2016  # the backticks are a literal markdown fence
@@ -620,6 +631,20 @@ for spec in prose-after:1 col0-fence:1 tight-fence:1 after-fence:1 indented:0 la
         col0-fence) printf -- '- x\n\n```sh\nmake\n```\n' ;;
         tight-fence) printf -- '- x\n```sh\nmake\n```\n' ;;
         after-fence) printf -- '- x\n\n  ```sh\n  echo x\n  ```\nplain prose\n' ;;
+        # CodeRabbit on #487: a line that interrupts the paragraph ends the list.
+        i-thematic-star) printf -- '- x\n***\nprose\n' ;;
+        i-thematic-dash) printf -- '- x\n- - -\n' ;;
+        i-thematic-under) printf -- '- x\n___\n' ;;
+        i-setext-eq) printf -- '- x\n===\n' ;;
+        i-setext-dash) printf -- '- x\n--\n' ;;
+        i-quote) printf -- '- x\n> quoted\n' ;;
+        i-star) printf -- '- x\n* y\n' ;;
+        i-plus) printf -- '- x\n+ y\n' ;;
+        i-ordered-dot) printf -- '- x\n1. y\n' ;;
+        i-ordered-paren) printf -- '- x\n1) y\n' ;;
+        i-html) printf -- '- x\n<div>y</div>\n' ;;
+        tight-bullet) printf -- '- x\n- y\n' ;;
+        lazy-two) printf -- '- x\n2. is not an interruption\n' ;;
         indented) printf -- '- x\n\n  more about x\n' ;;
         lazy) printf -- '- x continues\non this line\n' ;;
         second-bullet) printf -- '- x\n\n- y\n' ;;

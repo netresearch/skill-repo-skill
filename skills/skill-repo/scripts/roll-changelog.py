@@ -78,7 +78,13 @@ import textwrap
 # `\[Unreleased\]` is the same heading with escaped brackets, valid Markdown
 # that some formatters emit; missing it would seed a second heading above it.
 UNRELEASED_RE = re.compile(r"^##\s+\\?\[?unreleased\\?\]?\s*$", re.IGNORECASE)
-FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})(.*)$")
+# First-column lines that interrupt a paragraph (CommonMark): a thematic break,
+# a setext underline, a blockquote, a "*" or "+" bullet, an ordered item
+# starting at 1, an HTML block. Each ends a fragment's list.
+INTERRUPT_RE = re.compile(
+    r"^(?:([*_-])[ \t]*(?:\1[ \t]*){2,}$|=+[ \t]*$|-+[ \t]*$|>|[*+](?:[ \t]|$)|1[.)](?:[ \t]|$)|<)"
+)
 # A "## " heading without a version ("## Prior history") is no release.
 VERSION_RE = re.compile(r"\d\.\d")
 # Newest released heading, one regex per shape. Order matters: the linked form
@@ -121,10 +127,14 @@ def fail(msg: str) -> None:
     sys.exit(1)
 
 
-def closes(fence, marker):
-    """True when marker closes the fence opened with fence: the same character,
-    at least as long (CommonMark). A shorter run is content."""
-    return marker[0] == fence[0] and len(marker) >= len(fence)
+def closes(fence, m):
+    """True when the FENCE_RE match m closes the fence opened with fence: the
+    same character, at least as long, nothing but whitespace after it
+    (CommonMark). A shorter run or a line like "```python" is content."""
+    marker = m.group(1)
+    return (
+        marker[0] == fence[0] and len(marker) >= len(fence) and not m.group(2).strip()
+    )
 
 
 def scan(lines):
@@ -136,7 +146,7 @@ def scan(lines):
             marker = m.group(1)
             if fence is None:
                 fence = marker
-            elif closes(fence, marker):
+            elif closes(fence, m):
                 fence = None
             yield i, line, True
             continue
@@ -480,25 +490,27 @@ def fence_open(lines):
             continue
         if fence is None:
             fence = m.group(1)
-        elif closes(fence, m.group(1)):
+        elif closes(fence, m):
             fence = None
     return fence is not None
 
 
 def stray_text(lines):
     """True when a line starts in column 0 without "- " where Markdown ends the
-    list: it opens a fence, sits inside one, or follows anything but paragraph
-    text (a blank line, a fence). It would land in the CHANGELOG outside the
-    entry. Right after paragraph text it is the bullet's lazy continuation."""
+    list: it opens a fence, sits inside one, interrupts a paragraph
+    (INTERRUPT_RE), or follows anything but paragraph text (a blank line, a
+    fence). It would land in the CHANGELOG outside the entry. Other text right
+    after paragraph text is the bullet's lazy continuation."""
     fence, para = None, False
     for line in lines:
         m = FENCE_RE.match(line)
-        col0 = line[:1] not in ("", " ", "\t") and not line.startswith("- ")
-        if col0 and (m or fence is not None or not para):
+        stop = INTERRUPT_RE.match(line)
+        col0 = line[:1] not in ("", " ", "\t") and (stop or not line.startswith("- "))
+        if col0 and (m or stop or fence is not None or not para):
             return True
         if m and fence is None:
             fence = m.group(1)
-        elif m and closes(fence, m.group(1)):
+        elif m and closes(fence, m):
             fence = None
         para = not m and fence is None and bool(line.strip())
     return False
