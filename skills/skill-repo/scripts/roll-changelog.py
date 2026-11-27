@@ -28,6 +28,8 @@ Shapes:
     linked              ## [v2.6.0](https://.../releases/tag/v2.6.0) — 2026-02-28
     none yet            first release: default to the keep-a-changelog
                         bracketed-dash form the [Unreleased] bracket implies
+                        (a "## " heading without a version, such as
+                        "## Prior history", only ends [Unreleased])
 
 Guards:
     * exactly one Unreleased heading outside code fences, or abort;
@@ -47,8 +49,9 @@ Changelog fragments (changelog.d/ next to FILE):
       selects the heading ("upgrading" -> "### Upgrading from X.Y", X.Y taken
       from the newest released heading, or an existing "### Upgrading…"
       heading in [Unreleased]); README.md is skipped;
-    * content: one or more top-level bullets ("- "), no line starting with
-      "#" — the file name selects the heading.
+    * content: one or more top-level bullets ("- "), every further line
+      indented under its bullet (fences too), no line starting with "#" —
+      the file name selects the heading.
     Before the roll every fragment is appended, in file-name order, at the end
     of its heading inside [Unreleased]; a missing heading is inserted in Keep
     a Changelog order, a duplicated heading (a rebase of sibling entries) is
@@ -75,7 +78,9 @@ import textwrap
 # `\[Unreleased\]` is the same heading with escaped brackets, valid Markdown
 # that some formatters emit; missing it would seed a second heading above it.
 UNRELEASED_RE = re.compile(r"^##\s+\\?\[?unreleased\\?\]?\s*$", re.IGNORECASE)
-FENCE_RE = re.compile(r"^ {0,3}(```|~~~)")
+FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+# A "## " heading without a version ("## Prior history") is no release.
+VERSION_RE = re.compile(r"\d+\.\d+")
 # Newest released heading, one regex per shape. Order matters: the linked form
 # also starts with "## [" and must win over plain bracketed.
 LINKED_RE = re.compile(
@@ -89,9 +94,10 @@ BARE_DASH_RE = re.compile(
     r"^##\s+(?P<tag>v?\d[^\s\[\]]*)\s+(?P<dash>[-—–])\s+(?P<date>\S+)\s*$"
 )
 # Fragment type -> heading, in Keep a Changelog order; "upgrading" is resolved
-# per file (see upgrading_heading). Same table, name pattern and content rules
-# as the TYPO3 extensions' Build/Scripts/changelog-fragments.php, so one
-# changelog.d/ convention holds across the org.
+# per file (see upgrading_heading). Same table and name pattern as the TYPO3
+# extensions' collector (bin/changelog-fragments in netresearch/typo3-ci-
+# workflows), so one changelog.d/ convention holds across the org; the content
+# checks differ in detail.
 FRAGMENT_SECTIONS = {
     "upgrading": None,
     "added": "### Added",
@@ -232,17 +238,23 @@ def read_changelog(path):
 
 
 def locate_headings(lines):
-    """Return (unreleased_index, first_released) or refuse: exactly one
-    Unreleased heading outside code fences, and no released heading above it."""
+    """Return (unreleased_index, end, first_released) or refuse: exactly one
+    Unreleased heading outside code fences, and no released heading above it.
+    end is the next "## " heading (or EOF); first_released is the first one
+    below it that carries a version, the shape the new heading copies."""
     unreleased_at = []
     first_released = None  # (index, line)
+    end = None
     for i, line, in_fence in scan(lines):
         if in_fence:
             continue
         if UNRELEASED_RE.match(line):
             unreleased_at.append(i)
-        elif first_released is None and line.startswith("## "):
-            first_released = (i, line)
+        elif line.startswith("## "):
+            if end is None:
+                end = i
+            if not first_released and (not unreleased_at or VERSION_RE.search(line)):
+                first_released = (i, line)
     if len(unreleased_at) != 1:
         fail(
             f"{len(unreleased_at)} Unreleased headings outside code fences "
@@ -255,7 +267,7 @@ def locate_headings(lines):
             f"Unreleased heading (line {idx + 1}) — refusing to roll a "
             f"non-standard layout"
         )
-    return idx, first_released
+    return idx, end if end is not None else len(lines), first_released
 
 
 def splice_roll(lines, idx, end, new_heading):
@@ -432,6 +444,11 @@ def read_fragments(changelog_path):
                 f"  {name}  must not contain a heading; the file name selects the heading"
             )
             continue
+        if stray_text(text_lines):
+            problems.append(
+                f"  {name}  has text outside a top-level bullet; indent it under its bullet"
+            )
+            continue
         if fence_open(text_lines):
             # An open fence would swallow every heading below the fragment
             # once it sits in the CHANGELOG, and the roll would misplace the
@@ -460,6 +477,19 @@ def fence_open(lines):
         elif fence == m.group(1):
             fence = None
     return fence is not None
+
+
+def stray_text(lines):
+    """True when a line starts in column 0 without "- " after a blank line, or
+    opens a fence there: Markdown ends the list at that line, and it would land
+    in the CHANGELOG outside the entry. Right after text, it is the bullet's
+    lazy continuation."""
+    return any(
+        line[:1] not in ("", " ", "\t")
+        and not line.startswith("- ")
+        and (not prev.strip() or FENCE_RE.match(line))
+        for prev, line in itertools.pairwise([""] + lines)
+    )
 
 
 def collect_fragments(lines, fragments):
@@ -629,7 +659,7 @@ def main() -> None:
                 f"{fragment_dir} is not writable — the fragments could not be removed after the roll"
             )
         lines = collect_fragments(lines, fragments)
-    idx, first_released = locate_headings(lines)
+    idx, end, first_released = locate_headings(lines)
 
     if first_released is None:
         # First release: no shape to copy. The [Unreleased] bracket implies
@@ -641,7 +671,6 @@ def main() -> None:
     # The section to be rolled must contain content — and HTML comments are
     # not content: rolling a comment-only section would ship a visually empty
     # release.
-    end = first_released[0] if first_released else len(lines)
     section = "\n".join(lines[idx + 1 : end])
     if not re.sub(r"<!--.*?-->", "", section, flags=re.DOTALL).strip():
         fail(

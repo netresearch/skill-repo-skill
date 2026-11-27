@@ -314,12 +314,15 @@ release). One file per PR cannot conflict.
 The format is the `changelog.d/` convention the org's TYPO3 extensions already
 use, so one convention holds across the org:
 
-- name `<branch-slug>.<section>.md`, lowercase; `<section>` is one of
+- name `<branch-slug>.<section>.md`, the slug in lowercase ASCII letters,
+  digits, `.`, `_` and `-`, starting with a letter or digit; `<section>` is one of
   `upgrading`, `added`, `changed`, `deprecated`, `removed`, `fixed`,
   `security` and selects the heading — `upgrading` lands under
   `### Upgrading from X.Y`, X.Y taken from the newest released heading;
-- content: one or more top-level bullets (`-` and a space), no line starting
-  with `#`. A change that belongs under two headings gets two files.
+- content: one or more top-level bullets (`-` and a space), every further
+  line indented under its bullet (code fences too), no line starting with
+  `#`, every fence closed by the same run of backticks or tildes it opened with.
+  A change that belongs under two headings gets two files.
 
 **Collection happens at bump time, inside the roll.** `roll-changelog.py` reads
 `changelog.d/` next to the CHANGELOG it rolls and, before moving
@@ -330,7 +333,8 @@ its first occurrence, and creates a missing `[Unreleased]` heading. Only after
 `CHANGELOG.md` is written does it delete the fragments (never `README.md`,
 never the directory); the bump commit stages those deletions, which the
 driver's allowlist admits. Any other entry in the directory — a wrong name, a
-heading, prose before the first bullet — refuses the whole roll before
+heading, prose before the first bullet or after a blank line in the first
+column, a fence left open — refuses the whole roll before
 anything is written: a guessed category ships a wrong release note.
 `--dry-run` lists the fragments it would collect; `--check-unreleased` and
 the fleet survey report `has-content` while fragments wait on the default
