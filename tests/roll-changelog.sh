@@ -216,15 +216,40 @@ check "bad date refused" 1 "$(roll "$f" 1.0.0 --date yesterday)"
 f="$WORK/inverted.md"
 printf '## [1.0.0] - 2026-01-01\n\n- old\n\n## [Unreleased]\n\n- new\n' > "$f"
 check "released heading before Unreleased refused" 1 "$(roll "$f" 1.1.0)"
+printf '## Notes\n\n- old\n\n## [Unreleased]\n\n- new\n' > "$f"
+check "version-less heading before Unreleased refused too" 1 "$(roll "$f" 1.1.0)"
+check "…as a heading above Unreleased, not as an empty section" yes \
+    "$(grep -q 'precedes the Unreleased heading' "$WORK/err.txt" && echo yes || echo no)"
 
 # --- second roll on the same file: Unreleased is empty now -> refused --------
 f="$WORK/dash.md"   # rolled successfully in test 1
 check "re-roll after a roll is refused (empty Unreleased)" 1 "$(roll "$f" 1.4.0)"
 
 # --- guard: unrecognized released-heading shape refused ----------------------
+# The heading carries a version, so it is a release in a shape the script
+# cannot reproduce. Copying another shape would split the history in two.
 f="$WORK/weird.md"
-printf '## [Unreleased]\n\n- a\n\n## Notes and thanks\n\n- b\n' > "$f"
+printf '## [Unreleased]\n\n- a\n\n## Version 1.0.0\n\n- b\n' > "$f"
 check "unrecognized released-heading shape refused" 1 "$(roll "$f" 1.1.0)"
+
+# --- a "## " heading without a version is no release (#486) ------------------
+# netresearch/coding_agent_cli_toolset: no release yet, and the history before
+# the changelog sits under "## Prior history". It ends [Unreleased]; the first
+# release takes the keep-a-changelog default shape above it.
+f="$WORK/prior.md"
+printf '# Changelog\n\n## [Unreleased]\n\n### Added\n- pi catalog entry\n\n## Prior history\n\nSee git log.\n' > "$f"
+check "version-less heading: first release rolls" 0 "$(roll "$f" 1.0.0 --date 2026-11-27)"
+check "version-less heading: new release above it, which stays last" "## [Unreleased]|## [1.0.0] - 2026-11-27|### Added|## Prior history" \
+    "$(grep -E '^##' "$f" | paste -sd'|')"
+check "version-less heading: its text is not moved into the release" "See git log." \
+    "$(awk '/^## Prior history$/ { on = 1; next } on && NF' "$f")"
+printf '## [Unreleased]\n\n## Prior history\n\nSee git log.\n' > "$f"
+check "version-less heading: an empty Unreleased above it is still refused" 1 "$(roll "$f" 1.0.0)"
+f="$WORK/notes-then-release.md"
+printf '## [Unreleased]\n\n- a\n\n## Notes and thanks\n\n- b\n\n## 1.0.0 (2026-01-01)\n\n- c\n' > "$f"
+check "version-less heading before a release: rolls" 0 "$(roll "$f" 1.1.0 --date 2026-11-27)"
+check "version-less heading before a release: shape copied from the release" yes \
+    "$(grep -qx '## 1.1.0 (2026-11-27)' "$f" && echo yes || echo no)"
 
 # --- guard: linked heading whose URL lacks its own tag refused ---------------
 f="$WORK/badlink.md"
@@ -236,6 +261,14 @@ f="$WORK/comment.md"
 printf '## [Unreleased]\n\n<!-- add entries here -->\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
 check "comment-only Unreleased refused (would ship a visually empty release)" 1 \
     "$(roll "$f" 1.1.0)"
+
+# --- a fence closes only on a marker of the opener's length (#486) ----------
+# Four backticks open; a three-backtick line inside is content, as Markdown
+# renders it, so the lookalike heading after it stays hidden.
+f="$WORK/longfence.md"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '## [Unreleased]\n\n- a\n\n````markdown\n```\n## [Unreleased]\n````\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "four-backtick fence hides a lookalike past a three-backtick line" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 
 # --- tilde fences hide lookalikes too ----------------------------------------
 f="$WORK/tilde.md"
@@ -546,6 +579,83 @@ check "fragments: unclosed fence keeps the fragment" yes \
 printf -- '- entry\n\n  ```text\n  closed\n  ```\n' > "$d/changelog.d/x.added.md"
 check "fragments: a closed indented fence is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 
+# The four-backtick reproducer from #486: the script closed the fence at the
+# three-backtick line, Markdown keeps it open to the end of CHANGELOG.md.
+fragcase longfence
+printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ````markdown\n  ```\n' > "$d/changelog.d/x.added.md"
+check "fragments: four-backtick fence closed by three refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "fragments: …and names the open fence" yes \
+    "$(grep -q 'x.added.md  has a code fence that is not closed' "$WORK/err.txt" && echo yes || echo no)"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ````markdown\n  ```\n  ````\n' > "$d/changelog.d/x.added.md"
+check "fragments: four-backtick fence closed by four is accepted (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+# CodeRabbit on #487: a fence line with an info string never closes a fence.
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```sh\n  echo\n  ```python\n' > "$d/changelog.d/x.added.md"
+check "fragments: a fence 'closed' by a line with an info string refuses" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```sh\n  echo\n  ```  \n' > "$d/changelog.d/x.added.md"
+check "fragments: a closing fence with trailing spaces closes (control)" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+f="$WORK/infofence.md"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '## [Unreleased]\n\n- a\n\n```\n```text\n## [Unreleased]\n```\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "a fence line with an info string does not close a CHANGELOG fence" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+
+# CodeRabbit on #487: a longer closing run closes the fence too. Read as still
+# open, the fence hid the release heading below it, the old release moved
+# under the new one and the fragment landed under the old release.
+fragcase shortfence
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf '## [Unreleased]\n\n- a\n\n```\nx\n````\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- frag\n' > "$d/changelog.d/x.fixed.md"
+check "three-backtick fence closed by four: rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "three-backtick fence closed by four: fragment under the new release" "- frag" \
+    "$(awk '/^## \[1\.1\.0\]/ { on = 1; next } on && /^## / { exit } on && /^- frag$/' "$f")"
+check "three-backtick fence closed by four: old release keeps only its entry" "- old" \
+    "$(awk '/^## \[1\.0\.0\]/ { on = 1; next } on && /^- /' "$f")"
+# shellcheck disable=SC2016  # the backticks are a literal markdown fence
+printf -- '- entry\n\n  ```text\n  x\n  ````\n' > "$d/changelog.d/x.added.md"
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+check "fragments: three-backtick fence closed by four is accepted" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+
+# The prose reproducer from #486: unindented text after a blank line ends the
+# list and lands under the heading as a paragraph of its own.
+for spec in prose-after:1 col0-fence:1 tight-fence:1 after-fence:1 indented:0 lazy:0 second-bullet:0 i-thematic-star:1 i-thematic-dash:1 i-thematic-under:1 i-setext-eq:1 i-setext-dash:1 i-quote:1 i-star:1 i-plus:1 i-ordered-dot:1 i-ordered-paren:1 i-html:1 tight-bullet:0 lazy-two:0; do
+    fragcase "stray-${spec%%:*}"
+    printf '# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+    # shellcheck disable=SC2016  # the backticks are a literal markdown fence
+    case "${spec%%:*}" in
+        prose-after) printf -- '- x\n\nplain prose\n' ;;
+        col0-fence) printf -- '- x\n\n```sh\nmake\n```\n' ;;
+        tight-fence) printf -- '- x\n```sh\nmake\n```\n' ;;
+        after-fence) printf -- '- x\n\n  ```sh\n  echo x\n  ```\nplain prose\n' ;;
+        # CodeRabbit on #487: a line that interrupts the paragraph ends the list.
+        i-thematic-star) printf -- '- x\n***\nprose\n' ;;
+        i-thematic-dash) printf -- '- x\n- - -\n' ;;
+        i-thematic-under) printf -- '- x\n___\n' ;;
+        i-setext-eq) printf -- '- x\n===\n' ;;
+        i-setext-dash) printf -- '- x\n--\n' ;;
+        i-quote) printf -- '- x\n> quoted\n' ;;
+        i-star) printf -- '- x\n* y\n' ;;
+        i-plus) printf -- '- x\n+ y\n' ;;
+        i-ordered-dot) printf -- '- x\n1. y\n' ;;
+        i-ordered-paren) printf -- '- x\n1) y\n' ;;
+        i-html) printf -- '- x\n<div>y</div>\n' ;;
+        tight-bullet) printf -- '- x\n- y\n' ;;
+        lazy-two) printf -- '- x\n2. is not an interruption\n' ;;
+        indented) printf -- '- x\n\n  more about x\n' ;;
+        lazy) printf -- '- x continues\non this line\n' ;;
+        second-bullet) printf -- '- x\n\n- y\n' ;;
+        *) echo "unknown case $spec" >&2 ;;
+    esac > "$d/changelog.d/x.added.md"
+    check "fragments: ${spec%%:*} exits ${spec##*:}" "${spec##*:}" "$(roll "$f" 1.1.0 --date 2026-08-13)"
+done
+check "fragments: …the refusal names the stray text" yes \
+    "$(fragcase stray-msg; printf '## [Unreleased]\n\n- a\n' > "$f"; printf -- '- x\n\nprose\n' > "$d/changelog.d/x.added.md"
+       roll "$f" 1.1.0 > /dev/null; grep -q 'x.added.md  has text outside a top-level bullet' "$WORK/err.txt" && echo yes || echo no)"
+
 # Into a filled [Unreleased], same category: one heading, existing entry first.
 fragcase same
 printf '## [Unreleased]\n\nIntro text.\n\n### Added\n\n- existing\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
@@ -681,6 +791,30 @@ src > "$f"
 check "fragments: empty changelog.d rolls" 0 "$(roll "$f" 1.1.0 --date 2026-08-13)"
 check "fragments: empty changelog.d is byte-identical to no changelog.d" yes \
     "$(cmp -s "$f" "$WORK/nofrag-plain/CHANGELOG.md" && echo yes || echo no)"
+
+# --- changelog.d README template (#486) --------------------------------------
+TEMPLATE="$(cd "$HERE/.." && pwd)/skills/skill-repo/templates/changelog.d-README.md.template"
+fragcase slug
+printf '## [Unreleased]\n\n- a\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- y\n' > "$d/changelog.d/fix-über.fixed.md"
+check "template: a lowercase non-ASCII slug is refused" 1 "$(roll "$f" 1.1.0 --date 2026-08-13)"
+check "template: …and the template names the slug alphabet" yes \
+    "$(grep -q 'lowercase ASCII letters, digits' "$TEMPLATE" && echo yes || echo no)"
+# The preview command runs as written, with the script read from this checkout
+# instead of the URL, which must name this script's path.
+preview=$(awk '/^```sh$/ { on = 1; next } /^```$/ { on = 0 } on' "$TEMPLATE" |
+    awk '{ if (sub(/\\$/, "")) { buf = buf $0; next } print buf $0; buf = "" }')
+url=$(grep -o 'https://[^ ]*' <<< "$preview")
+check "template: the preview URL names this script" yes \
+    "$([ -n "$url" ] && [ -f "$(cd "$HERE/.." && pwd)/${url#*/skill-repo-skill/main/}" ] && echo yes || echo no)"
+fragcase preview
+printf '## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n- old\n' > "$f"
+printf -- '- x\n' > "$d/changelog.d/x.added.md"
+before=$(sha256sum "$f")
+check "template: the preview command runs" 0 \
+    "$([ -n "$preview" ] || { echo none; exit; }; cd "$d" && bash -c "${preview#*| }" < "$SCRIPT" > "$WORK/out.txt" 2>&1; echo $?)"
+check "template: …lists the fragment and writes nothing" "yes $before" \
+    "$(grep -qx 'would collect: changelog.d/x.added.md' "$WORK/out.txt" && echo yes || echo no) $(sha256sum "$f")"
 
 echo
 if [ "$fail" -eq 0 ]; then

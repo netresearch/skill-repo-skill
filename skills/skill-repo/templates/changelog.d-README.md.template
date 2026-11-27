@@ -6,8 +6,10 @@ that section conflict as soon as one of them merges; two fragment files do not.
 
 ## Format
 
-- File name: `<branch-slug>.<section>.md`, lowercase, for example
-  `fix-sync-lock.fixed.md`. The branch slug keeps names unique.
+- File name: `<branch-slug>.<section>.md`, for example
+  `fix-sync-lock.fixed.md`. The branch slug keeps names unique. It holds
+  lowercase ASCII letters, digits, `.`, `_` and `-`, and starts with a
+  letter or digit: `fix-über` or an uppercase letter stops the roll.
 - `<section>` selects the heading the entry lands under:
 
   | Section      | Heading in `CHANGELOG.md`                         |
@@ -21,19 +23,36 @@ that section conflict as soon as one of them merges; two fragment files do not.
   | `security`   | `### Security`                                    |
 
 - Content: one or more top-level bullets (`-` and a space), written as they
-  will appear in `CHANGELOG.md`. No heading; the file name selects it. A
-  change that belongs under two headings gets two files.
+  will appear in `CHANGELOG.md`. A fragment uses only `-` bullets and
+  indented continuation: indent every further line under its bullet, code
+  fences included. A first-column line other than a `-` bullet (after a
+  blank line, a fence, or a line such as `***`, `>`, `*`, `1.` or `<`) ends
+  the list. A fence closes with the character it opened with, at least as
+  many of them, and nothing after them: `` ```python `` never closes. No
+  line starts with `#`, inside a fence or not; the file name selects the
+  heading. A change that belongs under two
+  headings gets two files.
 
-Apart from this `README.md`, any other file in this directory, or a fragment
-that breaks these rules (including a code fence left open), stops the release
-roll before it writes anything.
+Every file in this directory apart from this `README.md` must be a fragment
+that follows these rules. Any other file, or a fragment that breaks a rule
+(including a code fence left open), stops the release roll before it writes
+anything.
 
 ## Release
 
-The version bump runs `roll-changelog.py` from the skill-repo skill. Before it
+The version bump runs `roll-changelog.py` from the skill-repo skill, version
+4.3.0 or later; an older copy rolls without reading this directory, and the
+fragments wait for the next release. Before it
 moves `[Unreleased]` under the new version, it appends every fragment, in
 file-name order, at the end of its heading, creates a missing heading in Keep a
 Changelog order, and deletes the fragment. The bump commit carries those
 deletions. With no fragments the roll works as it does without this directory:
-it still moves the existing `[Unreleased]` entries under the new version. Preview with
-`roll-changelog.py CHANGELOG.md X.Y.Z --dry-run`.
+it still moves the existing `[Unreleased]` entries under the new version.
+
+Preview the roll from the repository root (Python 3.11 or later). It writes
+nothing; `99.0.0` stands for any valid version:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/netresearch/skill-repo-skill/main/skills/skill-repo/scripts/roll-changelog.py \
+  | python3 - CHANGELOG.md 99.0.0 --dry-run
+```
